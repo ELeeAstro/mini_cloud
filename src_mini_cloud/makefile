@@ -32,9 +32,6 @@ LFLAGS    = $(FFLAGS)
 
 
 OBJECTS = \
-limex.o \
-limex_aux.o \
-limex_dense.o \
 dvode.o \
 mini_cloud_precision.o \
 mini_cloud_class.o \

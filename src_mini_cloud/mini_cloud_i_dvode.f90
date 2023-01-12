@@ -113,7 +113,7 @@ contains
     iwork(5:10) = 0
 
     rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DVODE)
-    rwork(6) = 0.0_dp              ! Maximum timestep (for heavy evaporation ~0.1 is required)
+    rwork(6) = 0.0_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
     iwork(6) = 100000               ! Max number of internal steps
 
 
@@ -171,7 +171,7 @@ contains
 
         if (d_sp(1)%sevap < 0.0_dp) then
           print*, 'Seed evap'
-          y(5+n_dust) = y(5+n_dust) + d_sp(1)%Nl*y(1)/nd_atm
+          y(5+n_dust) = y(5+n_dust) + (d_sp(1)%Nl*y(1))/nd_atm
           y(1:5+n_dust-1) = 1e-30_dp
           t_now = t_end
           cycle

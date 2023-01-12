@@ -51,6 +51,8 @@ module mini_cloud_class
     real(dp) :: Vl, Vl13, Vl23
     real(dp) :: Js
 
+    real(dp) :: v_stoi
+
     real(dp) :: chis, sevap
 
   end type dust
@@ -96,6 +98,7 @@ contains
         d_sp(n)%a0 = 1.553_dp * 1e-8_dp
         d_sp(n)%alpha = 1.0_dp
         d_sp(n)%sig = 1200.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
 
       case('TiC')
 
@@ -105,7 +108,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 1000.0_dp
-
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case('SiC')
 
@@ -115,6 +119,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 1800.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case('CaTiO3')
 
@@ -124,6 +130,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 915.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('TiO2')
 
@@ -136,6 +144,7 @@ contains
         d_sp(n)%Nf = 0.0_dp
         d_sp(n)%a0 = ((3.0_dp*d_sp(n)%dV)/(4.0_dp*pi))**(third)  !1.956_dp * 1e-8_dp !
         d_sp(n)%alpha = 1.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
 
       case ('VO')
 
@@ -145,6 +154,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 600.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('Al2O3')
 
@@ -153,6 +164,8 @@ contains
         d_sp(n)%mass = d_sp(n)%mol_wght * amu
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
+        d_sp(n)%v_stoi = 2.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('Fe')
 
@@ -161,6 +174,8 @@ contains
         d_sp(n)%mass = d_sp(n)%mol_wght * amu
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case('Mg2SiO4')
 
@@ -169,6 +184,8 @@ contains
         d_sp(n)%mass = d_sp(n)%mol_wght * amu
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
+        d_sp(n)%v_stoi = 2.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case('MgSiO3')
 
@@ -178,6 +195,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 400.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('SiO2')
 
@@ -186,6 +205,8 @@ contains
         d_sp(n)%mass = d_sp(n)%mol_wght * amu
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('SiO')
 
@@ -199,6 +220,8 @@ contains
         d_sp(n)%a0 = ((3.0_dp*d_sp(n)%dV)/(4.0_dp*pi))**(third) !2.001_dp * 1e-8_dp
         d_sp(n)%alpha = 1.0_dp
         d_sp(n)%sig = 500.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('Cr')
 
@@ -211,6 +234,8 @@ contains
         d_sp(n)%Nf = 1.0_dp
         d_sp(n)%a0 = ((3.0_dp*d_sp(n)%dV)/(4.0_dp*pi))**(third) !1.421_dp * 1e-8_dp
         d_sp(n)%alpha = 1.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('MnS')
 
@@ -220,6 +245,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 2326.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('Na2S')
 
@@ -229,6 +256,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 1033.0_dp
+        d_sp(n)%v_stoi = 2.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('ZnS')
 
@@ -238,6 +267,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 860.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('KCl')
 
@@ -249,6 +280,8 @@ contains
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * a_seed**3) / d_sp(n)%dV !1000.0_dp
         d_sp(n)%Nf = 1.0_dp
         d_sp(n)%a0 = ((3.0_dp*d_sp(n)%dV)/(4.0_dp*pi))**(third) !2.458_dp * 1e-8_dp
+        d_sp(n)%alpha = 1.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
         d_sp(n)%alpha = 1.0_dp
 
       case ('NaCl')
@@ -262,6 +295,8 @@ contains
         d_sp(n)%Nf = 1.0_dp
         d_sp(n)%a0 = ((3.0_dp*d_sp(n)%dV)/(4.0_dp*pi))**(third) !2.205_dp * 1e-8_dp
         d_sp(n)%alpha = 1.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('NH4Cl')
 
@@ -271,6 +306,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 56.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('H2O')
 
@@ -279,6 +316,8 @@ contains
         d_sp(n)%mass = d_sp(n)%mol_wght * amu
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('NH3')
 
@@ -288,6 +327,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 23.4_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('CH4')
 
@@ -297,6 +338,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 14.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('NH4SH')
 
@@ -306,6 +349,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 50.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case ('H2S')
 
@@ -315,6 +360,8 @@ contains
         d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
         d_sp(n)%inuc = 0
         d_sp(n)%sig = 58.1_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
 
       case default
         print*, 'Class: Species not included yet: ', d_sp(:)%name, 'stopping'

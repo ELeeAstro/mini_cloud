@@ -22,9 +22,6 @@ contains
 
     nd(:) = nd_atm * VMR(:)
 
-    v_stoi = 1.0_dp
-    alpha = 1.0_dp
-
     a_av = max(k(2)/k(1),a_seed)
     a_av = min(a_av, 1.0_dp)
 
@@ -42,7 +39,7 @@ contains
         S = (1.0_dp - stab) * bmix
       end if
 
-      top_term = d_sp(n)%dV * v_stoi * alpha * nd(n)
+      top_term = d_sp(n)%dV * d_sp(n)%v_stoi * d_sp(n)%alpha * nd(n)
       therm_term = sqrt((kb * T)/(twopi * d_sp(n)%mass))
 
       d_sp(n)%chis = top_term*therm_term * S

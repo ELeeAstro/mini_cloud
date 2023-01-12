@@ -18,7 +18,7 @@ program main
 
   sp(1) = 'TiO2'
   sp(2) = 'Fe'
-  sp(3) = 'MgSiO3'
+  sp(3) = 'Mg2SiO4'
 
   k(:) = 1.0e-30_dp
   k3(:) = 1.0e-30_dp
@@ -31,7 +31,7 @@ program main
   time = 6840.0_dp !0.0e0_dp
 
   T_in = 1500.0_dp
-  P_in = 1.0e5_dp
+  P_in = 1.0e4_dp
 
   t_step = 10.0_dp
 

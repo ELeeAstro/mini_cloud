@@ -981,7 +981,7 @@ C  19920722  Minor revisions to prologue (ACH).
 C  19920831  Conversion to double precision done (ACH).
 C  19921106  Fixed minor bug: ETAQ,ETAQM1 in DVSTEP SAVE statement (ACH).
 C  19921118  Changed LUNSAV/MFLGSV to IXSAV (ACH).
-C  19941222  Removed MF overwrite; attached sign to H in estimated second
+C  19941222  Removed MF overwrite; attached sign to H in estimated second 
 C            deriv. in DVHIN; misc. comment changes throughout (ACH).
 C  19970515  Minor corrections to comments in prologue, DVJAC (ACH).
 C  19981111  Corrected Block B by adding final line, GO TO 200 (ACH).
@@ -1044,7 +1044,7 @@ C
       DOUBLE PRECISION ATOLI, BIG, EWTI, FOUR, H0, HMAX, HMX, HUN, ONE,
      1   PT2, RH, RTOLI, SIZE, TCRIT, TNEXT, TOLSF, TP, TWO, ZERO
       INTEGER I, IER, IFLAG, IMXER, JCO, KGO, LENIW, LENJ, LENP, LENRW,
-     1   LENWM, LF0, MBAND, MFA, ML, MORD, MU, MXHNL0, MXSTP0, NITER,
+     1   LENWM, LF0, MBAND, MFA, ML, MORD, MU, MXHNL0, MXSTP0, NITER, 
      2   NSLAST
       CHARACTER*80 MSG
 C
@@ -1166,7 +1166,6 @@ C
       DATA  MORD(1) /12/, MORD(2) /5/, MXSTP0 /500/, MXHNL0 /10/
       DATA ZERO /0.0D0/, ONE /1.0D0/, TWO /2.0D0/, FOUR /4.0D0/,
      1     PT2 /0.2D0/, HUN /100.0D0/
-C$omp threadprivate(/DVOD01/,/DVOD02/)
 C-----------------------------------------------------------------------
 C Block A.
 C This code block is executed on every call.
@@ -1881,7 +1880,7 @@ C
       COMMON /DVOD02/ HU, NCFN, NETF, NFE, NJE, NLU, NNI, NQU, NST
 C
       DATA HUN /100.0D0/, ZERO /0.0D0/
-C$omp threadprivate(/DVOD01/,/DVOD02/)
+C
       IFLAG = 0
       IF (K .LT. 0 .OR. K .GT. NQ) GO TO 80
       TFUZZ = HUN*UROUND*SIGN(ABS(TN) + ABS(HU), HU)
@@ -2046,7 +2045,7 @@ C
      2     ETAMXF /0.2D0/,     ETAMX1 /1.0D4/,     ETAMX2 /10.0D0/,
      3     ETAMX3 /10.0D0/,    ONEPSM /1.00001D0/, THRESH /1.5D0/
       DATA ONE/1.0D0/, ZERO/0.0D0/
-C$omp threadprivate(/DVOD01/,/DVOD02/)
+C
       KFLAG = 0
       TOLD = TN
       NCF = 0
@@ -2448,7 +2447,7 @@ C
 C
       DATA CORTES /0.1D0/
       DATA ONE  /1.0D0/, SIX /6.0D0/, TWO /2.0D0/, ZERO /0.0D0/
-C$omp threadprivate(/DVOD01/)
+C
       FLOTL = REAL(L)
       NQM1 = NQ - 1
       NQM2 = NQ - 2
@@ -2619,7 +2618,7 @@ C
      7                NSLP, NYH
 C
       DATA ONE /1.0D0/, ZERO /0.0D0/
-C$omp threadprivate(/DVOD01/)
+C
       IF ((NQ .EQ. 2) .AND. (IORD .NE. 1)) RETURN
       NQM1 = NQ - 1
       NQM2 = NQ - 2
@@ -2833,7 +2832,6 @@ C
       DATA CCMAX /0.3D0/, CRDOWN /0.3D0/, MAXCOR /3/, MSBP /20/,
      1     RDIV  /2.0D0/
       DATA ONE /1.0D0/, TWO /2.0D0/, ZERO /0.0D0/
-C$omp threadprivate(/DVOD01/,/DVOD02/)
 C-----------------------------------------------------------------------
 C On the first step, on a change of method order, or after a
 C nonlinear convergence failure with NFLAG = -2, set IPUP = MITER
@@ -3061,7 +3059,7 @@ C-----------------------------------------------------------------------
       COMMON /DVOD02/ HU, NCFN, NETF, NFE, NJE, NLU, NNI, NQU, NST
 C
       DATA ONE /1.0D0/, THOU /1000.0D0/, ZERO /0.0D0/, PT1 /0.1D0/
-C$omp threadprivate(/DVOD01/,/DVOD02/)
+C
       IERPJ = 0
       HRL1 = H*RL1
 C See whether J should be evaluated (JOK = -1) or not (JOK = 1). -------
@@ -3324,7 +3322,7 @@ C
      7                NSLP, NYH
 C
       DATA ONE /1.0D0/, ZERO /0.0D0/
-C$omp threadprivate(/DVOD01/)
+C
       IERSL = 0
       GO TO (100, 100, 300, 400, 400), MITER
  100  CALL DGESL (WM(3), N, N, IWM(31), X, 0)
@@ -3387,7 +3385,7 @@ C
       COMMON /DVOD01/ RVOD1(48), IVOD1(33)
       COMMON /DVOD02/ RVOD2(1), IVOD2(8)
       DATA LENRV1/48/, LENIV1/33/, LENRV2/1/, LENIV2/8/
-C$omp threadprivate(/DVOD01/,/DVOD02/)
+C
       IF (JOB .EQ. 2) GO TO 100
       DO 10 I = 1,LENRV1
  10     RSAV(I) = RVOD1(I)
@@ -4390,5 +4388,436 @@ C
    80       CONTINUE
    90    CONTINUE
   100 CONTINUE
+      RETURN
+      END
+*DECK DAXPY
+      SUBROUTINE DAXPY (N, DA, DX, INCX, DY, INCY)
+C***BEGIN PROLOGUE  DAXPY
+C***PURPOSE  Compute a constant times a vector plus a vector.
+C***CATEGORY  D1A7
+C***TYPE      DOUBLE PRECISION (SAXPY-S, DAXPY-D, CAXPY-C)
+C***KEYWORDS  BLAS, LINEAR ALGEBRA, TRIAD, VECTOR
+C***AUTHOR  Lawson, C. L., (JPL)
+C           Hanson, R. J., (SNLA)
+C           Kincaid, D. R., (U. of Texas)
+C           Krogh, F. T., (JPL)
+C***DESCRIPTION
+C
+C                B L A S  Subprogram
+C    Description of Parameters
+C
+C     --Input--
+C        N  number of elements in input vector(s)
+C       DA  double precision scalar multiplier
+C       DX  double precision vector with N elements
+C     INCX  storage spacing between elements of DX
+C       DY  double precision vector with N elements
+C     INCY  storage spacing between elements of DY
+C
+C     --Output--
+C       DY  double precision result (unchanged if N .LE. 0)
+C
+C     Overwrite double precision DY with double precision DA*DX + DY.
+C     For I = 0 to N-1, replace  DY(LY+I*INCY) with DA*DX(LX+I*INCX) +
+C       DY(LY+I*INCY),
+C     where LX = 1 if INCX .GE. 0, else LX = 1+(1-N)*INCX, and LY is
+C     defined in a similar way using INCY.
+C
+C***REFERENCES  C. L. Lawson, R. J. Hanson, D. R. Kincaid and F. T.
+C                 Krogh, Basic linear algebra subprograms for Fortran
+C                 usage, Algorithm No. 539, Transactions on Mathematical
+C                 Software 5, 3 (September 1979), pp. 308-323.
+C***ROUTINES CALLED  (NONE)
+C***REVISION HISTORY  (YYMMDD)
+C   791001  DATE WRITTEN
+C   890831  Modified array declarations.  (WRB)
+C   890831  REVISION DATE from Version 3.2
+C   891214  Prologue converted to Version 4.0 format.  (BAB)
+C   920310  Corrected definition of LX in DESCRIPTION.  (WRB)
+C   920501  Reformatted the REFERENCES section.  (WRB)
+C***END PROLOGUE  DAXPY
+      DOUBLE PRECISION DX(*), DY(*), DA
+C***FIRST EXECUTABLE STATEMENT  DAXPY
+      IF (N.LE.0 .OR. DA.EQ.0.0D0) RETURN
+      IF (INCX .EQ. INCY) IF (INCX-1) 5,20,60
+C
+C     Code for unequal or nonpositive increments.
+C
+    5 IX = 1
+      IY = 1
+      IF (INCX .LT. 0) IX = (-N+1)*INCX + 1
+      IF (INCY .LT. 0) IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        DY(IY) = DY(IY) + DA*DX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C     Code for both increments equal to 1.
+C
+C     Clean-up loop so remaining vector length is a multiple of 4.
+C
+   20 M = MOD(N,4)
+      IF (M .EQ. 0) GO TO 40
+      DO 30 I = 1,M
+        DY(I) = DY(I) + DA*DX(I)
+   30 CONTINUE
+      IF (N .LT. 4) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,4
+        DY(I) = DY(I) + DA*DX(I)
+        DY(I+1) = DY(I+1) + DA*DX(I+1)
+        DY(I+2) = DY(I+2) + DA*DX(I+2)
+        DY(I+3) = DY(I+3) + DA*DX(I+3)
+   50 CONTINUE
+      RETURN
+C
+C     Code for equal, positive, non-unit increments.
+C
+   60 NS = N*INCX
+      DO 70 I = 1,NS,INCX
+        DY(I) = DA*DX(I) + DY(I)
+   70 CONTINUE
+      RETURN
+      END
+*DECK DCOPY
+      SUBROUTINE DCOPY (N, DX, INCX, DY, INCY)
+C***BEGIN PROLOGUE  DCOPY
+C***PURPOSE  Copy a vector.
+C***CATEGORY  D1A5
+C***TYPE      DOUBLE PRECISION (SCOPY-S, DCOPY-D, CCOPY-C, ICOPY-I)
+C***KEYWORDS  BLAS, COPY, LINEAR ALGEBRA, VECTOR
+C***AUTHOR  Lawson, C. L., (JPL)
+C           Hanson, R. J., (SNLA)
+C           Kincaid, D. R., (U. of Texas)
+C           Krogh, F. T., (JPL)
+C***DESCRIPTION
+C
+C                B L A S  Subprogram
+C    Description of Parameters
+C
+C     --Input--
+C        N  number of elements in input vector(s)
+C       DX  double precision vector with N elements
+C     INCX  storage spacing between elements of DX
+C       DY  double precision vector with N elements
+C     INCY  storage spacing between elements of DY
+C
+C     --Output--
+C       DY  copy of vector DX (unchanged if N .LE. 0)
+C
+C     Copy double precision DX to double precision DY.
+C     For I = 0 to N-1, copy DX(LX+I*INCX) to DY(LY+I*INCY),
+C     where LX = 1 if INCX .GE. 0, else LX = 1+(1-N)*INCX, and LY is
+C     defined in a similar way using INCY.
+C
+C***REFERENCES  C. L. Lawson, R. J. Hanson, D. R. Kincaid and F. T.
+C                 Krogh, Basic linear algebra subprograms for Fortran
+C                 usage, Algorithm No. 539, Transactions on Mathematical
+C                 Software 5, 3 (September 1979), pp. 308-323.
+C***ROUTINES CALLED  (NONE)
+C***REVISION HISTORY  (YYMMDD)
+C   791001  DATE WRITTEN
+C   890831  Modified array declarations.  (WRB)
+C   890831  REVISION DATE from Version 3.2
+C   891214  Prologue converted to Version 4.0 format.  (BAB)
+C   920310  Corrected definition of LX in DESCRIPTION.  (WRB)
+C   920501  Reformatted the REFERENCES section.  (WRB)
+C***END PROLOGUE  DCOPY
+      DOUBLE PRECISION DX(*), DY(*)
+C***FIRST EXECUTABLE STATEMENT  DCOPY
+      IF (N .LE. 0) RETURN
+      IF (INCX .EQ. INCY) IF (INCX-1) 5,20,60
+C
+C     Code for unequal or nonpositive increments.
+C
+    5 IX = 1
+      IY = 1
+      IF (INCX .LT. 0) IX = (-N+1)*INCX + 1
+      IF (INCY .LT. 0) IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        DY(IY) = DX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C     Code for both increments equal to 1.
+C
+C     Clean-up loop so remaining vector length is a multiple of 7.
+C
+   20 M = MOD(N,7)
+      IF (M .EQ. 0) GO TO 40
+      DO 30 I = 1,M
+        DY(I) = DX(I)
+   30 CONTINUE
+      IF (N .LT. 7) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,7
+        DY(I) = DX(I)
+        DY(I+1) = DX(I+1)
+        DY(I+2) = DX(I+2)
+        DY(I+3) = DX(I+3)
+        DY(I+4) = DX(I+4)
+        DY(I+5) = DX(I+5)
+        DY(I+6) = DX(I+6)
+   50 CONTINUE
+      RETURN
+C
+C     Code for equal, positive, non-unit increments.
+C
+   60 NS = N*INCX
+      DO 70 I = 1,NS,INCX
+        DY(I) = DX(I)
+   70 CONTINUE
+      RETURN
+      END
+*DECK DDOT
+      DOUBLE PRECISION FUNCTION DDOT (N, DX, INCX, DY, INCY)
+C***BEGIN PROLOGUE  DDOT
+C***PURPOSE  Compute the inner product of two vectors.
+C***CATEGORY  D1A4
+C***TYPE      DOUBLE PRECISION (SDOT-S, DDOT-D, CDOTU-C)
+C***KEYWORDS  BLAS, INNER PRODUCT, LINEAR ALGEBRA, VECTOR
+C***AUTHOR  Lawson, C. L., (JPL)
+C           Hanson, R. J., (SNLA)
+C           Kincaid, D. R., (U. of Texas)
+C           Krogh, F. T., (JPL)
+C***DESCRIPTION
+C
+C                B L A S  Subprogram
+C    Description of Parameters
+C
+C     --Input--
+C        N  number of elements in input vector(s)
+C       DX  double precision vector with N elements
+C     INCX  storage spacing between elements of DX
+C       DY  double precision vector with N elements
+C     INCY  storage spacing between elements of DY
+C
+C     --Output--
+C     DDOT  double precision dot product (zero if N .LE. 0)
+C
+C     Returns the dot product of double precision DX and DY.
+C     DDOT = sum for I = 0 to N-1 of  DX(LX+I*INCX) * DY(LY+I*INCY),
+C     where LX = 1 if INCX .GE. 0, else LX = 1+(1-N)*INCX, and LY is
+C     defined in a similar way using INCY.
+C
+C***REFERENCES  C. L. Lawson, R. J. Hanson, D. R. Kincaid and F. T.
+C                 Krogh, Basic linear algebra subprograms for Fortran
+C                 usage, Algorithm No. 539, Transactions on Mathematical
+C                 Software 5, 3 (September 1979), pp. 308-323.
+C***ROUTINES CALLED  (NONE)
+C***REVISION HISTORY  (YYMMDD)
+C   791001  DATE WRITTEN
+C   890831  Modified array declarations.  (WRB)
+C   890831  REVISION DATE from Version 3.2
+C   891214  Prologue converted to Version 4.0 format.  (BAB)
+C   920310  Corrected definition of LX in DESCRIPTION.  (WRB)
+C   920501  Reformatted the REFERENCES section.  (WRB)
+C***END PROLOGUE  DDOT
+      DOUBLE PRECISION DX(*), DY(*)
+C***FIRST EXECUTABLE STATEMENT  DDOT
+      DDOT = 0.0D0
+      IF (N .LE. 0) RETURN
+      IF (INCX .EQ. INCY) IF (INCX-1) 5,20,60
+C
+C     Code for unequal or nonpositive increments.
+C
+    5 IX = 1
+      IY = 1
+      IF (INCX .LT. 0) IX = (-N+1)*INCX + 1
+      IF (INCY .LT. 0) IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        DDOT = DDOT + DX(IX)*DY(IY)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C     Code for both increments equal to 1.
+C
+C     Clean-up loop so remaining vector length is a multiple of 5.
+C
+   20 M = MOD(N,5)
+      IF (M .EQ. 0) GO TO 40
+      DO 30 I = 1,M
+         DDOT = DDOT + DX(I)*DY(I)
+   30 CONTINUE
+      IF (N .LT. 5) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,5
+      DDOT = DDOT + DX(I)*DY(I) + DX(I+1)*DY(I+1) + DX(I+2)*DY(I+2) +
+     1              DX(I+3)*DY(I+3) + DX(I+4)*DY(I+4)
+   50 CONTINUE
+      RETURN
+C
+C     Code for equal, positive, non-unit increments.
+C
+   60 NS = N*INCX
+      DO 70 I = 1,NS,INCX
+        DDOT = DDOT + DX(I)*DY(I)
+   70 CONTINUE
+      RETURN
+      END
+*DECK DSCAL
+      SUBROUTINE DSCAL (N, DA, DX, INCX)
+C***BEGIN PROLOGUE  DSCAL
+C***PURPOSE  Multiply a vector by a constant.
+C***CATEGORY  D1A6
+C***TYPE      DOUBLE PRECISION (SSCAL-S, DSCAL-D, CSCAL-C)
+C***KEYWORDS  BLAS, LINEAR ALGEBRA, SCALE, VECTOR
+C***AUTHOR  Lawson, C. L., (JPL)
+C           Hanson, R. J., (SNLA)
+C           Kincaid, D. R., (U. of Texas)
+C           Krogh, F. T., (JPL)
+C***DESCRIPTION
+C
+C                B L A S  Subprogram
+C    Description of Parameters
+C
+C     --Input--
+C        N  number of elements in input vector(s)
+C       DA  double precision scale factor
+C       DX  double precision vector with N elements
+C     INCX  storage spacing between elements of DX
+C
+C     --Output--
+C       DX  double precision result (unchanged if N.LE.0)
+C
+C     Replace double precision DX by double precision DA*DX.
+C     For I = 0 to N-1, replace DX(IX+I*INCX) with  DA * DX(IX+I*INCX),
+C     where IX = 1 if INCX .GE. 0, else IX = 1+(1-N)*INCX.
+C
+C***REFERENCES  C. L. Lawson, R. J. Hanson, D. R. Kincaid and F. T.
+C                 Krogh, Basic linear algebra subprograms for Fortran
+C                 usage, Algorithm No. 539, Transactions on Mathematical
+C                 Software 5, 3 (September 1979), pp. 308-323.
+C***ROUTINES CALLED  (NONE)
+C***REVISION HISTORY  (YYMMDD)
+C   791001  DATE WRITTEN
+C   890831  Modified array declarations.  (WRB)
+C   890831  REVISION DATE from Version 3.2
+C   891214  Prologue converted to Version 4.0 format.  (BAB)
+C   900821  Modified to correct problem with a negative increment.
+C           (WRB)
+C   920501  Reformatted the REFERENCES section.  (WRB)
+C***END PROLOGUE  DSCAL
+      DOUBLE PRECISION DA, DX(*)
+      INTEGER I, INCX, IX, M, MP1, N
+C***FIRST EXECUTABLE STATEMENT  DSCAL
+      IF (N .LE. 0) RETURN
+      IF (INCX .EQ. 1) GOTO 20
+C
+C     Code for increment not equal to 1.
+C
+      IX = 1
+      IF (INCX .LT. 0) IX = (-N+1)*INCX + 1
+      DO 10 I = 1,N
+        DX(IX) = DA*DX(IX)
+        IX = IX + INCX
+   10 CONTINUE
+      RETURN
+C
+C     Code for increment equal to 1.
+C
+C     Clean-up loop so remaining vector length is a multiple of 5.
+C
+   20 M = MOD(N,5)
+      IF (M .EQ. 0) GOTO 40
+      DO 30 I = 1,M
+        DX(I) = DA*DX(I)
+   30 CONTINUE
+      IF (N .LT. 5) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,5
+        DX(I) = DA*DX(I)
+        DX(I+1) = DA*DX(I+1)
+        DX(I+2) = DA*DX(I+2)
+        DX(I+3) = DA*DX(I+3)
+        DX(I+4) = DA*DX(I+4)
+   50 CONTINUE
+      RETURN
+      END
+*DECK IDAMAX
+      INTEGER FUNCTION IDAMAX (N, DX, INCX)
+C***BEGIN PROLOGUE  IDAMAX
+C***PURPOSE  Find the smallest index of that component of a vector
+C            having the maximum magnitude.
+C***CATEGORY  D1A2
+C***TYPE      DOUBLE PRECISION (ISAMAX-S, IDAMAX-D, ICAMAX-C)
+C***KEYWORDS  BLAS, LINEAR ALGEBRA, MAXIMUM COMPONENT, VECTOR
+C***AUTHOR  Lawson, C. L., (JPL)
+C           Hanson, R. J., (SNLA)
+C           Kincaid, D. R., (U. of Texas)
+C           Krogh, F. T., (JPL)
+C***DESCRIPTION
+C
+C                B L A S  Subprogram
+C    Description of Parameters
+C
+C     --Input--
+C        N  number of elements in input vector(s)
+C       DX  double precision vector with N elements
+C     INCX  storage spacing between elements of DX
+C
+C     --Output--
+C   IDAMAX  smallest index (zero if N .LE. 0)
+C
+C     Find smallest index of maximum magnitude of double precision DX.
+C     IDAMAX = first I, I = 1 to N, to maximize ABS(DX(IX+(I-1)*INCX)),
+C     where IX = 1 if INCX .GE. 0, else IX = 1+(1-N)*INCX.
+C
+C***REFERENCES  C. L. Lawson, R. J. Hanson, D. R. Kincaid and F. T.
+C                 Krogh, Basic linear algebra subprograms for Fortran
+C                 usage, Algorithm No. 539, Transactions on Mathematical
+C                 Software 5, 3 (September 1979), pp. 308-323.
+C***ROUTINES CALLED  (NONE)
+C***REVISION HISTORY  (YYMMDD)
+C   791001  DATE WRITTEN
+C   890531  Changed all specific intrinsics to generic.  (WRB)
+C   890531  REVISION DATE from Version 3.2
+C   891214  Prologue converted to Version 4.0 format.  (BAB)
+C   900821  Modified to correct problem with a negative increment.
+C           (WRB)
+C   920501  Reformatted the REFERENCES section.  (WRB)
+C***END PROLOGUE  IDAMAX
+      DOUBLE PRECISION DX(*), DMAX, XMAG
+      INTEGER I, INCX, IX, N
+C***FIRST EXECUTABLE STATEMENT  IDAMAX
+      IDAMAX = 0
+      IF (N .LE. 0) RETURN
+      IDAMAX = 1
+      IF (N .EQ. 1) RETURN
+C
+      IF (INCX .EQ. 1) GOTO 20
+C
+C     Code for increments not equal to 1.
+C
+      IX = 1
+      IF (INCX .LT. 0) IX = (-N+1)*INCX + 1
+      DMAX = ABS(DX(IX))
+      IX = IX + INCX
+      DO 10 I = 2,N
+        XMAG = ABS(DX(IX))
+        IF (XMAG .GT. DMAX) THEN
+          IDAMAX = I
+          DMAX = XMAG
+        ENDIF
+        IX = IX + INCX
+   10 CONTINUE
+      RETURN
+C
+C     Code for increments equal to 1.
+C
+   20 DMAX = ABS(DX(1))
+      DO 30 I = 2,N
+        XMAG = ABS(DX(I))
+        IF (XMAG .GT. DMAX) THEN
+          IDAMAX = I
+          DMAX = XMAG
+        ENDIF
+   30 CONTINUE
       RETURN
       END
