@@ -25,13 +25,13 @@ program main
 
   k(:) = 1.0e-30_dp
   k3(:) = 1.0e-30_dp
-  VMR(1) = 1.041e-7_dp * 9.8_dp
+  VMR(1) = 1.041e-7_dp
   VMR(2) = 2.771e-6_dp
   VMR(3) = 2.231e-5_dp
   VMR(4) = 3.588e-5_dp
 
   ! Number of iterations and start time
-  n_it = 1000
+  n_it = 3000!400
   time = 6840.0_dp !0.0e0_dp
 
   T_in = 1500.0_dp
@@ -59,6 +59,9 @@ program main
 
       ! Call DIHRT and perform integrations
       call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
+      !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
+      !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
+
 
 
       print*, k(:), k(2)/k(1) * 1e4

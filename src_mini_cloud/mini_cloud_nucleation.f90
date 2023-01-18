@@ -88,7 +88,7 @@ contains
 
     !! Finally calculate J_star ! Note underfloat limiter here
     J_s = nsp * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
-
+    
   end subroutine nuc_MCNT
 
   subroutine calc_seed_evap(n_dust, k)
@@ -98,7 +98,10 @@ contains
     real(dp), dimension(4), intent(inout) :: k
 
     integer :: n
-    real(dp) :: tau_evap
+    real(dp) :: tau_evap, a_av
+
+    a_av = max(k(2)/k(1),a_seed)
+    a_av = min(a_av, 1.0_dp)
 
     do n = 1, n_dust
 
@@ -108,8 +111,8 @@ contains
 
       else
 
-        tau_evap = a_seed/abs(d_sp(n)%chis)
-        d_sp(n)%sevap =  -(k(1)/tau_evap)
+        tau_evap = a_av/abs(d_sp(n)%chis)
+        d_sp(n)%sevap = -(k(1)/tau_evap)
 
       end if
 

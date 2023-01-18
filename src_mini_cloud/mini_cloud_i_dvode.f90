@@ -41,6 +41,9 @@ contains
     real(dp) :: rpar
     integer :: ipar
 
+    integer :: ncall_max
+    real(dp) :: dt, t_cum
+
     real(dp) :: a_check, Ar_check, V_check
 
     if (first_call .eqv. .True.) then
@@ -61,33 +64,33 @@ contains
     Ar_check = fourpi * k(3)/k(1)
     V_check = fourpi3 * k(4)/k(1)
 
-    if (k(1) > 1e-10_dp .and. &
-      & (a_check <= a_seed*1.05_dp .or. Ar_check <= Ar_seed*1.05_dp .or. V_check <= V_seed*1.05_dp)) then
-      k(1) = k(1)
-      k(2) = a_seed * k(1)
-      k(3) = Ar_seed/fourpi * k(1)
-      k(4) = V_seed/fourpi3 * k(1)
+    ! if (k(1) > 1e-10_dp .and. &
+    !   & (a_check <= a_seed*1.05_dp .or. Ar_check <= Ar_seed*1.05_dp .or. V_check <= V_seed*1.05_dp)) then
+    !   k(1) = k(1)
+    !   k(2) = a_seed * k(1)
+    !   k(3) = Ar_seed/fourpi * k(1)
+    !   k(4) = V_seed/fourpi3 * k(1)
 
-      k3(1) = k(4)
-      k3(2:n_dust) = 1e-30_dp
-    end if
-
-
-    call calc_saturation(n_dust, VMR(:))
-    call calc_nucleation(n_dust, VMR(:))
-
-    ! ! If small number of dust particles and small nucleation rate - don't integrate
-    if ((sum(d_sp(:)%Js) < 1.0e-10_dp) .and. (k(1) < 1.0e-10_dp)) then
-      return
-    end if
+    !   k3(1) = k(4)
+    !   k3(2:n_dust) = 1e-30_dp
+    ! end if
 
 
-    call calc_chem(n_dust, k(:), k3(:), VMR(:))
-    ! If overall growth is super slow, don't bother integrating
-     if (k(1) > 1.0e-10_dp .and. (sum(d_sp(:)%Js) < 1.0e-10_dp &
-       & .and. abs(sum(d_sp(:)%chis)) < 1.0e-30_dp)) then
-         return
-    end if
+    ! call calc_saturation(n_dust, VMR(:))
+    ! call calc_nucleation(n_dust, VMR(:))
+
+    ! ! ! If small number of dust particles and small nucleation rate - don't integrate
+    ! if ((sum(d_sp(:)%Js) < 1.0e-10_dp) .and. (k(1) < 1.0e-10_dp)) then
+    !   return
+    ! end if
+
+
+    ! call calc_chem(n_dust, k(:), k3(:), VMR(:))
+    ! ! If overall growth is super slow, don't bother integrating
+    !  if (k(1) > 1.0e-10_dp .and. (sum(d_sp(:)%Js) < 1.0e-10_dp &
+    !    & .and. abs(sum(d_sp(:)%chis)) < 1.0e-30_dp)) then
+    !      return
+    ! end if
 
     ! -----------------------------------------
     ! ***  parameters for the dvode-solver  ***
@@ -113,7 +116,7 @@ contains
     iwork(5:10) = 0
 
     rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DVODE)
-    rwork(6) = 0.0_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
+    rwork(6) = 1e-2_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
     iwork(6) = 100000               ! Max number of internal steps
 
 
@@ -131,7 +134,7 @@ contains
 
     ncall = 1
 
-    do while((t_now < t_end))
+    do while((t_now < t_end) .and. ncall <= 3)
 
       y(1:5+n_dust-1) = y(1:5+n_dust-1)/nd_atm
 
@@ -140,46 +143,13 @@ contains
 
       y(1:5+n_dust-1) = y(1:5+n_dust-1) * nd_atm
 
+      ncall = ncall + 1
+
       if (istate == -1) then
         istate = 2
-        ncall = ncall + 1
       else if (istate < -1) then
         ! Some critical failure - comment out if don't care
         print*, istate, real(t_now), real(rwork(11)), int(T), real(P_cgs/1e6_dp)
-        exit
-      end if
-
-      call calc_saturation(ipar, y(5+ipar:5+ipar+ipar-1))
-      call calc_nucleation(ipar, y(5+ipar:5+ipar+ipar-1))
-      call calc_chem(ipar, y(1:4), y(5:5+ipar-1), y(5+ipar:5+ipar+ipar-1))
-      call calc_seed_evap(ipar, y(1:4))
-
-      ! Check if species are at seed particle limits 
-      a_check = y(2)/y(1)
-      Ar_check = fourpi * y(3)/y(1)
-      V_check = fourpi3 * y(4)/y(1)
-
-      if (y(1) > 1e-10_dp .and. &
-        & (a_check <= a_seed*1.05_dp .or. Ar_check <= Ar_seed*1.05_dp .or. V_check <= V_seed*1.05_dp)) then
-        y(1) = y(1)
-        y(2) = a_seed * y(1)
-        y(3) = Ar_seed/fourpi * y(1)
-        y(4) = V_seed/fourpi3 * y(1)
-
-        y(5) = y(4)
-        y(6:5+n_dust-1) = 1e-30_dp
-
-        if (d_sp(1)%sevap < 0.0_dp) then
-          print*, 'Seed evap'
-          y(5+n_dust) = y(5+n_dust) + (d_sp(1)%Nl*y(1))/nd_atm
-          y(1:5+n_dust-1) = 1e-30_dp
-          t_now = t_end
-          cycle
-        end if
-
-      end if
-
-      if (ncall > 1) then
         exit
       end if
 
@@ -204,18 +174,9 @@ contains
     real(dp), intent(inout) :: rpar
     integer, intent(inout) :: ipar
 
-    real(dp) :: tot_k3 
-
     y(1:5+ipar-1) = y(1:5+ipar-1) * nd_atm
 
-    ! Rescale L3s
-    tot_k3 = sum(y(5:5+ipar-1))
-    if (tot_k3 < 1.0e-29_dp) then
-       y(5) = y(4)
-       y(6:5+ipar-1) = 1e-30_dp
-    else
-      y(5:5+ipar-1) = (y(5:5+ipar-1) / tot_k3) * y(4)
-    end if
+    y(5:5+ipar-1) = max(y(5:5+ipar-1),1.0e-30_dp)
 
     call calc_saturation(ipar, y(5+ipar:5+ipar+ipar-1))
     call calc_nucleation(ipar, y(5+ipar:5+ipar+ipar-1))

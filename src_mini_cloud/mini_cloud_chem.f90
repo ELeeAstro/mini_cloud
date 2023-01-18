@@ -34,7 +34,7 @@ contains
       if (stab <= 1.0_dp) then
         S = 1.0_dp - stab
       else
-        bmix = max(k3(n)/k(4),1e-30_dp)
+        bmix = max(k3(n)/k(4),1e-99_dp)
         bmix = min(bmix,1.0_dp)
         S = (1.0_dp - stab) * bmix
       end if

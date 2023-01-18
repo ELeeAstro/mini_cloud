@@ -10,6 +10,7 @@ ndust = 4
 neps = 4
 
 data1 = np.loadtxt('tracers.txt')
+it = data1[:,0]
 time = data1[:,1]
 nt = len(time)
 Tg = data1[:,2]
@@ -44,20 +45,20 @@ elif example == 2:
 
 
 fig, ax1 = plt.subplots()
-ax1.plot(time,yval, ls='dashed',c='red',label='T')
+ax1.plot(it,yval, ls='dashed',c='red',label='T')
 ax1.set_ylabel('T [K]')
 ax1.set_xlabel('Time [s]')
 ax1.legend(loc=1)
 if example == 2:
     plt.yscale('log')
 ax2 = ax1.twinx()
-ax2.plot(time,tracer[:,0],label='nd')
+ax2.plot(it,tracer[:,0],label='nd')
 ax2.set_ylabel('nd [cm-3]')
 plt.yscale('log')
 ax2.legend(loc=2)
 
 fig, ax1 = plt.subplots()
-ax1.plot(time,yval, ls='dashed',c='red',label='T')
+ax1.plot(it,yval, ls='dashed',c='red',label='T')
 ax1.set_ylabel('T [K]')
 ax1.set_xlabel('Time [s]')
 ax1.legend(loc=1)
@@ -65,14 +66,14 @@ if example == 2:
     ax1.set_ylabel('P [bar]')
     plt.yscale('log')
 ax2 = ax1.twinx()
-ax2.plot(time,amean,label='<a>')
-ax2.plot(time,aeff,label='aeff')
+ax2.plot(it,amean,label='<a>')
+ax2.plot(it,aeff,label='aeff')
 ax2.set_ylabel('a [um]')
 ax2.legend(loc=2)
 plt.yscale('log')
 
 fig, ax1 = plt.subplots()
-ax1.plot(time,yval, ls='dashed',c='red',label='T')
+ax1.plot(it,yval, ls='dashed',c='red',label='T')
 ax1.set_ylabel('T [K]')
 ax1.set_xlabel('Time [s]')
 ax1.legend(loc=1)
@@ -81,13 +82,13 @@ if example == 2:
     plt.yscale('log')
 ax2 = ax1.twinx()
 for i in range(ndust):
-  ax2.plot(time,Vsp[:,i],label=spname[i])
+  ax2.plot(it,Vsp[:,i],label=spname[i])
 ax2.set_ylabel('Vs')
 ax2.legend(loc=2)
 plt.yscale('log')
 
 fig, ax1 = plt.subplots()
-ax1.plot(time,yval, ls='dashed',c='red',label='T')
+ax1.plot(it,yval, ls='dashed',c='red',label='T')
 ax1.set_ylabel('T [K]')
 ax1.set_xlabel('Time [s]')
 ax1.legend(loc=1)
@@ -96,7 +97,7 @@ if example == 2:
     plt.yscale('log')
 ax2 = ax1.twinx()
 for i in range(neps):
-  ax2.plot(time,tracer[:,nmom+ndust+i],label=epsname[i])
+  ax2.plot(it,tracer[:,nmom+ndust+i],label=epsname[i])
 for i in range(neps):
   ax2.axhline(tracer[0,nmom+ndust+i],ls='dotted')
 ax2.set_ylabel('eps')
@@ -104,7 +105,7 @@ ax2.legend(loc=2)
 plt.yscale('log')
 
 fig, ax1 = plt.subplots()
-ax1.plot(time,yval, ls='dashed',c='red',label='T')
+ax1.plot(it,yval, ls='dashed',c='red',label='T')
 ax1.set_ylabel('T [K]')
 ax1.set_xlabel('Time [s]')
 ax1.legend(loc=1)
@@ -112,7 +113,7 @@ if example == 2:
     ax1.set_ylabel('P [bar]')
     plt.yscale('log')
 ax2 = ax1.twinx()
-ax2.plot(time,vf)
+ax2.plot(it,vf)
 ax2.set_ylabel('vf')
 ax2.legend(loc=2)
 #plt.yscale('log')
