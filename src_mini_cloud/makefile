@@ -40,6 +40,7 @@ mini_cloud_nucleation.o \
 mini_cloud_chem.o \
 mini_cloud_rhs.o \
 mini_cloud_i_dvode.o \
+mini_cloud_vf.o \
 main.o
 
 # executable statement

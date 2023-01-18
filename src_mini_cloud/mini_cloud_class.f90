@@ -28,8 +28,6 @@ module mini_cloud_class
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
   real(dp), parameter :: mmHg = 1333.2239_dp  ! mmHg to dyne
 
-
-
   real(dp) :: P_cgs, T, nd_atm
   real(dp) :: a_seed, Ar_seed, V_seed
 

@@ -6,8 +6,8 @@ import matplotlib.pylab as plt
 example = 1
 
 nmom = 4
-ndust = 3
-neps = 3
+ndust = 4
+neps = 4
 
 data1 = np.loadtxt('tracers.txt')
 time = data1[:,1]
@@ -16,18 +16,22 @@ Tg = data1[:,2]
 Pg = data1[:,3]
 ntracer = nmom + ndust + neps
 tracer = np.zeros((nt,ntracer))
-tracer[:,:] = data1[:,4:]
+tracer[:,:] = data1[:,4:-1]
+vf = data1[:,-1]
 
 amean = tracer[:,1]/tracer[:,0]  * 1e4
 amean[np.where(tracer[:,0] < 1e-20)] = 0.0
+
+aeff = tracer[:,3]/tracer[:,2]  * 1e4
+aeff[np.where(tracer[:,0] < 1e-20)] = 0.0
 
 Vsp = np.zeros((nt,ndust))
 for i in range(ndust):
   Vsp[:,i] = tracer[:,nmom+i]/tracer[:,3]
 Vsp[np.where(tracer[:,3] < 1e-20)] = 0.0
 
-spname = ['TiO2','Fe','MgSiO3']
-epsname = ['TiO2','Fe','MgSiO3']
+spname = ['TiO2','Al2O3','Fe','MgSiO3']
+epsname = ['TiO2','Al2O3','Fe','MgSiO3']
 c = []
 
 
@@ -62,7 +66,8 @@ if example == 2:
     plt.yscale('log')
 ax2 = ax1.twinx()
 ax2.plot(time,amean,label='<a>')
-ax2.set_ylabel('<a> [um]')
+ax2.plot(time,aeff,label='aeff')
+ax2.set_ylabel('a [um]')
 ax2.legend(loc=2)
 plt.yscale('log')
 
@@ -97,5 +102,19 @@ for i in range(neps):
 ax2.set_ylabel('eps')
 ax2.legend(loc=2)
 plt.yscale('log')
+
+fig, ax1 = plt.subplots()
+ax1.plot(time,yval, ls='dashed',c='red',label='T')
+ax1.set_ylabel('T [K]')
+ax1.set_xlabel('Time [s]')
+ax1.legend(loc=1)
+if example == 2:
+    ax1.set_ylabel('P [bar]')
+    plt.yscale('log')
+ax2 = ax1.twinx()
+ax2.plot(time,vf)
+ax2.set_ylabel('vf')
+ax2.legend(loc=2)
+#plt.yscale('log')
 
 plt.show()

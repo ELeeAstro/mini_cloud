@@ -38,3 +38,5 @@
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+tracers.txt
