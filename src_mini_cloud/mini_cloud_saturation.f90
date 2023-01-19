@@ -3,9 +3,7 @@ module mini_cloud_saturation
   use mini_cloud_class
   implicit none
 
-
   public :: calc_saturation
-
 
 contains
 

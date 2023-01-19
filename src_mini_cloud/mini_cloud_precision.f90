@@ -12,7 +12,6 @@ module mini_cloud_precision
   private
   public :: dp
 
-
   ! Fortran 2008 intrinsic precisions - reccomonded if possible
   !integer, parameter :: sp = REAL32
   integer, parameter :: dp = REAL64
@@ -31,6 +30,5 @@ module mini_cloud_precision
   !integer, parameter ::  sp = kind(1.0)
   !integer, parameter :: dp = selected_real_kind(2*precision(1.0_sp))
   !integer, parameter :: qp = selected_real_kind(2*precision(1.0_dp))
-
 
 end module mini_cloud_precision

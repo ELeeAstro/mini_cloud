@@ -3,7 +3,6 @@ module mini_cloud_nucleation
   use mini_cloud_class
   implicit none
 
-
   public :: calc_nucleation, calc_seed_evap
 
 contains
@@ -175,8 +174,6 @@ contains
       sig = d_sp(n)%sig
     end select
 
-
   end subroutine calc_sig
-
 
 end module mini_cloud_nucleation

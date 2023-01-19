@@ -5,21 +5,20 @@ module mini_cloud_vf
 
   !! Diameter, LJ potential and molecular weight for background gases
   !! Availible currently: H2, He, N2
-  real(kind=dp), parameter :: d_H2 = 2.827e-8_dp, LJ_H2 = 59.7_dp * kb, molg_H2 = 2.01588_dp
-  real(kind=dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
-  real(kind=dp), parameter :: d_N2 = 3.798e-8_dp, LJ_N2 = 71.4_dp * kb, molg_N2 = 14.0067_dp
-  !real(kind=dp), parameter :: d_H = , LJ_H =  * kb, molg_H =  * amu
+  real(dp), parameter :: d_H2 = 2.827e-8_dp, LJ_H2 = 59.7_dp * kb, molg_H2 = 2.01588_dp
+  real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
+  real(dp), parameter :: d_N2 = 3.798e-8_dp, LJ_N2 = 71.4_dp * kb, molg_N2 = 14.0067_dp
+  !real(dp), parameter :: d_H = , LJ_H =  * kb, molg_H =  * amu
 
   ! Manual mixing parameters for background gas
   logical, parameter :: gmix = .True.
   integer, parameter :: ngmix = 2
 
-  real(kind=dp), dimension(ngmix) :: mixr_g = (/0.85_dp, 0.15_dp/)
-  real(kind=dp), dimension(ngmix) :: d_g = (/d_H2, d_He/)
-  real(kind=dp), dimension(ngmix) :: LJ_g = (/LJ_H2, LJ_He/)
-  real(kind=dp), dimension(ngmix) :: molg_g = (/molg_H2, molg_He/)
-  real(kind=dp), dimension(ngmix) :: nu_g
-
+  real(dp), dimension(ngmix) :: mixr_g = (/0.85_dp, 0.15_dp/)
+  real(dp), dimension(ngmix) :: d_g = (/d_H2, d_He/)
+  real(dp), dimension(ngmix) :: LJ_g = (/LJ_H2, LJ_He/)
+  real(dp), dimension(ngmix) :: molg_g = (/molg_H2, molg_He/)
+  real(dp), dimension(ngmix) :: nu_g
 
 contains
 

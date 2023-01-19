@@ -96,12 +96,11 @@ contains
 
     integer, intent(in) :: t
     double precision, intent(in) :: time
-    integer, save :: u1, u2, u3, u4, u5
+    integer, save :: u1
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
       open(newunit=u1,file='tracers.txt',action='readwrite')
-
       first_call = .False.
     end if
 

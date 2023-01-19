@@ -3,7 +3,6 @@ module mini_cloud_chem
   use mini_cloud_class
   implicit none
 
-
   public :: calc_chem
 
 contains
@@ -16,7 +15,7 @@ contains
     real(dp), dimension(n_dust), intent(in) :: k3, VMR
 
     integer :: n
-    real(dp) :: v_stoi, alpha, S, top_term, therm_term, bmix, p_par, k_fac, a_av
+    real(dp) :: S, top_term, therm_term, bmix, k_fac, a_av
     real(dp) :: stab
     real(dp), dimension(n_dust) :: nd
 
@@ -47,6 +46,5 @@ contains
     end do
 
   end subroutine calc_chem
-
 
 end module mini_cloud_chem

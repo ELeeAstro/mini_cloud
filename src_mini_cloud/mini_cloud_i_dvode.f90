@@ -8,6 +8,7 @@ module mini_cloud_i_dvode
   implicit none
 
   logical :: first_call = .True.
+  !$omp threadprivate (first_call)
 
   public ::  mini_cloud_dvode, RHS_update, jac_dummy
 
@@ -24,11 +25,10 @@ contains
     real(dp), dimension(n_dust), intent(inout) :: k3
     real(dp), dimension(n_dust), intent(inout) :: VMR
 
-    integer :: n
     integer :: ncall
 
     ! Time controls
-    real(dp) :: t_begin, t_now, dt_init, t_old
+    real(dp) :: t_begin, t_now
 
     ! dvode variables
     integer :: neq 
@@ -40,11 +40,6 @@ contains
     integer :: rworkdim, iworkdim
     real(dp) :: rpar
     integer :: ipar
-
-    integer :: ncall_max
-    real(dp) :: dt, t_cum
-
-    real(dp) :: a_check, Ar_check, V_check
 
     if (first_call .eqv. .True.) then
       call mini_cloud_init(n_dust, sp)
@@ -59,38 +54,21 @@ contains
     P_cgs = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
     nd_atm = P_cgs/(kb*T)  ! Find initial number density [cm-3] of atmosphere
 
-    ! Check if species are at seed particle limits 
-    a_check = k(2)/k(1)
-    Ar_check = fourpi * k(3)/k(1)
-    V_check = fourpi3 * k(4)/k(1)
+    call calc_saturation(n_dust, VMR(:))
+    call calc_nucleation(n_dust, VMR(:))
 
-    ! if (k(1) > 1e-10_dp .and. &
-    !   & (a_check <= a_seed*1.05_dp .or. Ar_check <= Ar_seed*1.05_dp .or. V_check <= V_seed*1.05_dp)) then
-    !   k(1) = k(1)
-    !   k(2) = a_seed * k(1)
-    !   k(3) = Ar_seed/fourpi * k(1)
-    !   k(4) = V_seed/fourpi3 * k(1)
-
-    !   k3(1) = k(4)
-    !   k3(2:n_dust) = 1e-30_dp
-    ! end if
+    ! ! If small number of dust particles and small nucleation rate - don't integrate
+    if ((sum(d_sp(:)%Js) < 1.0e-10_dp) .and. (k(1) < 1.0e-10_dp)) then
+      return
+    end if
 
 
-    ! call calc_saturation(n_dust, VMR(:))
-    ! call calc_nucleation(n_dust, VMR(:))
-
-    ! ! ! If small number of dust particles and small nucleation rate - don't integrate
-    ! if ((sum(d_sp(:)%Js) < 1.0e-10_dp) .and. (k(1) < 1.0e-10_dp)) then
-    !   return
-    ! end if
-
-
-    ! call calc_chem(n_dust, k(:), k3(:), VMR(:))
-    ! ! If overall growth is super slow, don't bother integrating
-    !  if (k(1) > 1.0e-10_dp .and. (sum(d_sp(:)%Js) < 1.0e-10_dp &
-    !    & .and. abs(sum(d_sp(:)%chis)) < 1.0e-30_dp)) then
-    !      return
-    ! end if
+    call calc_chem(n_dust, k(:), k3(:), VMR(:))
+    ! If overall growth is super slow, don't bother integrating
+     if (k(1) > 1.0e-10_dp .and. (sum(d_sp(:)%Js) < 1.0e-10_dp &
+       & .and. abs(sum(d_sp(:)%chis)) < 1.0e-30_dp)) then
+         return
+    end if
 
     ! -----------------------------------------
     ! ***  parameters for the dvode-solver  ***
@@ -130,7 +108,6 @@ contains
 
     t_begin = 0.0_dp
     t_now = t_begin
-    dt_init = 1.0e-99_dp
 
     ncall = 1
 
@@ -154,7 +131,6 @@ contains
       end if
 
     end do
-
 
     k(:) = max(y(1:4),1e-30_dp)
     k3(:) = max(y(5:5+n_dust-1),1e-30_dp)
@@ -182,7 +158,7 @@ contains
     call calc_nucleation(ipar, y(5+ipar:5+ipar+ipar-1))
     call calc_chem(ipar, y(1:4), y(5:5+ipar-1), y(5+ipar:5+ipar+ipar-1))
     call calc_seed_evap(ipar, y(1:4))
-    call form_RHS(ipar, y(1:4), y(5:5+ipar-1), y(5+ipar:5+ipar+ipar-1), f)
+    call form_RHS(ipar, y(1:4), f)
 
     y(1:5+ipar-1) = y(1:5+ipar-1)/nd_atm
     f(1:5+ipar-1) = f(1:5+ipar-1)/nd_atm

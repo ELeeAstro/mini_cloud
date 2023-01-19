@@ -18,7 +18,7 @@ Pg = data1[:,3]
 ntracer = nmom + ndust + neps
 tracer = np.zeros((nt,ntracer))
 tracer[:,:] = data1[:,4:-1]
-vf = data1[:,-1]
+vf = abs(data1[:,-1])
 
 amean = tracer[:,1]/tracer[:,0]  * 1e4
 amean[np.where(tracer[:,0] < 1e-20)] = 0.0
@@ -116,6 +116,6 @@ ax2 = ax1.twinx()
 ax2.plot(it,vf)
 ax2.set_ylabel('vf')
 ax2.legend(loc=2)
-#plt.yscale('log')
+plt.yscale('log')
 
 plt.show()

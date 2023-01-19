@@ -12,7 +12,7 @@ F90LINKER =  gfortran
 FFLAGS  = -O2 -pipe
 
 #Parallel flags
-#FFLAGS	= -O3 -pipe -fopenmp
+#FFLAGS	= -O2 -pipe -fopenmp
 
 # for ifort Compiler
 #====================

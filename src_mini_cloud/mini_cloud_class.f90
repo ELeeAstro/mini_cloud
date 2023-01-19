@@ -21,7 +21,6 @@ module mini_cloud_class
   real(dp), parameter :: cal = 4.184e7_dp, cal_si = 4.184_dp ! Carlories
   real(dp), parameter :: mH = 1.007825 * amu  ! Mass of Hydrogen atom
 
-
   !! Common unit conversions
   real(dp), parameter :: bar = 1.0e6_dp ! bar to dyne
   real(dp), parameter :: atm = 1.01325e6_dp ! atm to dyne
@@ -29,6 +28,7 @@ module mini_cloud_class
   real(dp), parameter :: mmHg = 1333.2239_dp  ! mmHg to dyne
 
   real(dp) :: P_cgs, T, nd_atm
+  !$omp threadprivate (P_cgs, T, nd_atm)
   real(dp) :: a_seed, Ar_seed, V_seed
 
   type dust
@@ -56,11 +56,9 @@ module mini_cloud_class
   end type dust
 
   type(dust), allocatable, dimension(:) :: d_sp
-
-
+  !$omp threadprivate (d_sp)
 
 contains
-
 
   subroutine mini_cloud_init(n_dust, sp)
 

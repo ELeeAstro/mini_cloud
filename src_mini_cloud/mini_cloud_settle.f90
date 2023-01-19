@@ -1,5 +1,5 @@
 module mini_cloud_settle
-    use mini_cloud_precision
+  use mini_cloud_precision
   implicit none
 
 
@@ -71,7 +71,7 @@ contains
 
     end do
 
-   end subroutine adv_tracer_mccormack   
+  end subroutine adv_tracer_mccormack   
 
   subroutine minmod(nlay,q,dz,sig)
     implicit none
@@ -120,6 +120,5 @@ contains
 
 
   end subroutine adv_prepare
-
 
 end module mini_cloud_settle
