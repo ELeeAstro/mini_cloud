@@ -41,6 +41,8 @@ contains
     real(dp) :: rpar
     integer :: ipar
 
+    real(dp) :: a_check, Ar_check, V_check
+
     if (first_call .eqv. .True.) then
       call mini_cloud_init(n_dust, sp)
       first_call = .False.
@@ -53,6 +55,22 @@ contains
     T = T_in
     P_cgs = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
     nd_atm = P_cgs/(kb*T)  ! Find initial number density [cm-3] of atmosphere
+
+    ! Check if species are at seed particle limits 
+    a_check = k(2)/k(1)
+    Ar_check = fourpi * k(3)/k(1)
+    V_check = fourpi3 * k(4)/k(1)
+
+    if (k(1) > 1e-30_dp .and. &
+      & (a_check <= a_seed*1.0_dp .or. Ar_check <= Ar_seed*1.0_dp .or. V_check <= V_seed*1.0_dp)) then
+      k(1) = k(1)
+      k(2) = a_seed * k(1)
+      k(3) = Ar_seed/fourpi * k(1)
+      k(4) = V_seed/fourpi3 * k(1)
+
+      k3(1) = k(4)
+      k3(2:n_dust) = 1e-30_dp
+    end if
 
     call calc_saturation(n_dust, VMR(:))
     call calc_nucleation(n_dust, VMR(:))
@@ -74,7 +92,7 @@ contains
     ! ***  parameters for the dvode-solver  ***
     ! -----------------------------------------
 
-    itask = 1
+    itask = 4
     istate = 1
     iopt = 1
 
@@ -88,14 +106,16 @@ contains
     rtol(:) = 1e-12_dp           ! Relative tolerances for each scalar
     atol(:) = 1e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
-    rwork(1) = 0.0_dp                 ! Critical T value (don't integrate past time here)
+    rwork(:) = 0.0_dp
+    iwork(:) = 0
 
-    rwork(5:10) = 0.0_dp
-    iwork(5:10) = 0
+    iwork(5) = 2               ! Max order required
 
-    rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DVODE)
+    rwork(1) = t_end                 ! Critical T value (don't integrate past time here)
+    rwork(5) = 1.0e-99_dp              ! Initial starting timestep (start low, will adapt in DVODE)
     rwork(6) = 1e-2_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
     iwork(6) = 100000               ! Max number of internal steps
+    iwork(7) = 1
 
 
     ! Prepare all species for the solver
@@ -121,6 +141,22 @@ contains
       y(1:5+n_dust-1) = y(1:5+n_dust-1) * nd_atm
 
       ncall = ncall + 1
+
+      ! Check if species are at seed particle limits 
+      a_check = y(2)/y(1)
+      Ar_check = fourpi * y(3)/y(1)
+      V_check = fourpi3 * y(4)/y(1)
+
+      if (y(1) > 1e-30_dp .and. &
+        & (a_check <= a_seed*1.0_dp .or. Ar_check <= Ar_seed*1.0_dp .or. V_check <= V_seed*1.0_dp)) then
+        y(1) = y(1)
+        y(2) = a_seed * y(1)
+        y(3) = Ar_seed/fourpi * y(1)
+        y(4) = V_seed/fourpi3 * y(1)
+
+        y(5) = y(4)
+        y(6:5+n_dust-1) = 1e-30_dp
+      end if
 
       if (istate == -1) then
         istate = 2
@@ -153,6 +189,7 @@ contains
     y(1:5+ipar-1) = y(1:5+ipar-1) * nd_atm
 
     y(5:5+ipar-1) = max(y(5:5+ipar-1),1.0e-30_dp)
+    !y(:) = max(y(:),1.0e-30_dp)
 
     call calc_saturation(ipar, y(5+ipar:5+ipar+ipar-1))
     call calc_nucleation(ipar, y(5+ipar:5+ipar+ipar-1))

@@ -43,7 +43,7 @@ contains
     P_cgs = P_in * 10.0_dp
     rho = (P_cgs * mu * amu)/(kb * T)
 
-    a_av = max(k(2)/k(1),1e-30_dp)
+    a_av = max(k(2)/k(1),a_seed)
     a_av = min(a_av, 100.0_dp)
 
     ! Find the mixing ratio of the grain composition

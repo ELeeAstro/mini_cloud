@@ -2,7 +2,6 @@ module mini_cloud_settle
   use mini_cloud_precision
   implicit none
 
-
   public :: adv_tracer_mccormack
   private :: adv_prepare, minmod
 
@@ -12,26 +11,24 @@ contains
     implicit none
 
     integer, intent(in) :: nlay, nq
-    real(dp), dimension(nlay), intent(inout) :: q
+    real(dp), dimension(nq,nlay), intent(inout) :: q
     real(dp), dimension(nlay), intent(in) :: vf 
     real(dp), dimension(nlay+1), intent(in) :: h
     real(dp), intent(in) :: tend
 
     real(dp), parameter :: cfl = 0.90_dp
 
-    real(dp), dimension(nlay) :: rate, sig, c, qc, vfc
+    real(dp), dimension(nq,nlay) :: qc
+    real(dp), dimension(nlay) :: sig, c, vfc
     real(dp) :: D, tnow, dt
-    integer :: i, iit
+    integer :: i, iit, n
 
-    vfc = vf / 100.0_dp
+    vfc(:) = vf(:) / 100.0_dp
 
     call adv_prepare(nlay+1, h, dh)
 
-    !-------------------
-    ! ***  timestep  ***
-    !-------------------
     dt = 9.0e99_dp
-    do i=1,nlay
+    do i = 1, nlay
       D  = abs(vfc(i))
       if (D <= 0.0_dp) then
         cycle
@@ -53,21 +50,24 @@ contains
       !! Find the courant number
       c(:) = abs(vfc(:)) * dt / dh(:)
 
-      !! Find the minmod limiter
-      call minmod(nlay,q,dh,sig)
+      do n = 1, nq
 
-      !! Perform McCormack step
-      qc(:) = q(:)
-      qc(:nlay-1) = q(:nlay-1) - sig(:nlay-1)*c(:nlay-1)*(q(2:nlay) - q(:nlay-1))
-      q(2:nlay) = 0.5_dp * (q(2:nlay) + qc(2:nlay) - c(2:nlay)*(qc(2:nlay) - qc(:nlay-1)))
+        !! Find the minmod limiter
+        call minmod(nlay,q(n,:),dh,sig)
 
-      q(:) = max(q(:),1e-30_dp)
+        !! Perform McCormack step
+        qc(n,:) = q(n,:)
+        qc(n,:nlay-1) = q(n,:nlay-1) - sig(:nlay-1)*c(:nlay-1)*(q(n,2:nlay) - q(n,:nlay-1))
+        q(n,2:nlay) = 0.5_dp * (q(n,2:nlay) + qc(n,2:nlay) - c(2:nlay)*(qc(n,2:nlay) - qc(n,:nlay-1)))
+
+        q(n,:) = max(q(n,:),1e-30_dp)
+
+      end do
 
       tnow = tnow + dt
       iit = iit + 1
 
-      q(1) = 1e-30_dp
-
+      q(:,nlay) = 1e-30_dp
 
     end do
 
@@ -113,11 +113,10 @@ contains
 
     ! Find distance between each layer center
     hmid(:) = (h(1:nlev-1) +  h(2:nlev))/2.0_dp
-    do i = 1, nlay-1
-      dh(i) =  hmid(i+1) - hmid(i)
+    do i = nlay-1,1,-1
+      dh(i) =  hmid(i) - hmid(i+1)
     end do
-    dh(nlay) = dh(nlay-1)/2.0_dp
-
+    dh(nlay) = hmid(nlay)
 
   end subroutine adv_prepare
 
