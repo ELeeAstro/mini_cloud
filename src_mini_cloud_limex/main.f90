@@ -1,7 +1,7 @@
 program main
   use mini_cloud_precision
   use mini_cloud_class
-  use mini_cloud_i_dvode
+  use mini_cloud_i_limex
   use mini_cloud_vf
   implicit none
 
@@ -19,17 +19,16 @@ program main
   real(dp) :: time
 
   sp(1) = 'TiO2  '
-  sp(2) = 'Mg2SiO4'
+  sp(2) = 'Al2O3 '
   sp(3) = 'Fe    '
-  sp(4) = 'Al2O3 '
+  sp(4) = 'Mg2SiO4'
 
   k(:) = 1.0e-30_dp
   k3(:) = 1.0e-30_dp
   VMR(1) = 1.041e-7_dp
-  VMR(2) = 3.588e-5_dp
+  VMR(2) = 2.771e-6_dp
   VMR(3) = 2.231e-5_dp
-  VMR(4) = 2.771e-6_dp
-
+  VMR(4) = 3.588e-5_dp
 
   ! Number of iterations and start time
   n_it = 3000!400
@@ -59,7 +58,7 @@ program main
       call output(tt, time)
 
       ! Call DIHRT and perform integrations
-      call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
+      call mini_cloud_limex(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
       !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
       !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
 

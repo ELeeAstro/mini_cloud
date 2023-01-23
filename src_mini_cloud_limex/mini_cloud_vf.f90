@@ -90,9 +90,6 @@ contains
     ! Final v_f is negative (downward)
     vf = -(2.0_dp * beta * a_av**2 * grav * (rho_mix - rho)) / (9.0_dp * nu_mix)
 
-    ! Convert to pressure coordinates
-    vf = - rho * grav * vf
-
   end subroutine calc_vf
 
 end module mini_cloud_vf

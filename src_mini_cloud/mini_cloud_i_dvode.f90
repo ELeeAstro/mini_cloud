@@ -72,21 +72,20 @@ contains
       k3(2:n_dust) = 1e-30_dp
     end if
 
-    call calc_saturation(n_dust, VMR(:))
-    call calc_nucleation(n_dust, VMR(:))
+    ! call calc_saturation(n_dust, VMR(:))
+    ! call calc_nucleation(n_dust, VMR(:))
+    ! ! ! If small number of dust particles and small nucleation rate - don't integrate
+    ! if ((sum(d_sp(:)%Js) < 1.0e-10_dp) .and. (k(1) < 1.0e-10_dp)) then
+    !   return
+    ! end if
 
-    ! ! If small number of dust particles and small nucleation rate - don't integrate
-    if ((sum(d_sp(:)%Js) < 1.0e-10_dp) .and. (k(1) < 1.0e-10_dp)) then
-      return
-    end if
 
-
-    call calc_chem(n_dust, k(:), k3(:), VMR(:))
-    ! If overall growth is super slow, don't bother integrating
-     if (k(1) > 1.0e-10_dp .and. (sum(d_sp(:)%Js) < 1.0e-10_dp &
-       & .and. abs(sum(d_sp(:)%chis)) < 1.0e-30_dp)) then
-         return
-    end if
+    ! call calc_chem(n_dust, k(:), k3(:), VMR(:))
+    ! ! If overall growth is super slow, don't bother integrating
+    !  if (k(1) > 1.0e-10_dp .and. (sum(d_sp(:)%Js) < 1.0e-10_dp &
+    !    & .and. abs(sum(d_sp(:)%chis)) < 1.0e-30_dp)) then
+    !      return
+    ! end if
 
     ! -----------------------------------------
     ! ***  parameters for the dvode-solver  ***
@@ -109,13 +108,13 @@ contains
     rwork(:) = 0.0_dp
     iwork(:) = 0
 
-    iwork(5) = 2               ! Max order required
+    rwork(1) = t_end               ! Critical T value (don't integrate past time here)
+    rwork(5) = 1.0e-12_dp              ! Initial starting timestep (start low, will adapt in DVODE)
+    rwork(6) = 1.0e-3_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
 
-    rwork(1) = t_end                 ! Critical T value (don't integrate past time here)
-    rwork(5) = 1.0e-99_dp              ! Initial starting timestep (start low, will adapt in DVODE)
-    rwork(6) = 1e-2_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
+    iwork(5) = 2               ! Max order required
     iwork(6) = 100000               ! Max number of internal steps
-    iwork(7) = 1
+    iwork(7) = 1                ! Number of error messages 
 
 
     ! Prepare all species for the solver
@@ -159,7 +158,7 @@ contains
       end if
 
       if (istate == -1) then
-        istate = 2
+        istate = 1
       else if (istate < -1) then
         ! Some critical failure - comment out if don't care
         print*, istate, real(t_now), real(rwork(11)), int(T), real(P_cgs/1e6_dp)
@@ -189,7 +188,6 @@ contains
     y(1:5+ipar-1) = y(1:5+ipar-1) * nd_atm
 
     y(5:5+ipar-1) = max(y(5:5+ipar-1),1.0e-30_dp)
-    !y(:) = max(y(:),1.0e-30_dp)
 
     call calc_saturation(ipar, y(5+ipar:5+ipar+ipar-1))
     call calc_nucleation(ipar, y(5+ipar:5+ipar+ipar-1))

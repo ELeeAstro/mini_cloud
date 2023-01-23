@@ -28,12 +28,12 @@ contains
 
       k_fac = exp((2.0_dp * d_sp(n)%sig * d_sp(n)%dV)/(a_av * kb * T))
 
-      stab = k_fac/d_sp(n)%sat!**(1.0_dp/d_sp(n)%v_stoi)
+      stab = k_fac/d_sp(n)%sat
       
       if (stab <= 1.0_dp) then
         S = 1.0_dp - stab
       else
-        bmix = max(k3(n)/k(4),1e-30_dp)
+        bmix = max(k3(n)/k(4),1e-99_dp)
         bmix = min(bmix,1.0_dp)
         S = (1.0_dp - stab) * bmix
       end if

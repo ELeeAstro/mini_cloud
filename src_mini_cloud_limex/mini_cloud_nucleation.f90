@@ -36,10 +36,6 @@ contains
           & d_sp(n)%a0, d_sp(n)%alpha, d_sp(n)%mol_wght, d_sp(n)%Js)
         end select
 
-        if (d_sp(n)%Js < 1e-10_dp) then
-          d_sp(n)%Js = 0.0_dp
-        end if
-        
       end if
 
       ! print*, n, T, d_sp(n)%sat, nd(n), d_sp(n)%Nf, d_sp(n)%sig, &
@@ -116,10 +112,6 @@ contains
 
         tau_evap = a_av/abs(d_sp(n)%chis)
         d_sp(n)%sevap = -(k(1)/tau_evap)
-
-        if (d_sp(n)%sevap > -1e-10_dp) then
-          d_sp(n)%sevap = 0.0_dp
-        end if
 
       end if
 
