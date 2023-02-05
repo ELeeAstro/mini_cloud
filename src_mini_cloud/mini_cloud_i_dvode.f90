@@ -14,7 +14,7 @@ module mini_cloud_i_dvode
 
 contains
 
-  subroutine mini_cloud_dvode(n_dust, T_in, P_in, t_end, sp, k, k3, VMR)
+  subroutine mini_cloud_dvode(n_dust, T_in, P_in, t_end, sp, k, k3, VMR, VMR0)
     implicit none
 
     integer, intent(in) :: n_dust
@@ -23,7 +23,7 @@ contains
 
     real(dp), dimension(4), intent(inout) :: k
     real(dp), dimension(n_dust), intent(inout) :: k3
-    real(dp), dimension(n_dust), intent(inout) :: VMR
+    real(dp), dimension(n_dust), intent(inout) :: VMR, VMR0
 
     integer :: ncall
 
@@ -41,7 +41,8 @@ contains
     real(dp) :: rpar
     integer :: ipar
 
-    real(dp) :: a_check, Ar_check, V_check
+    integer :: n
+    real(dp) :: a_check, Ar_check, V_check, total_k3s
 
     if (first_call .eqv. .True.) then
       call mini_cloud_init(n_dust, sp)
@@ -50,6 +51,14 @@ contains
 
     neq = 4 + n_dust + n_dust
     allocate(y(neq))
+
+    ! Prepare all species for the solver
+    k(:) = max(k(:),1e-30_dp)
+    k3(:) = max(k3(:),1e-30_dp)
+    VMR(:) = max(VMR(:),1e-30_dp)
+    VMR(:) = min(VMR0(:),VMR(:))
+
+    d_sp(:)%VMR0 =  VMR0(:)
 
     ! Work variables
     T = T_in
@@ -72,26 +81,28 @@ contains
       k3(2:n_dust) = 1e-30_dp
     end if
 
-    ! call calc_saturation(n_dust, VMR(:))
-    ! call calc_nucleation(n_dust, VMR(:))
-    ! ! ! If small number of dust particles and small nucleation rate - don't integrate
-    ! if ((sum(d_sp(:)%Js) < 1.0e-10_dp) .and. (k(1) < 1.0e-10_dp)) then
-    !   return
-    ! end if
 
 
-    ! call calc_chem(n_dust, k(:), k3(:), VMR(:))
-    ! ! If overall growth is super slow, don't bother integrating
-    !  if (k(1) > 1.0e-10_dp .and. (sum(d_sp(:)%Js) < 1.0e-10_dp &
-    !    & .and. abs(sum(d_sp(:)%chis)) < 1.0e-30_dp)) then
-    !      return
-    ! end if
+    call calc_saturation(n_dust, VMR(:))
+    call calc_nucleation(n_dust, VMR(:))
+    ! ! If small number of dust particles and small nucleation rate - don't integrate
+    if ((sum(d_sp(:)%Js) < 1.0e-10_dp) .and. (k(1) < 1.0e-10_dp)) then
+      return
+    end if
+
+
+    call calc_chem(n_dust, k(:), k3(:), VMR(:))
+    ! If overall growth is super slow, don't bother integrating
+     if (k(1) > 1.0e-10_dp .and. (sum(d_sp(:)%Js) < 1.0e-10_dp &
+       & .and. abs(sum(d_sp(:)%chis)) < 1.0e-12_dp)) then
+         return
+    end if
 
     ! -----------------------------------------
     ! ***  parameters for the dvode-solver  ***
     ! -----------------------------------------
 
-    itask = 4
+    itask = 1
     istate = 1
     iopt = 1
 
@@ -102,17 +113,17 @@ contains
     allocate(rtol(neq), atol(neq), rwork(rworkdim),iwork(iworkdim))
 
     itol = 4
-    rtol(:) = 1e-12_dp           ! Relative tolerances for each scalar
+    rtol(:) = 1e-10_dp           ! Relative tolerances for each scalar
     atol(:) = 1e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
     iwork(:) = 0
 
-    rwork(1) = t_end               ! Critical T value (don't integrate past time here)
-    rwork(5) = 1.0e-12_dp              ! Initial starting timestep (start low, will adapt in DVODE)
-    rwork(6) = 1.0e-3_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
+    rwork(1) = 0.0_dp               ! Critical T value (don't integrate past time here)
+    rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DVODE)
+    rwork(6) = 1.0e-1_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
 
-    iwork(5) = 2               ! Max order required
+    iwork(5) = 5               ! Max order required
     iwork(6) = 100000               ! Max number of internal steps
     iwork(7) = 1                ! Number of error messages 
 
@@ -122,6 +133,15 @@ contains
     y(5:5+n_dust-1) = max(k3(:),1e-30_dp)
     y(5+n_dust:5+n_dust+n_dust-1) = max(VMR(:),1e-30_dp)
 
+      ! Rescale k3s again
+      total_k3s = sum(y(5:5+n_dust-1))
+      if (total_K3s < 1.0e-20_dp) then
+        y(5) = y(4)
+        y(6:5+n_dust-1) = 1.0e-30_dp
+      else
+        y(5:5+n_dust-1) = (y(5:5+n_dust-1) / total_k3s) * y(4)
+      end if
+
     rpar = 0.0_dp
     ipar = n_dust
 
@@ -130,7 +150,7 @@ contains
 
     ncall = 1
 
-    do while((t_now < t_end) .and. ncall <= 3)
+    do while((t_now < t_end) .and. ncall <= 2)
 
       y(1:5+n_dust-1) = y(1:5+n_dust-1)/nd_atm
 
@@ -138,6 +158,10 @@ contains
         & istate, iopt, rwork, rworkdim, iwork, iworkdim, jac_dummy, mf, rpar, ipar)
 
       y(1:5+n_dust-1) = y(1:5+n_dust-1) * nd_atm
+
+       do n = 1, ipar
+        y(5+ipar-1+n) = min(VMR0(n),y(5+ipar-1+n))
+      end do
 
       ncall = ncall + 1
 
@@ -158,18 +182,38 @@ contains
       end if
 
       if (istate == -1) then
-        istate = 1
+        istate = 2
       else if (istate < -1) then
         ! Some critical failure - comment out if don't care
         print*, istate, real(t_now), real(rwork(11)), int(T), real(P_cgs/1e6_dp)
         exit
       end if
 
+      ! Rescale k3s again
+      total_k3s = sum(y(5:5+n_dust-1))
+      if (total_K3s < 1.0e-20_dp) then
+        y(5) = y(4)
+        y(6:5+n_dust-1) = 1.0e-30_dp
+      else
+        y(5:5+n_dust-1) = (y(5:5+n_dust-1) / total_k3s) * y(4)
+      end if
+
     end do
+
+          ! Rescale k3s again
+      total_k3s = sum(y(5:5+n_dust-1))
+      if (total_K3s < 1.0e-20_dp) then
+        y(5) = y(4)
+        y(6:5+n_dust-1) = 1.0e-30_dp
+      else
+        y(5:5+n_dust-1) = (y(5:5+n_dust-1) / total_k3s) * y(4)
+      end if
 
     k(:) = max(y(1:4),1e-30_dp)
     k3(:) = max(y(5:5+n_dust-1),1e-30_dp)
     VMR(:) = max(y(5+n_dust:5+n_dust+n_dust-1),1e-30_dp)
+
+    VMR(:) = min(VMR0(:),VMR(:))
 
     deallocate(rtol, atol, rwork, iwork, y)
 
@@ -185,9 +229,26 @@ contains
     real(dp), intent(inout) :: rpar
     integer, intent(inout) :: ipar
 
+    integer :: n
+    real(dp) :: tot_k3s
+
     y(1:5+ipar-1) = y(1:5+ipar-1) * nd_atm
 
-    y(5:5+ipar-1) = max(y(5:5+ipar-1),1.0e-30_dp)
+    !y(5:5+ipar-1) = max(y(5:5+ipar-1),1e-30_dp)
+    y(:) = max(y(:),1.0e-30_dp)
+
+    do n = 1, ipar
+      y(5+ipar-1+n) = min(d_sp(n)%VMR0,y(5+ipar-1+n))
+    end do
+
+    ! Rescale k3s again
+    tot_k3s = sum(y(5:5+ipar-1))
+    if (tot_K3s < 1.0e-20_dp) then
+      y(5) = y(4)
+      y(6:5+ipar-1) = 1.0e-30_dp
+    else
+      y(5:5+ipar-1) = (y(5:5+ipar-1) / tot_k3s) * y(4)
+    end if
 
     call calc_saturation(ipar, y(5+ipar:5+ipar+ipar-1))
     call calc_nucleation(ipar, y(5+ipar:5+ipar+ipar-1))

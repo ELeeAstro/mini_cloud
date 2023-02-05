@@ -75,17 +75,17 @@ ax.yaxis.set_minor_locator(locmin)
 ax.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
 ax.yaxis.set_ticks_position('both')
 
-plt.xlim(500,2600)
-xticks = [500,750,1000,1250,1500,1750,2000,2250,2500]
-xticks_lab = [r'500',r'750',r'1000',r'1250',r'1500',r'1750',r'2000',r'2250',r'2500']
+plt.xlim(500,2250)
+xticks = [500,750,1000,1250,1500,1750,2000,2250]
+xticks_lab = [r'500',r'750',r'1000',r'1250',r'1500',r'1750',r'2000',r'2250']
 plt.xticks(xticks,xticks_lab)
 
 plt.tick_params(axis='both',which='major',labelsize=14)
 
 plt.gca().invert_yaxis()
 
-plt.ylabel(r'Pressure [bar]',fontsize=16)
-plt.xlabel(r'Temperature [K]',fontsize=16)
+plt.ylabel(r'p$_{\rm gas}$ [bar]',fontsize=14)
+plt.xlabel(r'T$_{\rm gas}$ [K]',fontsize=14)
 
 
 plt.legend()

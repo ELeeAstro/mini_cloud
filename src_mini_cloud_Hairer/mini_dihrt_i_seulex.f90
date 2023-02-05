@@ -187,17 +187,15 @@ contains
 
       end if
 
-      if ((y(5)/y(4) > 0.98_dp) .and. (y(2)/y(1) < 10.0_dp * a_seed)) then
+      ! if ((y(5)/y(4) > 0.98_dp) .and. (y(2)/y(1) < 10.0_dp * a_seed)) then
 
-        print*, d_sp(1)%sevap
-        ! Distribution is purely seed particles - check for rapid evaporation
-        if (d_sp(1)%sevap < 0.0_dp) then
-          y(5+ipar) = y(5+ipar) + d_sp(1)%Nl*y(1)/nd_atm
-          y(1:5+ipar-1) = 1e-30_dp
-          exit
-        end if
-
-      end if
+      !   print*, d_sp(1)%sevap
+      !   ! Distribution is purely seed particles - check for rapid evaporation
+      !   if (d_sp(1)%sevap < 0.0_dp) then
+      !     y(5+ipar) = y(5+ipar) + d_sp(1)%Nl*y(1)/nd_atm
+      !     y(1:5+ipar-1) = 1e-30_dp
+      !     exit
+      !   end if
 
       if (ncall > 5) then
         exit
@@ -228,14 +226,7 @@ contains
 
     y(1:5+ipar-1) = y(1:5+ipar-1) * nd_atm
 
-    ! Rescale L3s
-    tot_k3 = sum(y(5:5+ipar-1))
-    if (tot_k3 < 1.0e-29_dp) then
-       y(5) = y(4)
-       y(6:5+ipar-1) = 1e-30_dp
-    else
-      y(5:5+ipar-1) = (y(5:5+ipar-1) / tot_k3) * y(4)
-    end if
+    y(5:5+ipar-1) = max(y(5:5+ipar-1),1.0e-30_dp)
 
     call calc_saturation(ipar, y(5+ipar:5+ipar+ipar-1))
     call calc_nucleation(ipar, y(5+ipar:5+ipar+ipar-1))

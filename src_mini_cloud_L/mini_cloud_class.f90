@@ -7,6 +7,8 @@ module mini_cloud_class
   real(dp), parameter :: twopi = 2.0_dp*pi, fourpi = 4.0_dp*pi
   real(dp), parameter :: half = 1.0_dp/2.0_dp
   real(dp), parameter :: third = 1.0_dp/3.0_dp, twothird = 2.0_dp/3.0_dp
+  real(dp), parameter :: Afak = (36.0_dp*pi)**(third)
+  real(dp), parameter :: vol2rad = (3.0_dp/(4.0_dp*pi))**(third)
   real(dp), parameter :: fourpi3 = fourpi/3.0_dp
 
   !! Common physical constants - CODATA 2018
@@ -27,8 +29,10 @@ module mini_cloud_class
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
   real(dp), parameter :: mmHg = 1333.2239_dp  ! mmHg to dyne
 
-  real(dp) :: P_cgs, T, nd_atm
-  !$omp threadprivate (P_cgs, T, nd_atm)
+  real(dp), parameter :: L_lim = 1e-30_dp
+
+  real(dp) :: P_cgs, T, nd_atm, rho
+  !$omp threadprivate (P_cgs, T, nd_atm, rho)
   real(dp) :: a_seed, Ar_seed, V_seed
 
   type dust
@@ -53,7 +57,7 @@ module mini_cloud_class
 
     real(dp) :: chis, sevap
 
-    real(dp) :: VMR0
+    real(dp) :: eps
 
   end type dust
 

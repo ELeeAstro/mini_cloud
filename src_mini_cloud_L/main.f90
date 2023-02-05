@@ -10,31 +10,28 @@ program main
 
   character(len=11), dimension(n_dust) :: sp
 
-  real(dp), dimension(4) :: k
-  real(dp), dimension(n_dust) :: k3
-  real(dp), dimension(n_dust) :: VMR, VMR0
-  real(dp) :: vf
+  ! real(dp), dimension(4) :: L
+  ! real(dp), dimension(n_dust) :: L3s
+  ! real(dp), dimension(n_dust) :: VMR
+  real(dp) :: vf 
 
   integer :: tt, n_it, example
   real(dp) :: time
 
   sp(1) = 'TiO2  '
-  sp(2) = 'MgSiO3'
+  sp(2) = 'Mg2SiO4'
   sp(3) = 'Fe    '
   sp(4) = 'Al2O3 '
 
-  k(:) = 1.0e-30_dp
-  k3(:) = 1.0e-30_dp
-  VMR(1) = 1.041e-7_dp
+  LL(:) = 1.0e-30_dp
+  L3s(:) = 1.0e-30_dp
+  VMR(1) = 1.041e-7_dp 
   VMR(2) = 3.588e-5_dp
-  VMR(3) = 2.231e-5_dp
+  VMR(3) = 2.231e-5_dp 
   VMR(4) = 2.771e-6_dp
 
-  VMR0(:) = VMR(:)
-
-
   ! Number of iterations and start time
-  n_it = 3000!400
+  n_it = 5000!400
   time = 6840.0_dp !0.0e0_dp
 
   T_in = 1500.0_dp
@@ -61,17 +58,18 @@ program main
       call output(tt, time)
 
       ! Call DIHRT and perform integrations
-      call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:), VMR0(:))
+      call mini_cloud_dvode(T_in, P_in, mu_in, t_step, sp(:))
       !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
       !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
 
 
 
-      print*, k(:), k(2)/k(1) * 1e4
-      print*, k3(:), VMR(:)
+      print*, LL(1)*rho, LL(2:4), LL(2)/LL(1) * vol2rad * 1e4
+      print*, L3s(:), VMR(:)
 
       ! Call the vertical falling rate routine
-      call calc_vf(n_dust, T_in, P_in, mu_in, grav, k(:), k3(:), vf)
+      !call calc_vf(n_dust, T_in, P_in, mu_in, grav, LL(:), L3s(:), vf)
+      vf = -10.0_dp
 
       ! increment time
       time = time + t_step
@@ -107,7 +105,7 @@ contains
       first_call = .False.
     end if
 
-    write(u1,*) t, time, T_in, P_in, k(:), k3(:), VMR(:), vf 
+    write(u1,*) t, time, T_in, P_in, LL(:), L3s(:), VMR(:), vf 
 
   end subroutine output
 

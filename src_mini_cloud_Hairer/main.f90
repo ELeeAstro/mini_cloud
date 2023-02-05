@@ -7,7 +7,7 @@ program main
   use mini_dihrt_i_ros4
   implicit none
 
-  integer, parameter :: n_dust = 3
+  integer, parameter :: n_dust = 4
   real(dp) :: T_in, P_in, t_step
 
   character(len=11), dimension(n_dust) :: sp
@@ -19,22 +19,24 @@ program main
   integer :: tt, n_it 
   real(dp) :: time
 
-  sp(1) = 'TiO2'
-  sp(2) = 'Fe'
-  sp(3) = 'MgSiO3'
+  sp(1) = 'TiO2  '
+  sp(2) = 'MgSiO3'
+  sp(3) = 'Fe    '
+  sp(4) = 'Al2O3 '
 
   k(:) = 1.0e-30_dp
   k3(:) = 1.0e-30_dp
-  VMR(1) = 1e-7_dp
-  VMR(2) = 2.2e-5_dp
-  VMR(3) = 3.6e-5_dp
+  VMR(1) = 1.041e-7_dp
+  VMR(2) = 3.588e-5_dp
+  VMR(3) = 2.231e-5_dp
+  VMR(4) = 2.771e-6_dp
 
   ! Number of iterations and start time
-  n_it = 1500
+  n_it = 3000!400
   time = 6840.0_dp !0.0e0_dp
 
   T_in = 1500.0_dp
-  P_in = 1.0e5_dp
+  P_in = 1.0e4_dp
 
   t_step = 10.0_dp
 

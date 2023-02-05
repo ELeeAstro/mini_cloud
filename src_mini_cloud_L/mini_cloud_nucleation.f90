@@ -7,16 +7,13 @@ module mini_cloud_nucleation
 
 contains
 
-  subroutine calc_nucleation(n_dust, VMR)
+  subroutine calc_nucleation(n_dust, nd)
     implicit none
 
     integer, intent(in) :: n_dust
-    real(dp), dimension(n_dust), intent(in) :: VMR
-
+    real(dp), dimension(n_dust), intent(in) :: nd
+    
     integer :: n
-    real(dp), dimension(n_dust) :: nd
-
-    nd(:) = nd_atm * VMR(:)
 
     do n = 1, n_dust
       
@@ -35,6 +32,12 @@ contains
           call nuc_MCNT(T, d_sp(n)%sat, nd(n), d_sp(n)%Nf, d_sp(n)%sig, &
           & d_sp(n)%a0, d_sp(n)%alpha, d_sp(n)%mol_wght, d_sp(n)%Js)
         end select
+
+        if (d_sp(n)%Js < 1e-10_dp) then
+          d_sp(n)%Js = 0.0_dp
+        end if
+
+        !d_sp(n)%Js = 0.0_dp
         
       end if
 
@@ -90,30 +93,38 @@ contains
     
   end subroutine nuc_MCNT
 
-  subroutine calc_seed_evap(n_dust, k)
+  subroutine calc_seed_evap(n_dust, LL)
     implicit none
 
     integer, intent(in) :: n_dust
-    real(dp), dimension(4), intent(inout) :: k
+    real(dp), dimension(4), intent(inout) :: LL
 
     integer :: n
     real(dp) :: tau_evap, a_av
 
-    a_av = max(k(2)/k(1),a_seed)
+    a_av = max(LL(2)/LL(1)*vol2rad,a_seed)
     a_av = min(a_av, 1.0_dp)
 
     do n = 1, n_dust
 
-      if ((d_sp(n)%chis >= 0.0_dp)) then
+      if ((d_sp(n)%chis >= 0.0_dp) .or. (d_sp(n)%inuc == 0)) then
 
-        d_sp(:)%sevap = 0.0_dp
-        return
+        d_sp(n)%sevap = 0.0_dp
+
+      else
+
+        tau_evap = a_av/abs(d_sp(n)%chis)
+        d_sp(n)%sevap = -((LL(1)*rho)/tau_evap)
+
+        if (d_sp(n)%sevap > -1e-10_dp) then
+          d_sp(n)%sevap = 0.0_dp
+        end if
+
+        !d_sp(n)%sevap = 0.0_dp
+
       end if
 
     end do
-
-        tau_evap = a_seed/abs(d_sp(1)%chis)
-        d_sp(1)%sevap = -(k(1)/tau_evap)
 
   end subroutine calc_seed_evap
 
