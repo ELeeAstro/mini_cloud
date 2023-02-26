@@ -3,6 +3,7 @@ program main
   use mini_cloud_class
   use mini_cloud_i_dvode
   use mini_cloud_vf
+  use mini_cloud_opac
   implicit none
 
   integer, parameter :: n_dust = 4
@@ -15,11 +16,15 @@ program main
   real(dp), dimension(n_dust) :: VMR, VMR0
   real(dp) :: vf
 
+  integer, parameter :: n_wl = 11
+  real(dp), dimension(n_wl+1) :: wl_e
+  real(dp), dimension(n_wl) :: wl, k_ext, alb, gg
+
   integer :: tt, n_it, example
   real(dp) :: time
 
   sp(1) = 'TiO2  '
-  sp(2) = 'MgSiO3'
+  sp(2) = 'Mg2SiO4'
   sp(3) = 'Fe    '
   sp(4) = 'Al2O3 '
 
@@ -32,9 +37,11 @@ program main
 
   VMR0(:) = VMR(:)
 
+  wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
+  wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
   ! Number of iterations and start time
-  n_it = 3000!400
+  n_it = 1000
   time = 6840.0_dp !0.0e0_dp
 
   T_in = 1500.0_dp
@@ -65,13 +72,16 @@ program main
       !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
       !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
 
-
-
-      print*, k(:), k(2)/k(1) * 1e4
-      print*, k3(:), VMR(:)
-
       ! Call the vertical falling rate routine
       call calc_vf(n_dust, T_in, P_in, mu_in, grav, k(:), k3(:), vf)
+
+      !! Call the opaicity routine
+      call opac_budaj_tables(n_dust, sp(:), T_in, mu_in, P_in, k(:), k3(:), n_wl, wl, k_ext, alb, gg)
+
+
+      print*, 'k', tt, k(:), k(2)/k(1) * 1e4
+      print*, 'k3', tt, k3(:), VMR(:)
+      print*, 'o', tt, k(2)/k(1)*1e4_dp,k_ext(5), alb(5), gg(5)
 
       ! increment time
       time = time + t_step

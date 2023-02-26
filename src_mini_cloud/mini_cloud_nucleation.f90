@@ -35,12 +35,15 @@ contains
           call nuc_MCNT(T, d_sp(n)%sat, nd(n), d_sp(n)%Nf, d_sp(n)%sig, &
           & d_sp(n)%a0, d_sp(n)%alpha, d_sp(n)%mol_wght, d_sp(n)%Js)
         end select
+
+       !print*, n, T, d_sp(n)%sat, nd(n), d_sp(n)%Nf, d_sp(n)%sig, &
+       !& d_sp(n)%a0, d_sp(n)%alpha, d_sp(n)%mol_wght, d_sp(n)%Js
         
       end if
 
-      ! print*, n, T, d_sp(n)%sat, nd(n), d_sp(n)%Nf, d_sp(n)%sig, &
-      ! & d_sp(n)%a0, d_sp(n)%alpha, d_sp(n)%mol_wght, d_sp(n)%Js
-      ! stop
+!       print*, n, T, d_sp(n)%sat, nd(n), d_sp(n)%Nf, d_sp(n)%sig, &
+!       & d_sp(n)%a0, d_sp(n)%alpha, d_sp(n)%mol_wght, d_sp(n)%Js
+       !stop
 
     end do
 
@@ -129,7 +132,7 @@ contains
 
   end subroutine nuc_SiO
 
-  pure subroutine calc_sig(n, T, sig)
+  subroutine calc_sig(n, T, sig)
     implicit none
 
     integer, intent(in) :: n

@@ -9,7 +9,7 @@ F90LINKER =  gfortran
 #FFLAGS	= -Og -pipe -Wall -Wextra -g -fbacktrace
 
 #Serial flags
-FFLAGS  = -O2 -pipe
+FFLAGS  = -O3 -pipe
 
 #Parallel flags
 #FFLAGS	= -O2 -pipe -fopenmp
@@ -41,6 +41,7 @@ mini_cloud_chem.o \
 mini_cloud_rhs.o \
 mini_cloud_i_dvode.o \
 mini_cloud_vf.o \
+mini_cloud_opac.o \
 main.o
 
 # executable statement

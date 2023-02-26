@@ -129,16 +129,19 @@ contains
       stop
     end select
 
-    p_par = nd(n) * kb * T
+    p_par = VMR(n) * P_cgs
     d_sp(n)%sat = p_par / p_vap
 
     ! Limiters
     d_sp(n)%sat = max(d_sp(n)%sat,1.0e-30_dp)
     d_sp(n)%sat = min(d_sp(n)%sat,1.0e30_dp)
 
-    end do
 
     !print*, n, p_par, p_vap, d_sp(n)%sat
+
+    end do
+
+
 
   end subroutine calc_saturation
 

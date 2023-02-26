@@ -10,6 +10,7 @@ module mini_cloud_i_dvode
   logical :: first_call = .True.
   !$omp threadprivate (first_call)
 
+  private :: first_call
   public ::  mini_cloud_dvode, RHS_update, jac_dummy
 
 contains
@@ -43,7 +44,7 @@ contains
 
     integer :: n
     real(dp) :: a_check, Ar_check, V_check, total_k3s
-
+    
     if (first_call .eqv. .True.) then
       call mini_cloud_init(n_dust, sp)
       first_call = .False.
