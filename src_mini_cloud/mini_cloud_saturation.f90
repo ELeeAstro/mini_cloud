@@ -15,9 +15,6 @@ contains
 
     integer :: n
     real(dp) :: TC, p_par, p_vap
-    real(dp), dimension(n_dust) :: nd
-
-    nd(:) = nd_atm * VMR(:)
 
     do n = 1, n_dust
     !! Calculate vapour pressure in dyne cm-2
@@ -136,12 +133,9 @@ contains
     d_sp(n)%sat = max(d_sp(n)%sat,1.0e-30_dp)
     d_sp(n)%sat = min(d_sp(n)%sat,1.0e30_dp)
 
-
     !print*, n, p_par, p_vap, d_sp(n)%sat
 
     end do
-
-
 
   end subroutine calc_saturation
 

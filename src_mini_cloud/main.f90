@@ -41,7 +41,7 @@ program main
   wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
   ! Number of iterations and start time
-  n_it = 1000
+  n_it = 5000
   time = 6840.0_dp !0.0e0_dp
 
   T_in = 1500.0_dp

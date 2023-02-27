@@ -100,23 +100,19 @@ contains
     real(dp), dimension(4), intent(inout) :: k
 
     integer :: n
-    real(dp) :: tau_evap, a_av
-
-    a_av = max(k(2)/k(1),a_seed)
-    a_av = min(a_av, 1.0_dp)
-
+    real(dp) :: tau_evap
+    
     do n = 1, n_dust
 
       if ((d_sp(n)%chis >= 0.0_dp)) then
-
         d_sp(:)%sevap = 0.0_dp
         return
       end if
 
     end do
 
-        tau_evap = a_seed/abs(d_sp(1)%chis)
-        d_sp(1)%sevap = -(k(1)/tau_evap)
+    tau_evap = a_seed/abs(d_sp(1)%chis)
+    d_sp(1)%sevap = -(k(1)/tau_evap)
 
   end subroutine calc_seed_evap
 

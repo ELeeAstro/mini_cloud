@@ -26,6 +26,10 @@ contains
     real(dp), dimension(n_dust), intent(inout) :: k3
     real(dp), dimension(n_dust), intent(inout) :: VMR, VMR0
 
+    real(dp), dimension(4) :: k_cp
+    real(dp), dimension(n_dust) :: k3_cp
+    real(dp), dimension(n_dust) :: VMR_cp    
+
     integer :: ncall
 
     ! Time controls
@@ -72,7 +76,7 @@ contains
     V_check = fourpi3 * k(4)/k(1)
 
     if (k(1) > 1e-30_dp .and. &
-      & (a_check <= a_seed*1.0_dp .or. Ar_check <= Ar_seed*1.0_dp .or. V_check <= V_seed*1.0_dp)) then
+      & (a_check <= a_seed*1.05_dp .or. Ar_check <= Ar_seed*1.05_dp .or. V_check <= V_seed*1.05_dp)) then
       k(1) = k(1)
       k(2) = a_seed * k(1)
       k(3) = Ar_seed/fourpi * k(1)
@@ -82,6 +86,14 @@ contains
       k3(2:n_dust) = 1e-30_dp
     end if
 
+    ! Rescale k3s again
+    total_k3s = sum(k3(:))
+    if (total_K3s < 1.0e-20_dp) then
+      k3(1) = k(4)
+      k3(2:) = 1.0e-30_dp
+    else
+      k3(:) = (k3(:) / total_k3s) * k(4)
+    end if
 
 
     call calc_saturation(n_dust, VMR(:))
@@ -151,7 +163,11 @@ contains
 
     ncall = 1
 
-    do while((t_now < t_end) .and. ncall <= 2)
+    k_cp(:) = k(:)
+    k3_cp(:) = k3(:)
+    VMR_cp(:) = VMR(:)
+
+    do while((t_now < t_end) .and. ncall <= 3)
 
       y(1:5+n_dust-1) = y(1:5+n_dust-1)/nd_atm
 
@@ -166,13 +182,13 @@ contains
 
       ncall = ncall + 1
 
-      ! Check if species are at seed particle limits 
+      ! Check if species are at seed particle limits
       a_check = y(2)/y(1)
       Ar_check = fourpi * y(3)/y(1)
       V_check = fourpi3 * y(4)/y(1)
 
       if (y(1) > 1e-30_dp .and. &
-        & (a_check <= a_seed*1.0_dp .or. Ar_check <= Ar_seed*1.0_dp .or. V_check <= V_seed*1.0_dp)) then
+        & (a_check <= a_seed*1.05_dp .or. Ar_check <= Ar_seed*1.05_dp .or. V_check <= V_seed*1.05_dp)) then
         y(1) = y(1)
         y(2) = a_seed * y(1)
         y(3) = Ar_seed/fourpi * y(1)
@@ -180,6 +196,20 @@ contains
 
         y(5) = y(4)
         y(6:5+n_dust-1) = 1e-30_dp
+
+        call calc_saturation(ipar, y(5+ipar:5+ipar+ipar-1))
+        call calc_nucleation(ipar, y(5+ipar:5+ipar+ipar-1))
+        call calc_chem(ipar, y(1:4), y(5:5+ipar-1), y(5+ipar:5+ipar+ipar-1))
+        call calc_seed_evap(ipar, y(1:4))
+
+         if (d_sp(1)%sevap < 0.0_dp) then
+           !print*, 'Seed evap'
+           y(1:4) = 1e-30_dp
+           y(5:5+n_dust-1) = 1e-30_dp
+           t_now = t_end
+           exit
+         end if
+
       end if
 
       if (istate == -1) then
@@ -187,6 +217,10 @@ contains
       else if (istate < -1) then
         ! Some critical failure - comment out if don't care
         print*, istate, real(t_now), real(rwork(11)), int(T), real(P_cgs/1e6_dp)
+        ! Return values to initial values
+        y(1:4) = k_cp(:)
+        y(5:5+n_dust-1) = k3_cp(:)
+        y(5+n_dust:5+n_dust+n_dust-1) = VMR_cp(:)
         exit
       end if
 
@@ -201,14 +235,14 @@ contains
 
     end do
 
-          ! Rescale k3s again
-      total_k3s = sum(y(5:5+n_dust-1))
-      if (total_K3s < 1.0e-20_dp) then
-        y(5) = y(4)
-        y(6:5+n_dust-1) = 1.0e-30_dp
-      else
-        y(5:5+n_dust-1) = (y(5:5+n_dust-1) / total_k3s) * y(4)
-      end if
+    ! Rescale k3s again
+    total_k3s = sum(y(5:5+n_dust-1))
+    if (total_K3s < 1.0e-20_dp) then
+      y(5) = y(4)
+      y(6:5+n_dust-1) = 1.0e-30_dp
+    else
+      y(5:5+n_dust-1) = (y(5:5+n_dust-1) / total_k3s) * y(4)
+    end if
 
     k(:) = max(y(1:4),1e-30_dp)
     k3(:) = max(y(5:5+n_dust-1),1e-30_dp)

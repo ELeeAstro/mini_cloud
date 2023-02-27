@@ -17,18 +17,15 @@ contains
     integer :: n
     real(dp) :: S, top_term, therm_term, bmix, k_fac, a_av
     real(dp) :: stab
-    real(dp), dimension(n_dust) :: nd
 
-    nd(:) = nd_atm * VMR(:)
-
-    a_av = max(k(2)/k(1),a_seed)
-    a_av = min(a_av, 1.0_dp)
+    a_av = max(k(4)/k(3),a_seed)
+    a_av = min(a_av, 100.0_dp)
 
     do n = 1, n_dust
 
       k_fac = exp((2.0_dp * d_sp(n)%sig * d_sp(n)%dV)/(a_av * kb * T))
 
-      stab = k_fac/d_sp(n)%sat!**(1.0_dp/d_sp(n)%v_stoi)
+      stab = k_fac/d_sp(n)%sat
       
       if (stab <= 1.0_dp) then
         S = 1.0_dp - stab
@@ -38,10 +35,10 @@ contains
         S = (1.0_dp - stab) * bmix
       end if
 
-      top_term = d_sp(n)%dV * d_sp(n)%v_stoi * d_sp(n)%alpha * nd(n)
-      therm_term = sqrt((kb * T)/(twopi * d_sp(n)%mass))
+      top_term = d_sp(n)%dV * d_sp(n)%v_stoi * d_sp(n)%alpha * VMR(n) * P_cgs
+      therm_term = sqrt(twopi * d_sp(n)%mass * kb * T)
 
-      d_sp(n)%chis = top_term*therm_term * S
+      d_sp(n)%chis = top_term/therm_term * S
 
     end do
 

@@ -62,8 +62,9 @@ contains
 
     amean = log10(k(2)/k(1) * 1e4_dp)
     Vmean = fourpi3 * k(4)/k(1)
-    b_mix(:) = k3(:)/sum(k3(:))
-
+    b_mix(:) = max(k3(:)/k(4),1e-30_dp)
+    b_mix(:) = min(k3(:)/k(4),1.0_dp)
+    
     do l = 1, n_wl
 
       k_ext(l) = 0.0_dp
