@@ -68,17 +68,18 @@ contains
 
     amean = k(2)/k(1)
     xsec = pi * amean**2
+    
     b_mix(:) = max(k3(:)/k(4),1e-30_dp)
     b_mix(:) = min(k3(:)/k(4),1.0_dp)
 
     do l = 1, n_wl
 
       !! Size parameter 
-      x = (2.0_dp * pi * (amean*1e4_dp)**2) / wl(l)
+      x = (2.0_dp * pi * amean) / (wl(l) * 1e-4_dp)
 
       if (x > 100.0_dp) then
         !! Use large size paramater approximation - guess alb and gg
-        k_ext(l) = 2.0_dp * xsec * k(1)
+        k_ext(l) = (2.0_dp * xsec * k(1))/rho
         alb(l) = 0.5_dp
         gg(l) = 0.5_dp
         cycle 
@@ -86,23 +87,13 @@ contains
 
       !! Refractive index
       !! Use LLL method
-      do n = 1, n_dust
-        N_inc(n) = cmplx(nk(n)%n(l),nk(n)%k(l),dp)
-      end do
-
-      N_eff = cmplx(0.0_dp, 0.0_dp,dp)
-      e_eff = cmplx(0.0_dp, 0.0_dp,dp)
-
-      N_eff0 = cmplx(0.0_dp, 0.0_dp,dp)
-      do n = 1, n_dust
-        N_eff0 = N_eff0 + b_mix(n) * N_inc(n)
-        e_inc(n) = m2e(N_inc(n))
-      end do
-
       e_eff0 = cmplx(0.0_dp,0.0_dp,dp)
       do n = 1, n_dust
+        N_inc(n) = cmplx(nk(n)%n(l),nk(n)%k(l),dp)
+        e_inc(n) = m2e(N_inc(n))
         e_eff0 = e_eff0 + b_mix(n)*e_inc(n)**(1.0_dp/3.0_dp)
       end do
+
       e_eff = e_eff0**3
       N_eff = e2m(e_eff)
 
