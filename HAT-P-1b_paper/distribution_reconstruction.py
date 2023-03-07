@@ -20,6 +20,8 @@ Var = k2/k0 - Ev**2
 
 print(Ev, Var)
 
+#Var = 1.9e-10
+
 na = 1000
 a = np.logspace(-6,-3,na)
 
@@ -39,12 +41,13 @@ beta = Ev/Var
 fgam = k0*beta**(alpha)/gamma(alpha) * a**(alpha-1) * np.exp(-beta*a)
 
 # Inv Gamma
-alpha = Ev**2/Var + 2.0
+alpha = np.minimum(Ev**2/Var + 2.0,50)
 beta = Ev*(alpha - 1.0)
 figam = k0*beta**(alpha)/gamma(alpha) * (1.0/a)**(alpha+1) * np.exp(-beta/a)
 
 # Rayleigh distribution
 sig = Ev/np.sqrt(np.pi/2.0)
+#sig = np.sqrt(Var/(2.0 - np.pi/2.0))
 fRay = k0*a/sig**2*np.exp(-a**2/(2.0*sig**2))
 
 #Potential Exponential
@@ -69,6 +72,17 @@ av = Ev
 sig2 = (k2*k0 - k1**2)/k0**2
 
 fbell = np.exp(-(a - av)**2/(2.0*sig))
+
+# beta 
+nu = (Ev*(1.0 - Ev))/Var - 1.0
+alpha = Ev*nu
+beta = (1.0 - Ev)*nu
+
+Bbeta = (gamma(alpha)*gamma(beta))/gamma(alpha + beta)
+print(gamma(alpha), gamma(beta), gamma(alpha + beta))
+print(Bbeta,nu,alpha,beta)
+
+fbeta = k0 * (a**(alpha - 1.0) * (1.0 - a)**(beta - 1.0))/Bbeta
 
 # Initial guess for the parameters
 #k_init = 1
@@ -100,6 +114,7 @@ plt.plot(a*1e4,fRay,label='Rayleigh',c=c[4])
 plt.plot(a*1e4,fpot,label='Pot. Exp.',c=c[5])
 plt.plot(a*1e4,fHan,label='Hansen',c=c[6])
 #plt.plot(a*1e4,fbell,label='Bell',c=c[7])
+plt.plot(a*1e4,fbeta,label='Beta',c=c[7])
 
 #plt.plot(a*1e4,fweb,label='Web',c=c[7])
 

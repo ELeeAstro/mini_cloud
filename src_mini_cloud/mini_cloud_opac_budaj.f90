@@ -1,4 +1,4 @@
-module mini_cloud_opac
+module mini_cloud_opac_budaj
   use mini_cloud_precision
   use mini_cloud_class
   implicit none
@@ -396,4 +396,4 @@ contains
 
   end subroutine locate
 
-end module mini_cloud_opac
+end module mini_cloud_opac_budaj

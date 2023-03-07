@@ -3,7 +3,8 @@ program main
   use mini_cloud_class
   use mini_cloud_i_dvode
   use mini_cloud_vf
-  use mini_cloud_opac
+  use mini_cloud_opac_budaj
+  use mini_cloud_opac_mie
   implicit none
 
   integer, parameter :: n_dust = 4
@@ -76,7 +77,8 @@ program main
       call calc_vf(n_dust, T_in, P_in, mu_in, grav, k(:), k3(:), vf)
 
       !! Call the opaicity routine
-      call opac_budaj_tables(n_dust, sp(:), T_in, mu_in, P_in, k(:), k3(:), n_wl, wl, k_ext, alb, gg)
+      !call opac_budaj_tables(n_dust, sp(:), T_in, mu_in, P_in, k(:), k3(:), n_wl, wl, k_ext, alb, gg)
+      call opac_mie(n_dust, sp(:), T_in, mu_in, P_in, k(:), k3(:), n_wl, wl, k_ext, alb, gg)
 
 
       print*, 'k', tt, k(:), k(2)/k(1) * 1e4

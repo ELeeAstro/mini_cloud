@@ -33,6 +33,7 @@ LFLAGS    = $(FFLAGS)
 
 OBJECTS = \
 dvode.o \
+lxmie_mod.o \
 mini_cloud_precision.o \
 mini_cloud_class.o \
 mini_cloud_saturation.o \
@@ -41,7 +42,8 @@ mini_cloud_chem.o \
 mini_cloud_rhs.o \
 mini_cloud_i_dvode.o \
 mini_cloud_vf.o \
-mini_cloud_opac.o \
+mini_cloud_opac_budaj.o \
+mini_cloud_opac_mie.o \
 main.o
 
 # executable statement
