@@ -88,8 +88,8 @@ contains
       N_eff = e2m(e_eff)
 
       if (x < 0.01_dp) then
-        !! Use small dielectric sphere approximation
-        call small_particle(N_eff, x, q_abs, q_sca)
+        !! Use Rayleigh approximation
+        call rayleigh(x, N_eff, q_abs, q_sca, q_ext)
         q_ext = q_abs + q_sca
         g = 0.0_dp
       else if (x > 100.0_dp) then
@@ -111,27 +111,25 @@ contains
   end subroutine opac_mie
 
   ! Small dielectric sphere approximation, small particle limit x << 1
-  subroutine small_particle(N_eff, x, q_abs, q_sca)
+  subroutine rayleigh(x, ri, q_abs, q_sca, q_ext)
     implicit none
 
     real(dp), intent(in) :: x
-    complex(dp), intent(in) :: N_eff
+    complex(dp), intent(in) :: ri
 
-    real(dp), intent(out) :: q_abs, q_sca
+    real(dp), intent(out) :: q_abs, q_sca, q_ext
 
-    real(dp) :: er, ei, term
+    complex(dp) :: alp
 
-    er = real(N_eff,dp)
-    ei = aimag(N_eff)
+    alp = (ri**2 - 1.0_dp)/(ri**2 + 2.0_dp)
 
-    term = (3.0_dp*ei)/((er + 2.0_dp)**2 + ei**2)
+    q_sca = 8.0_dp/3.0_dp * x**4 * abs(alp)**2
+    q_ext = 4.0_dp * x * aimag(alp * (1.0_dp + x**2/15.0_dp*alp * ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp)))) + &
+     & 8.0_dp/3.0_dp * x**4 * real(alp**2,dp)
 
-    q_abs = (4.0_dp * x) * term * &
-     & (1.0_dp + (4.0_dp*x**3)/3.0_dp * term)
-    q_sca = (8.0_dp/3.0_dp * x**4) * ((er - 1.0_dp)**2 + ei**2)/((er + 2.0_dp)**2 + ei**2)
+    q_abs = q_ext - q_sca
 
-  end subroutine small_particle  
-
+  end subroutine rayleigh
 
   subroutine adt(x, ri, q_abs, q_sca, q_ext)
     implicit none
@@ -175,9 +173,13 @@ contains
     else
       fac = exp(-rho2)
       fac2 = fac**2
-      q_ext = 2.0_dp + (4.0_dp/rho0**2)*(cos(2.0_dp*beta) - fac*(cos(rho1 - 2.0_dp*beta) + rho0*sin(rho1 - beta)))
+      q_ext = 2.0_dp + (4.0_dp/rho0**2)*(cos(2.0_dp*beta) - fac*(cos(rho1 - 2*beta) + rho0*sin(rho1 - beta)))
       q_abs = 1.0_dp + fac2/rho2 + (fac2 - 1.0_dp)/(2.0_dp*rho2**2)
       q_sca = q_ext - q_abs
+    end if
+
+    if (x >= 100.0_dp) then
+      q_ext = q_ext + 2.0_dp * x**(-2.0_dp/3.0_dp)
     end if
 
   end subroutine adt
@@ -211,6 +213,9 @@ contains
       case('Fe')
         nk(n)%name = sp(n)
         nk(n)%fname = 'Fe[s].dat'
+      case('FeO')
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'FeO[s].dat'        
       case('Mg2SiO4') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'Mg2SiO4_amorph[s].dat'

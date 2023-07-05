@@ -24,11 +24,13 @@ program main
   integer :: tt, n_it, example
   real(dp) :: time
 
-  sp(1) = 'TiO2  '
+  !! Chose name of individual species
+  sp(1) = 'TiO2   '
   sp(2) = 'Mg2SiO4'
-  sp(3) = 'Fe    '
-  sp(4) = 'Al2O3 '
+  sp(3) = 'Fe     '
+  sp(4) = 'Al2O3  '
 
+  !! Initial moments and species VMR
   k(:) = 1.0e-30_dp
   k3(:) = 1.0e-30_dp
   VMR(1) = 1.041e-7_dp
@@ -38,25 +40,30 @@ program main
 
   VMR0(:) = VMR(:)
 
+  !! Initialisation for v=arrays
   vf = 1e-30_dp
   k_ext(:) = 0.0_dp
   alb(:) = 0.0_dp
   gg(:) = 0.0_dp
 
+  !! Wavelengths to calculate opacity
   wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
   wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
-  ! Number of iterations and start time
+  !! Number of iterations and start time
   n_it = 5000
   time = 6840.0_dp !0.0e0_dp
 
+  !! input atmosphere properties
   T_in = 1500.0_dp
   P_in = 1.0e4_dp
   mu_in = 2.33_dp
-  grav = 2000.0_dp
+  grav = 1000.0_dp
 
+  !! Time step
   t_step = 10.0_dp
 
+  !! Select example
   example = 1
 
   ! Start time iteration
@@ -75,8 +82,6 @@ program main
 
       ! Call DIHRT and perform integrations
       call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:), VMR0(:))
-      !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
-      !call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:))
 
       ! Call the vertical falling rate routine
       call calc_vf(n_dust, T_in, P_in, mu_in, grav, k(:), k3(:), vf)

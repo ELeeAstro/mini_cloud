@@ -42,6 +42,10 @@ contains
       else
         p_vap = exp(15.71_dp - 47664.0_dp/T) * bar
       end if
+    case('FeO')
+      ! NIST 5 param fit
+      p_vap = exp(-6.30018e4_dp/T + 3.66364e1_dp - 2.42990e-3_dp*T &
+      & + 3.18636e-7_dp*T**2 - 0.0_dp*T**3)
     case('Mg2SiO4')
       ! Kozasa et al. (1989)
       p_vap = exp(-62279_dp/T + 20.944_dp) * atm

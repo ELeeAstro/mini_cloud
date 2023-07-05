@@ -23,8 +23,10 @@ contains
 
     do n = 1, n_dust
 
+      !! Kelvin Factor
       k_fac = exp((2.0_dp * d_sp(n)%sig * d_sp(n)%dV)/(a_av * kb * T))
 
+      !! Stability factor
       stab = k_fac/d_sp(n)%sat
       
       if (stab <= 1.0_dp) then

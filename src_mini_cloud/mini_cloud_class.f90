@@ -174,6 +174,18 @@ contains
         d_sp(n)%v_stoi = 1.0_dp
         d_sp(n)%alpha = 1.0_dp
 
+
+      case ('FeO')
+
+        d_sp(n)%bulk_den = 5.99_dp
+        d_sp(n)%mol_wght = 71.8444_dp
+        d_sp(n)%mass = d_sp(n)%mol_wght * amu
+        d_sp(n)%dV = d_sp(n)%mass / d_sp(n)%bulk_den
+        d_sp(n)%inuc = 0
+        d_sp(n)%sig = 584.0_dp
+        d_sp(n)%v_stoi = 1.0_dp
+        d_sp(n)%alpha = 1.0_dp
+
       case('Mg2SiO4')
 
         d_sp(n)%bulk_den = 3.21_dp
