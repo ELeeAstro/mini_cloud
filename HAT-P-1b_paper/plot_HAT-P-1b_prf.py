@@ -2,13 +2,78 @@ import numpy as np
 import matplotlib.pylab as plt
 import matplotlib.ticker
 import seaborn as sns
+from netCDF4 import Dataset
 
 fname = 'HAT-P-1b_HELIOS.txt'
 data = np.loadtxt(fname,skiprows=3)
 
 
-T = data[:,1]
-p = data[:,2]/1e6
+T_H = data[:,1]
+p_H = data[:,2]/1e6
+
+fname = 'FMS_RC_ic.out'
+data = np.loadtxt(fname)
+
+T_ic = data[:,2]
+p_ic = data[:,1]/1e5
+
+fname = 'atmos_average.nc'
+
+data = Dataset(fname)
+
+print (data.file_format)
+print (data.dimensions.keys())
+print (data.variables.keys())
+print (data.variables['time'])
+
+time = data.variables['time'][:]
+
+print ('time',time)
+
+lats = data.variables['grid_yt'][:]
+lons = data.variables['grid_xt'][:]
+lay_f = data.variables['pfull'][:]
+
+pk = data.variables['pk'][:]
+bk = data.variables['bk'][:]
+
+nt = len(time)
+nlat = len(lats)
+nlon = len(lons)
+nlay = len(lay_f)
+nlev = nlay + 1
+
+print(nt, nlat, nlon, nlay)
+
+t = -1
+
+gPs = np.zeros((nlat,nlon))
+gPs[:,:] = data.variables['ps'][t,:,:]
+
+
+gP_f = np.zeros((nlev,nlat,nlon))
+for y in range(nlat):
+  for x in range(nlon):
+    for z in range(nlev):
+      gP_f[z,y,x] = (gPs[y,x] * bk[z] + pk[z])/1e5
+
+gP = np.zeros((nlay,nlat,nlon))
+for z in range(nlay):
+  gP[z,:,:] = (gP_f[z+1,:,:] - gP_f[z,:,:])/(np.log(gP_f[z+1,:,:]) - np.log(gP_f[z,:,:]))
+
+
+T = np.zeros((nlay,nlat,nlon))
+T = data.variables['temp'][t,:,:,:]
+
+p_av = np.zeros(nlay)
+T_av = np.zeros(nlay)
+
+for z in range(nlay):
+  p_av[z] = np.average(gP[z,:,:])
+  T_av[z] = np.average(T[z,:,:])
+      
+
+## Begin plotting
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -49,18 +114,20 @@ fig, ax = plt.subplots()
 
 c = sns.color_palette('colorblind') 
 
-plt.plot(T,p,label='HAT-P-1b',c='black',ls='dashed')
+plt.plot(T_H,p_H,label='HELIOS',c='#D60270',ls='solid')
+plt.plot(T_ic,p_ic,label='Picket Fence I.C.',c='#9B4F96',ls='solid')
+plt.plot(T_av,p_av,label='GCM Global Av.',c='#0038A8',ls='solid')
 
 #plt.plot(Tc_CaTiO3,P,label=r'CaTiO$_{3}$',c='red')
-plt.plot(Tc_Al2O3,P,label=r'Al$_{2}$O$_{3}$',c=c[0])
-plt.plot(Tc_Fe,P,label=r'Fe',c=c[1])
-plt.plot(Tc_Mg2SiO4,P,label=r'Mg$_{2}$SiO$_{4}$',c=c[2])
-plt.plot(Tc_MgSiO3,P,label=r'MgSiO$_{3}$',c=c[3])
-plt.plot(Tc_Cr,P,label=r'Cr',c=c[4])
-plt.plot(Tc_MnS,P,label=r'MnS',c=c[5])
-plt.plot(Tc_Na2S,P,label=r'Na$_{2}$S',c=c[6])
-plt.plot(Tc_ZnS,P,label=r'ZnS',c=c[7])
-plt.plot(Tc_KCl,P,label=r'KCl',c=c[8])
+plt.plot(Tc_Al2O3,P,label=r'Al$_{2}$O$_{3}$',c=c[0],ls='dashed')
+plt.plot(Tc_Fe,P,label=r'Fe',c=c[1],ls='dashed')
+plt.plot(Tc_Mg2SiO4,P,label=r'Mg$_{2}$SiO$_{4}$',c=c[2],ls='dashed')
+plt.plot(Tc_MgSiO3,P,label=r'MgSiO$_{3}$',c=c[3],ls='dashed')
+plt.plot(Tc_Cr,P,label=r'Cr',c=c[4],ls='dashed')
+plt.plot(Tc_MnS,P,label=r'MnS',c=c[5],ls='dashed')
+plt.plot(Tc_Na2S,P,label=r'Na$_{2}$S',c=c[6],ls='dashed')
+plt.plot(Tc_ZnS,P,label=r'ZnS',c=c[7],ls='dashed')
+plt.plot(Tc_KCl,P,label=r'KCl',c=c[8],ls='dashed')
 #plt.plot(Tc_H2O,P,label=r'H2O',c='cyan')
 #plt.plot(Tc_NH4SH,P,label=r'NH$_{4}$SH',c='teal')
 #plt.plot(Tc_NH3,P,label=r'NH$_{3}$',c='olive')

@@ -38,6 +38,11 @@ program main
 
   VMR0(:) = VMR(:)
 
+  vf = 1e-30_dp
+  k_ext(:) = 0.0_dp
+  alb(:) = 0.0_dp
+  gg(:) = 0.0_dp
+
   wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
   wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
@@ -83,7 +88,7 @@ program main
 
       print*, 'k', tt, k(:), k(2)/k(1) * 1e4
       print*, 'k3', tt, k3(:), VMR(:)
-      print*, 'o', tt, k(2)/k(1)*1e4_dp,k_ext(5), alb(5), gg(5)
+      print*, 'o', tt, k(2)/k(1)*1e4_dp,k_ext(7), alb(7), gg(7)
 
       ! increment time
       time = time + t_step
@@ -111,15 +116,17 @@ contains
 
     integer, intent(in) :: t
     double precision, intent(in) :: time
-    integer, save :: u1
+    integer, save :: u1, u2
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
       open(newunit=u1,file='tracers.txt',action='readwrite')
+      open(newunit=u2,file='opac.txt',action='readwrite')
       first_call = .False.
     end if
 
     write(u1,*) t, time, T_in, P_in, k(:), k3(:), VMR(:), vf 
+    write(u2,*) t, time, k_ext(:), alb(:), gg(:)
 
   end subroutine output
 

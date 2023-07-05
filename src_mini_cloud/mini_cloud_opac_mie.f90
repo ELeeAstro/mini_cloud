@@ -22,7 +22,7 @@ module mini_cloud_opac_mie
   !$omp threadprivate (first_call)
 
   public :: opac_mie
-  private :: locate, bezier_interp, m2e, e2m, &
+  private :: locate, linear_log_interp, m2e, e2m, &
     & read_nk_tables, read_and_interp_nk_table
 
 contains
@@ -40,11 +40,11 @@ contains
     real(dp), dimension(n_wl), intent(out) :: k_ext, alb, gg
 
     integer :: l, n
-    real(dp) :: rho, T, mu, P_cgs
+    real(dp) :: rho
     real(dp) :: amean, x, xsec, q_ext, q_sca, q_abs, g
     real(dp), dimension(n_dust) :: b_mix
     complex(dp) :: e_eff, e_eff0
-    complex(dp) :: N_eff, N_eff0
+    complex(dp) :: N_eff
     complex(dp), dimension(n_dust) :: N_inc, e_inc
 
 
@@ -61,12 +61,11 @@ contains
       return
     end if
 
-    T = T_in
-    mu = mu_in
-    P_cgs = P_in * 10.0_dp
-    rho = (P_cgs * mu * amu)/(kb * T)
+    rho = (P_in * 10.0_dp * mu_in * amu)/(kb * T_in)
 
-    amean = k(2)/k(1)
+    amean = max(k(2)/k(1),a_seed)
+    !amean = min(amean,0.1_dp)
+
     xsec = pi * amean**2
     
     b_mix(:) = max(k3(:)/k(4),1e-30_dp)
@@ -77,30 +76,32 @@ contains
       !! Size parameter 
       x = (2.0_dp * pi * amean) / (wl(l) * 1e-4_dp)
 
-      if (x > 100.0_dp) then
-        !! Use large size paramater approximation - guess alb and gg
-        k_ext(l) = (2.0_dp * xsec * k(1))/rho
-        alb(l) = 0.5_dp
-        gg(l) = 0.5_dp
-        cycle 
-      end if
-
       !! Refractive index
-      !! Use LLL method
+      !! Use Landau-Lifshitz-Looyenga (LLL) method
       e_eff0 = cmplx(0.0_dp,0.0_dp,dp)
       do n = 1, n_dust
         N_inc(n) = cmplx(nk(n)%n(l),nk(n)%k(l),dp)
         e_inc(n) = m2e(N_inc(n))
         e_eff0 = e_eff0 + b_mix(n)*e_inc(n)**(1.0_dp/3.0_dp)
       end do
-
       e_eff = e_eff0**3
       N_eff = e2m(e_eff)
 
-      !! Call LX-MIE with negative k value
-      N_eff = cmplx(real(N_eff,dp),-aimag(N_eff),dp)
-      call lxmie(N_eff, x, q_ext, q_sca, q_abs, g)
+      if (x < 0.01_dp) then
+        !! Use small dielectric sphere approximation
+        call small_particle(N_eff, x, q_abs, q_sca)
+        q_ext = q_abs + q_sca
+        g = 0.0_dp
+      else if (x > 100.0_dp) then
+        call adt(x, N_eff, q_abs, q_sca, q_ext)
+        g = 0.8_dp ! Guess g for large particles
+      else
+        !! Call LX-MIE with negative k value
+        N_eff = cmplx(real(N_eff,dp),-aimag(N_eff),dp)
+        call lxmie(N_eff, x, q_ext, q_sca, q_abs, g)
+      end if
 
+      !! Calculate the opacity, abledo and mean cosine angle (asymmetry factor)
       k_ext(l) = (q_ext * xsec * k(1))/rho
       alb(l) = q_sca/q_ext
       gg(l) = g
@@ -108,6 +109,78 @@ contains
     end do
 
   end subroutine opac_mie
+
+  ! Small dielectric sphere approximation, small particle limit x << 1
+  subroutine small_particle(N_eff, x, q_abs, q_sca)
+    implicit none
+
+    real(dp), intent(in) :: x
+    complex(dp), intent(in) :: N_eff
+
+    real(dp), intent(out) :: q_abs, q_sca
+
+    real(dp) :: er, ei, term
+
+    er = real(N_eff,dp)
+    ei = aimag(N_eff)
+
+    term = (3.0_dp*ei)/((er + 2.0_dp)**2 + ei**2)
+
+    q_abs = (4.0_dp * x) * term * &
+     & (1.0_dp + (4.0_dp*x**3)/3.0_dp * term)
+    q_sca = (8.0_dp/3.0_dp * x**4) * ((er - 1.0_dp)**2 + ei**2)/((er + 2.0_dp)**2 + ei**2)
+
+  end subroutine small_particle  
+
+
+  subroutine adt(x, ri, q_abs, q_sca, q_ext)
+    implicit none
+
+    real(dp), intent(in) :: x
+    complex(dp), intent(in) :: ri
+
+    real(dp), intent(out) :: q_abs, q_sca, q_ext
+
+    real(dp) :: rho1, rho2, rho0, beta0, beta, fac, fac2
+    complex(dp) ::  rho
+
+    rho = 2.0_dp * x * (ri - 1.0_dp)
+    rho0 = abs(rho)
+    rho1 = real(rho, dp)
+    rho2 = aimag(rho)
+
+    if (abs(rho1) > 0.0_dp) then
+      beta0 = atan(abs(rho2)/abs(rho1))
+      if (rho1 < 0.0_dp .and. rho2 > 0.0_dp) then
+        beta = pi - beta0
+      else if (rho1 < 0.0_dp .and. rho2 < 0.0_dp) then
+        beta = pi + beta0
+      else if (rho1 > 0.0_dp .and. rho2 < 0.0_dp) then 
+        beta = 2.0_dp*pi - beta0
+      else 
+        beta = beta0 
+      endif     
+    else
+      if (rho2 > 0.0_dp) then
+        beta = 0.5_dp*pi 
+      else
+        beta = 1.5_dp*pi
+      endif
+    end if
+
+    if (rho0 < 1.0e-3_dp) then
+      q_ext = (4.0_dp/3.0_dp)*rho2 + 0.5_dp*(rho1**2 - rho2**2)
+      q_abs = (4.0_dp/3.0_dp)*rho2 - rho2**2
+      q_sca = 0.5_dp*rho0**2
+    else
+      fac = exp(-rho2)
+      fac2 = fac**2
+      q_ext = 2.0_dp + (4.0_dp/rho0**2)*(cos(2.0_dp*beta) - fac*(cos(rho1 - 2.0_dp*beta) + rho0*sin(rho1 - beta)))
+      q_abs = 1.0_dp + fac2/rho2 + (fac2 - 1.0_dp)/(2.0_dp*rho2**2)
+      q_sca = q_ext - q_abs
+    end if
+
+  end subroutine adt
 
   subroutine read_nk_tables(n_dust, sp, n_wl, wl)
     implicit none
@@ -169,10 +242,10 @@ contains
 
     integer :: u, l, nlines
     logical :: con_flag
-    real(dp), allocatable, dimension(:) :: wl, n, k 
+    real(dp), allocatable, dimension(:) :: wl, n, k
 
-    integer :: iwl1, iwl2, iwl3
-    real(dp), dimension(3) :: lwl, ln, lk
+    integer :: iwl1, iwl2
+    real(dp) :: wl1, wl2, n1, n2, k1, k2
 
     open(newunit=u,file=trim(p_2_nk)//trim(nk(nn)%fname),action='read')
     print*, 'reading nk table @: ', trim(p_2_nk)//trim(nk(nn)%fname)
@@ -187,51 +260,50 @@ contains
 
     do l = 1, nlines
       read(u,*) wl(l), n(l), k(l)
+      n(l) = max(n(l),1e-30_dp)
+      k(l) = max(k(l),1e-30_dp)
+      !print*, l, wl(l), n(l), k(l)
     end do
 
+    close(u)
 
-    !! Perform 1D Bezier interpolation to get n,k at specific wavelengths
+    !! Perform 1D log-linear interpolation to get n,k at specific wavelengths
     do l = 1, n_wl
 
       ! Find wavelength array triplet and check bounds
-      call locate(wl(:), nlines, wl_in(l), iwl2)
+      call locate(wl(:), nlines, wl_in(l), iwl1)
 
-      iwl1 = iwl2 - 1
-      iwl3 = iwl2 + 1
+      iwl2 = iwl1 + 1
 
       if (iwl1 <= 0) then
         ! Use lowest wavelength n,k values in table
         nk(nn)%n(l) = n(1)
         nk(nn)%k(l) = k(1)
         cycle
-      else if (iwl3 > nlines) then
+      else if (iwl2 > nlines) then
         ! Use greatest wavelength n,k values in table
         nk(nn)%n(l) = n(nlines)
         nk(nn)%k(l) = k(nlines)
         cycle
       end if
 
-      lwl(1) = wl(iwl1)
-      lwl(2) = wl(iwl2)
-      lwl(3) = wl(iwl3)
+      wl1 = wl(iwl1)
+      wl2 = wl(iwl2)
 
-      !! Interpolate n and k values
-      ln(1) = n(iwl1)
-      ln(2) = n(iwl2)
-      ln(3) = n(iwl3)
-      call Bezier_interp(lwl(:), ln(:), 3, wl_in(l), nk(nn)%n(l))
+      !! Interpolate n values
+      n1 = n(iwl1)
+      n2 = n(iwl2)
+      call linear_log_interp(wl_in(l), wl1 , wl2, n1, n2, nk(nn)%n(l))
 
-      lk(1) = k(iwl1)
-      lk(2) = k(iwl2)
-      lk(3) = k(iwl3)
-      call Bezier_interp(lwl(:), lk(:), 3, wl_in(l), nk(nn)%k(l))
+      !! Interpolate k values
+      k1 = k(iwl1)
+      k2 = k(iwl2)
+      call linear_log_interp(wl_in(l), wl1 , wl2, k1, k2, nk(nn)%k(l))
 
     end do
 
     deallocate(wl, n, k)
 
-    close(u)
-  
   end subroutine read_and_interp_nk_table
 
   ! ------------- Functions for LLL theory ------------- !!
@@ -267,49 +339,24 @@ contains
 
   end function m2e  
 
-  subroutine bezier_interp(xi, yi, ni, x, y)
+  ! Perform linear interpolation in log10 space
+  subroutine linear_log_interp(xval, x1, x2, y1, y2, yval)
     implicit none
 
-    integer, intent(in) :: ni
-    real(dp), dimension(ni), intent(in) :: xi, yi
-    real(dp), intent(in) :: x
-    real(dp), intent(out) :: y
+    real(dp), intent(in) :: xval, y1, y2, x1, x2
 
-    real(dp) :: dx, dx1, dy, dy1, w, yc, t, wlim, wlim1
+    real(dp), intent(out) :: yval
 
-    !xc = (xi(1) + xi(2))/2.0_dp ! Control point (no needed here, implicitly included)
-    dx = xi(2) - xi(1)
-    dx1 = xi(3) - xi(2)
-    dy = yi(2) - yi(1)
-    dy1 = yi(3) - yi(2)
+    real(dp) :: ly1, ly2
+    real(dp) :: norm
 
-    if (x > xi(1) .and. x < xi(2)) then
-      ! left hand side interpolation
-      !print*,'left'
-      w = dx1/(dx + dx1)
-      wlim = 1.0_dp + 1.0_dp/(1.0_dp - (dy1/dy) * (dx/dx1))
-      wlim1 = 1.0_dp/(1.0_dp - (dy/dy1) * (dx1/dx))
-      if (w <= min(wlim,wlim1) .or. w >= max(wlim,wlim1)) then
-        w = 1.0_dp
-      end if
-      yc = yi(2) - dx/2.0_dp * (w*dy/dx + (1.0_dp - w)*dy1/dx1)
-      t = (x - xi(1))/dx
-      y = (1.0_dp - t)**2 * yi(1) + 2.0_dp*t*(1.0_dp - t)*yc + t**2*yi(2)
-    else ! (x > xi(2) and x < xi(3)) then
-      ! right hand side interpolation
-      !print*,'right'
-      w = dx/(dx + dx1)
-      wlim = 1.0_dp/(1.0_dp - (dy1/dy) * (dx/dx1))
-      wlim1 = 1.0_dp + 1.0_dp/(1.0_dp - (dy/dy1) * (dx1/dx))
-      if (w <= min(wlim,wlim1) .or. w >= max(wlim,wlim1)) then
-        w = 1.0_dp
-      end if
-      yc = yi(2) + dx1/2.0_dp * (w*dy1/dx1 + (1.0_dp - w)*dy/dx)
-      t = (x - xi(2))/(dx1)
-      y = (1.0_dp - t)**2 * yi(2) + 2.0_dp*t*(1.0_dp - t)*yc + t**2*yi(3)
-    end if
+    ly1 = log10(y1); ly2 = log10(y2)
 
-  end subroutine bezier_interp
+    norm = 1.0_dp / log10(x2/x1)
+
+    yval = 10.0_dp**((ly1 * log10(x2/xval) + ly2 * log10(xval/x1)) * norm)
+
+  end subroutine linear_log_interp
 
   subroutine locate(arr, n, var, idx)
     implicit none
