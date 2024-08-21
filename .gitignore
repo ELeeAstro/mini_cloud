@@ -1,4 +1,7 @@
-tracers.txt
+results_1_s/*
+results_1/*
+results_2/*
+results_3/*
 
 # Prerequisites
 *.d
