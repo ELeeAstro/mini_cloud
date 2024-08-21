@@ -1,7 +1,10 @@
-results_1_s/*
-results_1/*
-results_2/*
-results_3/*
+results_1_s/*.txt
+results_1/*.txt
+results_2/*.txt
+results_3/*.txt
+results_ori/*.txt
+
+.DS_Store
 
 # Prerequisites
 *.d
