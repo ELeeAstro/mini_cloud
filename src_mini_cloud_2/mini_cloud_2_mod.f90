@@ -52,7 +52,7 @@ module mini_cloud_2_mod
   real(dp), dimension(3) :: molg_g = (/molg_H2, molg_He, molg_H/)
 
   public :: mini_cloud_2, RHS_mom, jac_dum
-  private :: calc_coal, calc_coag, calc_cond, calc_nuc
+  private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_het_nuc
 
   contains
 
@@ -247,7 +247,7 @@ module mini_cloud_2_mod
 
     deallocate(y, rtol, atol, rwork, iwork)
 
-    end subroutine mini_cloud_2
+  end subroutine mini_cloud_2
 
   subroutine RHS_mom(n_eq, time, y, f)
     implicit none
@@ -302,7 +302,7 @@ module mini_cloud_2_mod
     call calc_cond(n_eq, y, sat, r_c, rho_s, Kn, f_cond)
 
     !! Calculate nucleation rate
-    call calc_nuc(n_eq, y, sat, n_v, f_nuc)
+    call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc)
 
     !! Calculate the coagulation loss rate for the zeroth moment
     call calc_coag(n_eq, y, m_c, r_c, beta, Kn_p, f_coag)
@@ -348,9 +348,18 @@ module mini_cloud_2_mod
 
   end subroutine calc_cond
 
-  ! Modified classical nucleation theory,
+  subroutine calc_het_nuc(n_eq, y)
+    implicit none
+
+    integer, intent(in) :: n_eq
+    real(dp), dimension(n_eq), intent(in) :: y 
+
+
+  end subroutine calc_het_nuc
+
+  ! Modified classical nucleation theory (MCNT),
   ! ref: Gail & Sedlmayr (1984), Helling & Fomins (2014), Lee et al. (2015), Lee et al. (2018)
-  subroutine calc_nuc(n_eq, y, sat, nsp, J_s)
+  subroutine calc_hom_nuc(n_eq, y, sat, nsp, J_s)
     implicit none
 
     integer, intent(in) :: n_eq
@@ -399,7 +408,7 @@ module mini_cloud_2_mod
       J_s = 0.0_dp
     end if
     
-  end subroutine calc_nuc
+  end subroutine calc_hom_nuc
 
   subroutine calc_coag(n_eq, y, m_c, r_c, beta, Kn_p, f_coag)
     implicit none
