@@ -139,7 +139,7 @@ contains
       first_call = .False.
     end if
 
-    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0*nd_atm, q_1, v_f
+    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0, q_1, v_f
     write(u2,*) t, time, k_ext, ssa, g
 
   end subroutine output

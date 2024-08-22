@@ -13,6 +13,7 @@ module mini_cloud_2_mod
   real(dp), parameter :: R_gas = 8.31446261815324e7_dp
   real(dp), parameter :: amu = 1.66053906892e-24_dp
   real(dp), parameter :: Avo = 6.02214076e23_dp
+  real(dp), parameter :: eV = 1.60217663e-12_dp
   real(dp), parameter :: third = 1.0_dp/3.0_dp
   real(dp), parameter :: twothird = 2.0_dp/3.0_dp
 
@@ -27,7 +28,7 @@ module mini_cloud_2_mod
   real(dp) :: rho_d, mol_w_sp
   real(dp) :: r0, V0, m0, d0 ! Unit mass and volume
   real(dp), parameter :: r_seed = 1e-7_dp
-  real(dp) :: V_seed, m_seed
+  real(dp) :: V_seed, m_seed, Nl
 
   real(dp) :: mfp, eta
 
@@ -134,6 +135,7 @@ module mini_cloud_2_mod
     V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
     m_seed = V_seed * rho_d
     d0 = 2.0_dp * r0
+    Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / V0 
 
     !! Vapour pressure
     p_vap = p_vap_sp(sp, T)
@@ -164,7 +166,7 @@ module mini_cloud_2_mod
     allocate(rtol(n_eq), atol(n_eq), rwork(rworkdim), iwork(iworkdim))
 
     itol = 4
-    rtol(:) = 1.0e-3_dp           ! Relative tolerances for each scalar
+    rtol(:) = 1.0e-4_dp           ! Relative tolerances for each scalar
     atol(:) = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
@@ -257,7 +259,7 @@ module mini_cloud_2_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
-    real(dp) :: f_coal, f_coag, f_nuc, f_cond
+    real(dp) :: f_coal, f_coag, f_nuc_hom, f_cond, f_nuc_het
     real(dp) :: m_c, r_c, Kn, Kn_p, beta, sat
     real(dp) :: Rd_v, p_v, q_v, n_v
 
@@ -301,18 +303,20 @@ module mini_cloud_2_mod
     !! Calculate condensation rate
     call calc_cond(n_eq, y, sat, r_c, rho_s, Kn, f_cond)
 
-    !! Calculate nucleation rate
-    call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc)
+    !! Calculate homogenous nucleation rate
+    call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
 
-    !! Calculate the coagulation loss rate for the zeroth moment
+    call calc_het_nuc(n_eq, y, sat, r_c, f_nuc_het)
+
+    !! Calculate the coagulation rate
     call calc_coag(n_eq, y, m_c, r_c, beta, Kn_p, f_coag)
 
-    !! Calculate the coalesence loss rate for the zeroth moment
+    !! Calculate the coalesence rate
     call calc_coal(n_eq, y, r_c, Kn, beta, f_coal)
 
     !! Calculate final net flux rate for each tracer
-    f(1) = f_nuc + f_coag + f_coal
-    f(2) = m_seed*f_nuc + f_cond*y(1)
+    f(1) = f_nuc_hom + f_nuc_het + f_coag + f_coal
+    f(2) = m_seed*f_nuc_hom + m_seed*f_nuc_het + f_cond*y(1)
     f(3) = -f(2)
 
     !! Convert f to ratios
@@ -348,12 +352,49 @@ module mini_cloud_2_mod
 
   end subroutine calc_cond
 
-  subroutine calc_het_nuc(n_eq, y)
+  subroutine calc_het_nuc(n_eq, y, sat, r_c, J_het)
     implicit none
 
     integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
+    real(dp), dimension(n_eq), intent(in) :: y
+    real(dp), intent(in) :: sat, r_c
 
+    real(dp), intent(out) :: J_het
+
+    real(dp) :: r_crit, FG, Theta, Zel
+    real(dp) :: f, mu_con, phi, f0, x
+    real(dp) :: c_surf, nu, F_des
+
+
+    if (sat > 1.0_dp) then
+
+      r_crit = (2.0_dp * mol_w_sp * sig)/(rho_d*R_gas*T*log(sat))
+
+      FG = 4.0_dp/3.0_dp * pi * sig * r_crit**2
+
+      Theta = p/(sqrt(2.0_dp*m0*kb*T))
+ 
+      Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
+
+      mu_con = 0.5_dp
+      x = r_c/r_crit
+      phi = sqrt(1.0_dp - 2.0_dp*mu_con*x + x**2)
+      f0 = (x - mu_con)/phi
+
+      f = 0.5_dp * (1.0_dp + ((1.0_dp-mu_con*x)/phi)**3 + x**3*(2.0_dp - 3.0_dp*f0 + f0**3) &
+        & + 3.0_dp*mu_con*x**2*(f0 - 1.0_dp))
+
+      nu = 1e13_dp
+      F_des = 0.5_dp * eV !~ 0.5 eV
+
+      c_surf = Theta/nu * exp(F_des/(kb*T))
+
+      J_het = 4.0_dp * pi**2 * r_c**2 * r_crit**2 * Theta * c_surf * Zel * exp(-(FG*f)/(kb*T))
+
+      J_het = J_het * y(1)
+    else
+      J_het = 0.0_dp
+    end if
 
   end subroutine calc_het_nuc
 
@@ -419,11 +460,20 @@ module mini_cloud_2_mod
 
     real(dp), intent(out) :: f_coag
 
-    if (Kn_p >= 1.0_dp/sqrt(2.0_dp)) then
-      f_coag = -8.0_dp * sqrt((pi*kb*T)/m_c) * r_c**2 * y(1)**2
-    else
-      f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta) * y(1)**2
-    end if
+    real(dp) :: phi, del_r, D_r, V_r, lam_r
+
+
+    D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
+    V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
+
+    lam_r = (8.0_dp*D_r)/(pi*V_r)
+
+    del_r = ((2.0_dp*r_c + lam_r)**3 - (4.0_dp*r_c**2 + lam_r**2)**(1.5_dp))/(6.0_dp*r_c*lam_r) &
+      & - 2.0_dp*r_c 
+
+    phi = 2.0_dp*r_c/(2.0_dp*r_c + sqrt(2.0_dp)*del_r) + (4.0_dp*D_r)/(r_c*sqrt(2.0_dp)*V_r) 
+
+    f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)  * y(1)**2
 
   end subroutine calc_coag
 
@@ -441,8 +491,8 @@ module mini_cloud_2_mod
 
     !! Settling velocity
     vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
-      & * (1.0_dp + & 
-      & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+      & * (1.0_dp &
+      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
     !! Estimate differential velocity
     d_vf = eps * vf
