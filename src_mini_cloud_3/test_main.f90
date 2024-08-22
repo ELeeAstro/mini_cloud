@@ -1,6 +1,6 @@
 program test_mini_cloud_2
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_2_mod, only : mini_cloud_2, rho_d, mol_w_sp
+  use mini_cloud_3_mod, only : mini_cloud_3, rho_d, mol_w_sp
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -14,7 +14,7 @@ program test_mini_cloud_2
   integer :: example, tt, n_it
   character(len=20) :: sp
   real(dp) :: T_in, P_in, VMR_in(3), mu_in, grav_in, nd_atm, rho
-  real(dp) :: q_0, q_1, q_v, v_f, r_c, m_c, Rd_v, p_v, rho_v
+  real(dp) :: q_0, q_1, q_2, q_v, v_f, r_c, m_c, Rd_v, p_v, rho_v
   real(dp) :: k_ext, ssa, g
   real(dp) :: t_step, time
 
@@ -33,8 +33,9 @@ program test_mini_cloud_2
 
   !! Initial conditions
   q_v = 9.33e-8_dp  ! ~Ti abundance ratio at Solar (VMR)
-  q_0 = 1e-30_dp    ! ~Zero clouds at start 
-  q_1 = 1e-30_dp
+  q_0 = 0.0_dp    ! ~Zero clouds at start 
+  q_1 = 0.0_dp
+  q_2 = 0.0_dp
 
  ! Start time iteration
   do tt = 1, n_it
@@ -79,12 +80,14 @@ program test_mini_cloud_2
         p_v = q_v * P_in! Get pressure of vapour
         rho_v = p_v/(Rd_v*T_in) !! Mass density of species
         q_v = rho_v/rho 
-        q_0 = q_0 / nd_atm
-        q_1 = q_1 / rho
       end if
 
+
+      !! mini-cloud test output
+      call output(tt, time)
+
       !! Call mini-cloud and perform integrations for a single layer
-      call mini_cloud_2(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, q_v, q_0, q_1, v_f)
+      call mini_cloud_3(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, q_v, q_0, q_1, q_2, v_f)
 
       !! Call the ADT approximate opacity routine for a layer at a single wavelength
       !call adt_1_s
@@ -105,12 +108,9 @@ program test_mini_cloud_2
       r_c = ((3.0_dp*m_c)/(4.0_dp*pi*rho_d*1000.0_dp))**(1.0_dp/3.0_dp) * 1e6_dp
 
 
-      print*, 'q', tt, q_v, q_0, q_1, v_f
+      print*, 'q', tt, q_v, q_0, q_1, q_2, v_f
       print*, 'r', tt, m_c, r_c
       print*, 'o', tt, k_ext, ssa, g
-
-      !! mini-cloud test output
-      call output(tt, time)
 
     case(2)
       !! In this example, we timestep a call to mini-cloud
@@ -135,12 +135,12 @@ contains
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_2/tracers.txt',action='readwrite')
-      open(newunit=u2,file='results_2/opac.txt',action='readwrite')
+      open(newunit=u1,file='results_3/tracers.txt',action='readwrite')
+      open(newunit=u2,file='results_3/opac.txt',action='readwrite')
       first_call = .False.
     end if
 
-    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0, q_1, v_f
+    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0, q_1, q_2, v_f
     write(u2,*) t, time, k_ext, ssa, g
 
   end subroutine output

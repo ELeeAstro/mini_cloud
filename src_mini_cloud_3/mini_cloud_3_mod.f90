@@ -1,4 +1,4 @@
-module mini_cloud_2_mod
+module mini_cloud_3_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -52,12 +52,12 @@ module mini_cloud_2_mod
   real(dp), dimension(3) :: LJ_g = (/LJ_H2, LJ_He, LJ_H/)
   real(dp), dimension(3) :: molg_g = (/molg_H2, molg_He, molg_H/)
 
-  public :: mini_cloud_2, RHS_mom, jac_dum
+  public :: mini_cloud_3, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_het_nuc, calc_seed_evap
 
   contains
 
-  subroutine mini_cloud_2(T_in, P_in, grav_in, mu_in, VMR_in, t_end, sp, q_v, q_0, q_1, v_f)
+  subroutine mini_cloud_3(T_in, P_in, grav_in, mu_in, VMR_in, t_end, sp, q_v, q_0, q_1, q_2, v_f)
     implicit none
 
     ! Input variables
@@ -66,7 +66,7 @@ module mini_cloud_2_mod
     real(dp), dimension(:), intent(in) :: VMR_in
 
     ! Input/Output tracer values
-    real(dp), intent(inout) :: q_v, q_0, q_1
+    real(dp), intent(inout) :: q_v, q_0, q_1, q_2
     real(dp), intent(out) :: v_f
 
     integer :: ncall, n
@@ -90,7 +90,7 @@ module mini_cloud_2_mod
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
-    n_eq = 3
+    n_eq = 4
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -192,7 +192,8 @@ module mini_cloud_2_mod
     !! Give tracer values to y
     y(1) = q_0
     y(2) = q_1
-    y(3) = q_v 
+    y(3) = q_2
+    y(4) = q_v 
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
@@ -251,11 +252,12 @@ module mini_cloud_2_mod
     !! Give y values to tracers
     q_0 = y(1)
     q_1 = y(2)
-    q_v = y(3)
+    q_2 = y(3)
+    q_v = y(4)
 
     deallocate(y, rtol, atol, rwork, iwork)
 
-  end subroutine mini_cloud_2
+  end subroutine mini_cloud_3
 
   subroutine RHS_mom(n_eq, time, y, f)
     implicit none
@@ -265,7 +267,8 @@ module mini_cloud_2_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
-    real(dp) :: f_coal, f_coag, f_nuc_hom, f_cond, f_nuc_het, f_seed_evap
+    real(dp) :: f_coal_0, f_coal_3, f_coag_0, f_coag_3 
+    real(dp) :: f_nuc_hom, f_cond, f_nuc_het, f_seed_evap
     real(dp) :: m_c, r_c, Kn, beta, sat
     real(dp) :: p_v, q_v, n_v
 
@@ -277,11 +280,12 @@ module mini_cloud_2_mod
     !! Convert y to real numbers to calculate f
     y(1) = y(1)*nd_atm ! Convert to real number density
     y(2) = y(2)*rho   ! Convert to real mass density
-    y(3) = y(3)*rho   ! Convert to real mass density
+    y(3) = y(3)*rho**2   ! Convert to real Z
+    y(4) = y(4)*rho   ! Convert to real mass density
 
 
     !! Find the true vapour VMR
-    p_v = y(3) * Rd * T     !! Pressure of vapour
+    p_v = y(4) * Rd * T     !! Pressure of vapour
     q_v = p_v/p               !! VMR of vapour
     n_v = q_v * nd_atm        !! Number density of vapour
 
@@ -313,25 +317,28 @@ module mini_cloud_2_mod
     call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
 
     !! Calculate the coagulation rate
-    call calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
+    call calc_coag(n_eq, y, m_c, r_c, beta, f_coag_0, f_coag_3)
 
     !! Calculate the coalesence rate
-    call calc_coal(n_eq, y, r_c, Kn, beta, f_coal)
+    call calc_coal(n_eq, y, r_c, Kn, beta, f_coal_0, f_coal_3)
 
     !! Calculate final net flux rate for each tracer
-    f(1) = f_nuc_hom + f_nuc_het + f_seed_evap + f_coag + f_coal
+    f(1) = f_nuc_hom + f_nuc_het + f_seed_evap + f_coag_0 + f_coal_0
     f(2) = m_seed*(f_nuc_hom + f_nuc_het + f_seed_evap) + f_cond*y(1)
-    f(3) = -f(2)
+    f(3) = m_seed**2*(f_nuc_hom + f_nuc_het + f_seed_evap) + 2.0_dp*f_cond*y(2) + f_coag_3 + f_coal_3
+    f(4) = -f(2)
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm
     f(2) = f(2)/rho
-    f(3) = f(3)/rho
+    f(3) = f(3)/rho**2
+    f(4) = f(4)/rho
       
     !! Convert y back to ratios
     y(1) = y(1)/nd_atm
     y(2) = y(2)/rho 
-    y(3) = y(3)/rho
+    y(3) = y(3)/rho**2
+    y(4) = y(4)/rho
 
   end subroutine RHS_mom
 
@@ -378,9 +385,9 @@ module mini_cloud_2_mod
     Ak = exp((2.0_dp*V0*sig)/(kb*T*r_c))
 
     if (Kn >= 1.0_dp) then
-      dmdt = 4.0_dp * pi * r_c**2 * vth * (y(3) - Ak*rho_s)
+      dmdt = 4.0_dp * pi * r_c**2 * vth * (y(4) - Ak*rho_s)
     else
-      dmdt = 4.0_dp * pi * r_c * D * (y(3) - Ak*rho_s)
+      dmdt = 4.0_dp * pi * r_c * D * (y(4) - Ak*rho_s)
     end if
 
   end subroutine calc_cond
@@ -484,14 +491,14 @@ module mini_cloud_2_mod
     
   end subroutine calc_hom_nuc
 
-  subroutine calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
+  subroutine calc_coag(n_eq, y, m_c, r_c, beta, f_coag_0, f_coag_3)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
     real(dp), intent(in) :: m_c, r_c, beta
 
-    real(dp), intent(out) :: f_coag
+    real(dp), intent(out) :: f_coag_0, f_coag_3
 
     real(dp) :: phi, del_r, D_r, V_r, lam_r
 
@@ -506,18 +513,19 @@ module mini_cloud_2_mod
 
     phi = 2.0_dp*r_c/(2.0_dp*r_c + sqrt(2.0_dp)*del_r) + (4.0_dp*D_r)/(r_c*sqrt(2.0_dp)*V_r) 
 
-    f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)  * y(1)**2
+    f_coag_0 = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)  * y(1)**2
+    f_coag_3 = (8.0_dp * kb * T * beta)/(3.0_dp * eta * phi)  * y(2)**2
 
   end subroutine calc_coag
 
-  subroutine calc_coal(n_eq, y, r_c, Kn, beta, f_coal)
+  subroutine calc_coal(n_eq, y, r_c, Kn, beta, f_coal_0, f_coal_3)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
     real(dp), intent(in) :: r_c, Kn, beta
 
-    real(dp), intent(out) :: f_coal
+    real(dp), intent(out) :: f_coal_0, f_coal_3
 
     real(dp) :: d_vf, vf, Stk, E
     real(dp), parameter :: eps = 0.5_dp
@@ -541,7 +549,8 @@ module mini_cloud_2_mod
     end if
 
     !! Finally calculate the loss flux term
-    f_coal = -2.0_dp*pi*r_c**2*y(1)**2*d_vf*E
+    f_coal_0 = -2.0_dp*pi*r_c**2*y(1)**2*d_vf*E
+    f_coal_3 = 4.0_dp*pi*r_c**2*y(2)**2*d_vf*E
 
   end subroutine calc_coal
 
@@ -715,4 +724,4 @@ module mini_cloud_2_mod
 
   end function surface_tension
 
-end module mini_cloud_2_mod
+end module mini_cloud_3_mod
