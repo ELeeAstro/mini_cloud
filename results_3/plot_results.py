@@ -22,7 +22,7 @@ q_1 = data[:,-3]
 q_2 = data[:,-2]
 v_f = data[:,-1]
 
-rho_d = 4.23
+rho_d = 1.99
 nd_atm = P/(kb*T)  
 rho = (P*mu*amu)/(kb * T) 
 

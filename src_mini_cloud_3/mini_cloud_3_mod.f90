@@ -440,53 +440,31 @@ module mini_cloud_3_mod
 
   ! Modified classical nucleation theory (MCNT),
   ! ref: Gail & Sedlmayr (1984), Helling & Fomins (2014), Lee et al. (2015), Lee et al. (2018)
-  subroutine calc_hom_nuc(n_eq, y, sat, nsp, J_s)
+  subroutine calc_hom_nuc(n_eq, y, sat, n_v, J_hom)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: sat, nsp
+    real(dp), intent(in) :: sat, n_v
 
-    real(dp), intent(out) :: J_s
+    real(dp), intent(out) :: J_hom
 
-    real(dp) :: ln_ss, theta_inf, N_inf, N_star, N_star_1, dg_rt, Zel, tau_gr
-    real(dp) :: f0, kbT, Nf, alpha
+    real(dp) :: r_crit, FG, Theta, Zel, Nl
 
     if (sat > 1.0_dp) then
+      r_crit = (2.0_dp * mol_w_sp * sig)/(rho_d*R_gas*T*log(sat))
 
-      alpha = 1.0_dp
-      Nf = 0.0_dp
+      FG = 4.0_dp/3.0_dp * pi * sig * r_crit**2
 
-      ! Efficency Variables
-      ln_ss = log(sat) ! Natural log of saturation ratio
-      f0 = 4.0_dp * pi * r0**2 ! Monomer Area
-      kbT = kb * T         ! kb * T
+      Theta = p/(sqrt(2.0_dp*m0*kb*T))
 
-      !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
-      theta_inf = (f0 * sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
-      N_inf = (((twothird) * theta_inf) / ln_ss)**3
-      !Gail et al. (2014) ! note, typo in Lee et al. (2015a)
-      N_star = 1.0_dp + (N_inf / 8.0_dp) &
-        & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
-        & - 2.0_dp*(Nf/N_inf)**third)**3
-      N_star = max(1.000000001_dp, N_star) ! Ensure no div 0
-      N_star_1 = N_star - 1.0_dp
+      Nl = (4.0_dp/3.0_dp * pi * r_crit**3) / V0 
+ 
+      Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
 
-      !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
-      dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
-
-      !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
-      Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
-        & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
-
-      !! Calculate !!inverse!! of tau_gr
-      tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
-        & / (2.0_dp * pi * mol_w_sp * amu)) * nsp
-
-      !! Finally calculate J_star ! Note underfloat limiter here
-      J_s = nsp * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+      J_hom = 4.0_dp * pi * r_crit**2 * Theta * Zel * n_v * exp(-FG/(kb*T))
     else
-      J_s = 0.0_dp
+      J_hom = 0.0_dp
     end if
     
   end subroutine calc_hom_nuc

@@ -23,7 +23,7 @@ program test_mini_cloud_2
   t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 7000
+  n_it = 10000
 
   !! Start time
   time = 6840.0_dp
@@ -32,9 +32,9 @@ program test_mini_cloud_2
   example = 1
 
   !! Initial conditions
-  q_v = 9.33e-8_dp  ! ~Ti abundance ratio at Solar (VMR)
-  q_0 = 1e-30_dp    ! ~Zero clouds at start 
-  q_1 = 1e-30_dp
+  q_v = 1.17e-7_dp  ! ~K abundance ratio at Solar (VMR)
+  q_0 = 0.0_dp    ! ~Zero clouds at start 
+  q_1 = 0.0_dp
 
  ! Start time iteration
   do tt = 1, n_it
@@ -63,9 +63,9 @@ program test_mini_cloud_2
       grav_in = 10.0_dp
 
       !! Assumed condensate species
-      sp = 'TiO2'
-      rho_d = 4.23_dp
-      mol_w_sp = 79.866_dp
+      sp = 'KCl'
+      rho_d = 1.99_dp
+      mol_w_sp = 74.551_dp
 
       !! Number density [m-3] of layer
       nd_atm = P_in/(kb*T_in)  
