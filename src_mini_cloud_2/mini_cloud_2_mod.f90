@@ -318,7 +318,7 @@ module mini_cloud_2_mod
     call calc_coal(n_eq, y, r_c, Kn, beta, f_coal)
 
     !! Calculate final net flux rate for each tracer
-    f(1) = f_nuc_hom + f_nuc_het + f_seed_evap + f_coag + f_coal
+    f(1) = (f_nuc_hom + f_nuc_het + f_seed_evap) + f_coag + f_coal
     f(2) = m_seed*(f_nuc_hom + f_nuc_het + f_seed_evap) + f_cond*y(1)
     f(3) = -f(2)
 
@@ -350,7 +350,7 @@ module mini_cloud_2_mod
       !! If growing or too little number density then evaporation can't take place
       J_evap = 0.0_dp
     else 
-      !! Check if average mass is around 0.01% the seed particle mass
+      !! Check if average mass is around 0.1% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
       if (m_c <=  1.001_dp * m_seed) then
         !tau_evap = m_c/abs(f_cond)
@@ -406,7 +406,7 @@ module mini_cloud_2_mod
 
       Theta = p/(sqrt(2.0_dp*m0*kb*T))
 
-      Nl = (4.0_dp/3.0_dp * pi * r_crit**3) / V0 
+      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp)
 
       Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
 
@@ -451,7 +451,7 @@ module mini_cloud_2_mod
 
       Theta = p/(sqrt(2.0_dp*m0*kb*T))
 
-      Nl = (4.0_dp/3.0_dp * pi * r_crit**3) / V0 
+      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp) 
  
       Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
 

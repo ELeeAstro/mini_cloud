@@ -28,7 +28,7 @@ module mini_cloud_3_mod
   real(dp) :: rho_d, mol_w_sp
   real(dp) :: r0, V0, m0, d0 ! Unit mass and volume
   real(dp), parameter :: r_seed = 1e-7_dp
-  real(dp) :: V_seed, m_seed, Nl
+  real(dp) :: V_seed, m_seed
 
   real(dp) :: mfp, eta
 
@@ -138,7 +138,6 @@ module mini_cloud_3_mod
     V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
     m_seed = V_seed * rho_d
     d0 = 2.0_dp * r0
-    Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / V0 
 
     !! Saturation vapour pressure
     p_vap = p_vap_sp(sp, T)
@@ -401,7 +400,7 @@ module mini_cloud_3_mod
 
     real(dp), intent(out) :: J_het
 
-    real(dp) :: r_crit, FG, Theta, Zel
+    real(dp) :: r_crit, FG, Theta, Zel, Nl
     real(dp) :: f, mu_con, phi, f0, x
     real(dp) :: c_surf, nu, F_des
 
@@ -414,6 +413,8 @@ module mini_cloud_3_mod
 
       Theta = p/(sqrt(2.0_dp*m0*kb*T))
  
+      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp) 
+
       Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
 
       mu_con = 0.5_dp
@@ -458,11 +459,12 @@ module mini_cloud_3_mod
 
       Theta = p/(sqrt(2.0_dp*m0*kb*T))
 
-      Nl = (4.0_dp/3.0_dp * pi * r_crit**3) / V0 
+      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp) 
  
       Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
 
       J_hom = 4.0_dp * pi * r_crit**2 * Theta * Zel * n_v * exp(-FG/(kb*T))
+      
     else
       J_hom = 0.0_dp
     end if
