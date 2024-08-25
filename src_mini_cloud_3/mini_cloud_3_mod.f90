@@ -430,9 +430,8 @@ module mini_cloud_3_mod
 
       c_surf = Theta/nu * exp(F_des/(kb*T))
 
-      J_het = 4.0_dp * pi**2 * r_c**2 * r_crit**2 * Theta * c_surf * Zel * exp(-(FG*f)/(kb*T))
-
-      J_het = J_het * y(1)
+      J_het = 4.0_dp * pi**2 * r_c**2 * r_crit**2 * Theta * c_surf * Zel * exp(-(FG*f)/(kb*T)) * y(1)
+      
     else
       J_het = 0.0_dp
     end if
@@ -464,7 +463,7 @@ module mini_cloud_3_mod
       Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
 
       J_hom = 4.0_dp * pi * r_crit**2 * Theta * Zel * n_v * exp(-FG/(kb*T))
-      
+
     else
       J_hom = 0.0_dp
     end if
@@ -670,34 +669,85 @@ module mini_cloud_3_mod
     TC = T - 273.15_dp
 
     select case (sp)
+    case('C')
+      ! Tabak et al. (1995)
+      sig = 1400.0_dp
+    case('CaTiO3')
+      sig = 915.0_dp
+    case('TiC')
+      sig = 1240.0_dp
     case('TiO2')
       ! Sindel et al. (2022)
       sig = 589.79_dp - 0.0708_dp * T
     case('Fe')
+      ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
       sig = 1862.0_dp - 0.39_dp * (TC - 1530.0_dp)
       ! Pradhan et al. (2009)
       !sig = 2858.0_dp - 0.51_dp * T
+    case('Fe2O3')
+      sig = 410.0_dp
+    case('FeO')
+      ! Janz 1988
+      sig = 585.0_dp
     case('Al2O3')
       ! Pradhan et al. (2009)
       sig = 1024.0_dp - 0.177_dp * T
-    case('Cr')
-      sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)
+      ! Kozasa et al. (1989)
+      !sig = 690.0_dp
+    case('MgSiO3')
+      ! Janz 1988
+      sig = 197.3_dp + 0.098_dp * T
+    case('Mg2SiO4')
+      ! Kozasa et al. (1989)
+      sig = 436.0_dp
+    case('SiC')
+      ! Nozawa et al. (2003)
+      sig = 1800.0_dp
+    case('SiO')
+      ! Gail and Sedlmayr (1986)
+      sig = 500.0_dp
     case('SiO2')
       ! Pradhan et al. (2009)
-      sig = 243.2_dp - 0.013_dp * T
-
-      ! Pradhan et al. (2009):
-      !Si : 732 - 0.086*(T - 1685.0)
-      !MgO : 1170 - 0.636*T
-      !CaO : 791 - 0.0935*T
+      !sig = 243.2_dp - 0.013_dp * T
+      ! Janz 1988
+      sig = 243.2_dp + 0.031_dp * T
+    case('Cr')
+      ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
+      sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)      
+    case('MnS')
+      sig = 2326.0_dp
+    case('Na2S')
+      sig = 1033.0_dp
     case('KCl')
-      sig = 160.4_dp - 0.070_dp*TC
+      ! Janz 1988
+      sig = 175.57_dp - 0.07321_dp * T
     case('NaCl')
-      sig = 171.5_dp - 0.0719_dp*TC
+      ! Janz 1988
+      sig = 191.16_dp - 0.07188_dp * T
+    case('ZnS')
+      sig = 860.0_dp
     case('H2O')
+      ! Hale and Plummer (1974)
       sig = 141.0_dp - 0.15_dp*TC
+    case('NH3')
+      ! Weast et al. (1988)
+      sig = 23.4_dp
+    case('NH4Cl')
+      sig = 56.0_dp
+    case('NH4SH')
+      sig = 50.0_dp
+    case('CH4')
+      ! USCG (1984)
+      sig = 14.0_dp
+    case('H2S')
+      ! Nehb and Vydra (2006)
+      sig = 58.1_dp
+    case('S2','S8')
+      ! Fanelli 1950
+      sig = 60.8_dp
     case default
-      sig = 100.0_dp
+      print*, 'Species surface tension not found: ', trim(sp), 'STOP'
+      stop
     end select
 
     surface_tension = max(10.0_dp, sig)

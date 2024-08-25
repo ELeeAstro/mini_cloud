@@ -334,35 +334,6 @@ module mini_cloud_2_mod
 
   end subroutine RHS_mom
 
-  subroutine calc_seed_evap(n_eq, y, m_c, f_cond, J_evap)
-    implicit none
-
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y
-    real(dp), intent(in) :: m_c, f_cond
-
-    real(dp), intent(out) :: J_evap
-
-    real(dp), parameter  :: tau_evap = 1.0_dp
-    !real(dp) :: tau_evap
-
-    if ((f_cond >= 0.0_dp) .or. (y(1)/nd_atm <= 1e-29_dp)) then
-      !! If growing or too little number density then evaporation can't take place
-      J_evap = 0.0_dp
-    else 
-      !! Check if average mass is around 0.1% the seed particle mass
-      !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <=  1.001_dp * m_seed) then
-        !tau_evap = m_c/abs(f_cond)
-        J_evap = -y(1)/tau_evap
-      else
-        !! There is still some mantle to evaporate from
-        J_evap = 0.0_dp
-      end if
-    end if
-
-  end subroutine calc_seed_evap
-
   subroutine calc_cond(n_eq, y, r_c, Kn, dmdt)
     implicit none
 
@@ -461,6 +432,35 @@ module mini_cloud_2_mod
     end if
     
   end subroutine calc_hom_nuc
+
+  subroutine calc_seed_evap(n_eq, y, m_c, f_cond, J_evap)
+    implicit none
+
+    integer, intent(in) :: n_eq
+    real(dp), dimension(n_eq), intent(in) :: y
+    real(dp), intent(in) :: m_c, f_cond
+
+    real(dp), intent(out) :: J_evap
+
+    real(dp), parameter  :: tau_evap = 1.0_dp
+    !real(dp) :: tau_evap
+
+    if ((f_cond >= 0.0_dp) .or. (y(1)/nd_atm <= 1e-29_dp)) then
+      !! If growing or too little number density then evaporation can't take place
+      J_evap = 0.0_dp
+    else 
+      !! Check if average mass is around 0.1% the seed particle mass
+      !! This means the core is (probably) exposed to the air and can evaporate freely
+      if (m_c <=  (1.001_dp * m_seed)) then
+        !tau_evap = m_c/abs(f_cond)
+        J_evap = -y(1)/tau_evap
+      else
+        !! There is still some mantle to evaporate from
+        J_evap = 0.0_dp
+      end if
+    end if
+
+  end subroutine calc_seed_evap
 
   subroutine calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
     implicit none
@@ -642,7 +642,7 @@ module mini_cloud_2_mod
         p_vap_sp = exp(9.6_dp - 7510.0_dp/T) * bar
       end if
     case default
-      print*, 'Saturation: dust species not found: ', trim(sp), 'Stopping!'
+      print*, 'Vapour pressure species not found: ', trim(sp), 'STOP'
       stop
     end select
 
@@ -659,37 +659,93 @@ module mini_cloud_2_mod
     TC = T - 273.15_dp
 
     select case (sp)
+    case('C')
+      ! Tabak et al. (1995)
+      sig = 1400.0_dp
+    case('CaTiO3')
+      sig = 915.0_dp
+    case('TiC')
+      sig = 1240.0_dp
     case('TiO2')
       ! Sindel et al. (2022)
       sig = 589.79_dp - 0.0708_dp * T
     case('Fe')
+      ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
       sig = 1862.0_dp - 0.39_dp * (TC - 1530.0_dp)
       ! Pradhan et al. (2009)
       !sig = 2858.0_dp - 0.51_dp * T
+    case('Fe2O3')
+      sig = 410.0_dp
+    case('FeO')
+      ! Janz 1988
+      sig = 585.0_dp
     case('Al2O3')
       ! Pradhan et al. (2009)
       sig = 1024.0_dp - 0.177_dp * T
-    case('Cr')
-      sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)
+      ! Kozasa et al. (1989)
+      !sig = 690.0_dp
+    case('MgSiO3')
+      ! Janz 1988
+      sig = 197.3_dp + 0.098_dp * T
+    case('Mg2SiO4')
+      ! Kozasa et al. (1989)
+      sig = 436.0_dp
+    case('SiC')
+      ! Nozawa et al. (2003)
+      sig = 1800.0_dp
+    case('SiO')
+      ! Gail and Sedlmayr (1986)
+      sig = 500.0_dp
     case('SiO2')
       ! Pradhan et al. (2009)
-      sig = 243.2_dp - 0.013_dp * T
+      !sig = 243.2_dp - 0.013_dp * T
+      ! Janz 1988
+      sig = 243.2_dp + 0.031_dp * T
+    case('Cr')
+      ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
+      sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)      
+    case('MnS')
+      sig = 2326.0_dp
+    case('Na2S')
+      sig = 1033.0_dp
+    case('KCl')
+      ! Janz 1988
+      sig = 175.57_dp - 0.07321_dp * T
+    case('NaCl')
+      ! Janz 1988
+      sig = 191.16_dp - 0.07188_dp * T
+    case('ZnS')
+      sig = 860.0_dp
+    case('H2O')
+      ! Hale and Plummer (1974)
+      sig = 141.0_dp - 0.15_dp*TC
+    case('NH3')
+      ! Weast et al. (1988)
+      sig = 23.4_dp
+    case('NH4Cl')
+      sig = 56.0_dp
+    case('NH4SH')
+      sig = 50.0_dp
+    case('CH4')
+      ! USCG (1984)
+      sig = 14.0_dp
+    case('H2S')
+      ! Nehb and Vydra (2006)
+      sig = 58.1_dp
+    case('S2','S8')
+      ! Fanelli 1950
+      sig = 60.8_dp
+    case default
+      print*, 'Species surface tension not found: ', trim(sp), 'STOP'
+      stop
+    end select
+
+    surface_tension = max(10.0_dp, sig)
 
       ! Pradhan et al. (2009):
       !Si : 732 - 0.086*(T - 1685.0)
       !MgO : 1170 - 0.636*T
       !CaO : 791 - 0.0935*T
-    case('KCl')
-      sig = 160.4_dp - 0.070_dp*TC
-    case('NaCl')
-      sig = 171.5_dp - 0.0719_dp*TC
-    case('H2O')
-      sig = 141.0_dp - 0.15_dp*TC
-    case default
-      sig = 100.0_dp
-    end select
-
-    surface_tension = max(10.0_dp, sig)
 
   end function surface_tension
 
