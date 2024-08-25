@@ -12,7 +12,7 @@ program test_mini_cloud_2
 
 
   integer :: example, tt, n_it
-  character(len=20) :: sp
+  character(len=20) :: sp, sp_bg(3)
   real(dp) :: T_in, P_in, VMR_in(3), mu_in, grav_in, nd_atm, rho
   real(dp) :: q_0, q_1, q_v, v_f, r_c, m_c, Rd_v, p_v, rho_v
   real(dp) :: k_ext, ssa, g
@@ -51,7 +51,8 @@ program test_mini_cloud_2
       !! Assume constant pressure [pa]
       P_in = 1e5_dp
 
-      !! Assume constant H2, He and H background VMR @ approx solar
+       !! Assume constant H2, He and H background VMR @ approx solar
+      sp_bg = (/'H2','He','H '/)
       VMR_in(1) = 0.85_dp
       VMR_in(2) = 0.15_dp
       VMR_in(3) = 1e-6_dp
@@ -84,7 +85,7 @@ program test_mini_cloud_2
       end if
 
       !! Call mini-cloud and perform integrations for a single layer
-      call mini_cloud_2(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, q_v, q_0, q_1, v_f)
+      call mini_cloud_2(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, sp_bg, q_v, q_0, q_1, v_f)
 
       !! Call the ADT approximate opacity routine for a layer at a single wavelength
       !call adt_1_s

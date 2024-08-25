@@ -48,22 +48,21 @@ module mini_cloud_3_mod
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
   !! Constuct required arrays for calculating gas mixtures
-  real(dp), dimension(3) :: d_g = (/d_H2, d_He, d_H/)
-  real(dp), dimension(3) :: LJ_g = (/LJ_H2, LJ_He, LJ_H/)
-  real(dp), dimension(3) :: molg_g = (/molg_H2, molg_He, molg_H/)
+  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g
 
   public :: mini_cloud_3, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_het_nuc, calc_seed_evap
 
   contains
 
-  subroutine mini_cloud_3(T_in, P_in, grav_in, mu_in, VMR_in, t_end, sp, q_v, q_0, q_1, q_2, v_f)
+  subroutine mini_cloud_3(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1, q_2, v_f)
     implicit none
 
     ! Input variables
     character(len=20), intent(in) :: sp
+    character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end
-    real(dp), dimension(:), intent(in) :: VMR_in
+    real(dp), dimension(:), intent(in) :: bg_VMR_in
 
     ! Input/Output tracer values
     real(dp), intent(inout) :: q_v, q_0, q_1, q_2
@@ -96,9 +95,9 @@ module mini_cloud_3_mod
     T = T_in             ! Convert temperature to K
     p = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
 
-    n_gas = size(VMR_in)
+    n_gas = size(bg_VMR_in)
     allocate(VMR_g(n_gas))
-    VMR_g(:) = VMR_in(:)
+    VMR_g(:) = bg_VMR_in(:)
 
     !! Change mu_in to mu
     mu = mu_in ! Convert mean molecular weight to mu [g mol-1]
@@ -116,6 +115,7 @@ module mini_cloud_3_mod
     Rd = R_gas/mu
 
     !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
+    call eta_construct(sp_bg)
     top = 0.0_dp
     bot = 0.0_dp
     do n = 1, n_gas
@@ -254,7 +254,7 @@ module mini_cloud_3_mod
     q_2 = y(3)
     q_v = y(4)
 
-    deallocate(y, rtol, atol, rwork, iwork)
+    deallocate(y, rtol, atol, rwork, iwork, d_g, LJ_g, molg_g)
 
   end subroutine mini_cloud_3
 
@@ -753,5 +753,80 @@ module mini_cloud_3_mod
     surface_tension = max(10.0_dp, sig)
 
   end function surface_tension
+
+  subroutine eta_construct(sp_bg)
+    implicit none
+
+    character(len=20), dimension(:), intent(in) :: sp_bg
+    
+    integer :: n_bg, i
+
+    n_bg = size(sp_bg)
+
+    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg))
+
+    do i = 1, n_bg
+      select case(sp_bg(i))
+
+      case('OH')
+        d_g(i) = d_OH
+        LJ_g(i) = LJ_OH
+        molg_g(i) = molg_OH
+      case('H2')
+        d_g(i) = d_H2
+        LJ_g(i) = LJ_H2
+        molg_g(i) = molg_H2
+      case('H2O')
+        d_g(i) = d_H2O
+        LJ_g(i) = LJ_H2O
+        molg_g(i) = molg_H2O
+      case('H')
+        d_g(i) = d_H
+        LJ_g(i) = LJ_H
+        molg_g(i) = molg_H
+      case('CO')
+        d_g(i) = d_CO
+        LJ_g(i) = LJ_CO
+        molg_g(i) = molg_CO
+      case('CO2')
+        d_g(i) = d_CO2
+        LJ_g(i) = LJ_CO2
+        molg_g(i) = molg_CO2
+      case('O')
+        d_g(i) = d_O
+        LJ_g(i) = LJ_O
+        molg_g(i) = molg_O
+      case('CH4')
+        d_g(i) = d_CH4
+        LJ_g(i) = LJ_CH4
+        molg_g(i) = molg_CH4
+      case('C2H2')
+        d_g(i) = d_C2H2
+        LJ_g(i) = LJ_C2H2
+        molg_g(i) = molg_C2H2
+      case('NH3')
+        d_g(i) = d_NH3
+        LJ_g(i) = LJ_NH3
+        molg_g(i) = molg_NH3
+      case('N2')
+        d_g(i) = d_N2
+        LJ_g(i) = LJ_N2
+        molg_g(i) = molg_N2 
+      case('HCN')
+        d_g(i) = d_HCN
+        LJ_g(i) = LJ_HCN
+        molg_g(i) = molg_HCN
+      case('He')
+        d_g(i) = d_He
+        LJ_g(i) = LJ_He
+        molg_g(i) = molg_He
+      case default
+        print*, 'Background gas species data not found: ', trim(sp_bg(i)), 'STOP'
+        stop
+      end select
+
+    end do
+    
+  end subroutine eta_construct
 
 end module mini_cloud_3_mod
