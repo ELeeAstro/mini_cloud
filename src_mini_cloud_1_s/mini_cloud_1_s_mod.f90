@@ -40,23 +40,22 @@ module mini_cloud_1_s_mod
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
   !! Constuct required arrays for calculating gas mixtures
-  real(dp), dimension(3) :: d_g = (/d_H2, d_He, d_H/)
-  real(dp), dimension(3) :: LJ_g = (/LJ_H2, LJ_He, LJ_H/)
-  real(dp), dimension(3) :: molg_g = (/molg_H2, molg_He, molg_H/)
+  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g
 
   public :: mini_cloud_1_s, dqdt
-  private :: p_vap_sp
+  private :: p_vap_sp, eta_construct
 
 contains 
 
-  subroutine mini_cloud_1_s(deep_flag, T_in, P_in, grav_in, mu_in, VMR_in, t_end, sp, q_v, q_c, v_f)
+  subroutine mini_cloud_1_s(deep_flag, T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_c, v_f)
     implicit none
 
     logical, intent(in) :: deep_flag
     character(len=20), intent(in) :: sp
+    character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: t_end
     real(dp), intent(in) :: T_in, P_in, grav_in, mu_in
-    real(dp), dimension(:), intent(in)::  VMR_in
+    real(dp), dimension(:), intent(in)::  bg_VMR_in
     
     real(dp), intent(inout) :: q_v, q_c, v_f
 
@@ -88,9 +87,9 @@ contains
     mu = mu_in 
     grav = grav_in * 100.0_dp
 
-    n_gas = size(VMR_in)
+    n_gas = size(bg_VMR_in)
     allocate(VMR_g(n_gas))
-    VMR_g(:) = VMR_in(:)
+    VMR_g(:) = bg_VMR_in(:)
 
     !! Calculate deep replenishment rate of vapour
     Hp = (kb * Tl) / (mu * amu * grav)
@@ -156,6 +155,7 @@ contains
     !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
     top = 0.0_dp
     bot = 0.0_dp
+    call eta_construct(sp_bg)
     do k = 1, n_gas
       eta_g = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(k)*amu)*kb*Tl)/(pi*d_g(k)**2)) &
         & * ((((kb*Tl)/LJ_g(k))**(0.16_dp))/1.22_dp)
@@ -185,8 +185,11 @@ contains
     !! Convert vf to mks
     v_f = v_f / 100.0_dp 
 
+    deallocate(d_g, LJ_g, molg_g)
+
   end subroutine mini_cloud_1_s
 
+  !! Calculate tracer fluxes
   subroutine dqdt(n,x,y,f,rpar,ipar)
     implicit none
 
@@ -234,13 +237,14 @@ contains
 
   end subroutine dqdt
 
+  !! Dummy subroutine required for dopri5
   subroutine solout(nr,xold,x,y,n,con,icomp,nd,rpar,ipar,irtrn)
     implicit none
     integer, intent(in) :: nr, n, nd, irtrn, ipar(*)
     real(dp), intent(in) ::  Y(*),CON(*),ICOMP(*),RPAR(*), xold, x
   end subroutine solout
 
-
+  !! Vapour pressure for each species
   real(dp) function p_vap_sp(sp, T)
     implicit none
 
@@ -358,6 +362,83 @@ contains
     end select
 
   end function p_vap_sp
+
+  !! eta for background gas
+  subroutine eta_construct(sp_bg)
+    implicit none
+
+    character(len=20), dimension(:), intent(in) :: sp_bg
+    
+    integer :: n_bg, i
+
+    n_bg = size(sp_bg)
+
+    !! Construct the background gas arrays for eta (dynamical viscosity) calculation
+    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg))
+
+    do i = 1, n_bg
+      select case(sp_bg(i))
+
+      case('OH')
+        d_g(i) = d_OH
+        LJ_g(i) = LJ_OH
+        molg_g(i) = molg_OH
+      case('H2')
+        d_g(i) = d_H2
+        LJ_g(i) = LJ_H2
+        molg_g(i) = molg_H2
+      case('H2O')
+        d_g(i) = d_H2O
+        LJ_g(i) = LJ_H2O
+        molg_g(i) = molg_H2O
+      case('H')
+        d_g(i) = d_H
+        LJ_g(i) = LJ_H
+        molg_g(i) = molg_H
+      case('CO')
+        d_g(i) = d_CO
+        LJ_g(i) = LJ_CO
+        molg_g(i) = molg_CO
+      case('CO2')
+        d_g(i) = d_CO2
+        LJ_g(i) = LJ_CO2
+        molg_g(i) = molg_CO2
+      case('O')
+        d_g(i) = d_O
+        LJ_g(i) = LJ_O
+        molg_g(i) = molg_O
+      case('CH4')
+        d_g(i) = d_CH4
+        LJ_g(i) = LJ_CH4
+        molg_g(i) = molg_CH4
+      case('C2H2')
+        d_g(i) = d_C2H2
+        LJ_g(i) = LJ_C2H2
+        molg_g(i) = molg_C2H2
+      case('NH3')
+        d_g(i) = d_NH3
+        LJ_g(i) = LJ_NH3
+        molg_g(i) = molg_NH3
+      case('N2')
+        d_g(i) = d_N2
+        LJ_g(i) = LJ_N2
+        molg_g(i) = molg_N2 
+      case('HCN')
+        d_g(i) = d_HCN
+        LJ_g(i) = LJ_HCN
+        molg_g(i) = molg_HCN
+      case('He')
+        d_g(i) = d_He
+        LJ_g(i) = LJ_He
+        molg_g(i) = molg_He
+      case default
+        print*, 'Background gas species data not found: ', trim(sp_bg(i)), 'STOP'
+        stop
+      end select
+
+    end do
+    
+  end subroutine eta_construct
 
 end module mini_cloud_1_s_mod
 

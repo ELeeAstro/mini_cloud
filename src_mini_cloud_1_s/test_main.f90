@@ -7,7 +7,7 @@ program test_mini_cloud_1_simple
 
 
   integer :: example, tt, n_it
-  character(len=20) :: sp
+  character(len=20) :: sp, sp_bg(3)
   logical :: deep_flag
   real(dp) :: T_in, P_in, VMR_in(3), mu_in, grav_in
   real(dp) :: q_c, q_v, v_f, k_ext, ssa, g
@@ -15,10 +15,10 @@ program test_mini_cloud_1_simple
 
 
   !! time step
-  t_step = 10.0_dp
+  t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 1000
+  n_it = 10000
 
   !! Start time
   time = 6840.0_dp
@@ -27,7 +27,7 @@ program test_mini_cloud_1_simple
   example = 1
 
   !! Initial conditions
-  q_v = 3.55e-5_dp  ! ~Mg abundance ratio at Solar (VMR)
+  q_v = 1.17e-7_dp  ! ~Mg abundance ratio at Solar (VMR)
   q_c = 1e-30_dp    ! ~Zero clouds at start 
 
  ! Start time iteration
@@ -40,12 +40,13 @@ program test_mini_cloud_1_simple
       !! In this example, we timestep a call to mini-cloud while slowly increasing the temperature
 
       !! Start sinusoid temperature variation [K]
-      T_in = 1500.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.5_dp *  time)
+      T_in = 1600.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.01_dp *  time)
 
       !! Assume constant pressure [pa]
       P_in = 1e5_dp
 
-      !! Assume constant H2, He and H background VMR @ approx solar
+       !! Assume constant H2, He and H background VMR @ approx solar
+      sp_bg = (/'H2','He','H '/)
       VMR_in(1) = 0.85_dp
       VMR_in(2) = 0.15_dp
       VMR_in(3) = 1e-6_dp
@@ -57,22 +58,22 @@ program test_mini_cloud_1_simple
       grav_in = 10.0_dp
 
       !! Assumed condensate species
-      sp = 'MgSiO3'
+      sp = 'KCl'
 
       !! Variables to be sent to mini-cloud module via global variables !!
       !! Inside the loop to demonstrate they can be changed with time if required !!
       !! In this specific code everything is in cgs
       !! --------------------------- !! 
-      rho_c = 3.560_dp
+      rho_c = 1.99_dp
       tau_chem = 10.0_dp
 
       rm = 1.0_dp * 1e-4_dp
       sigma = 2.0_dp
 
-      mol_w_sp = 60.08430_dp
+      mol_w_sp = 74.551_dp
 
       Kzz_deep = 1e8_dp
-      q_v_deep = 3.55e-5_dp * mol_w_sp/mu_in !! MMR for deep mixing ratio
+      q_v_deep = 1.17e-7_dp * mol_w_sp/mu_in !! MMR for deep mixing ratio
       
       !! --------------------------- !! 
 
@@ -89,7 +90,7 @@ program test_mini_cloud_1_simple
       call output(tt, time)
 
       !! Call mini-cloud and perform integrations for a single layer
-      call mini_cloud_1_s(deep_flag, T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, q_v, q_c, v_f)
+      call mini_cloud_1_s(deep_flag, T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, sp_bg, q_v, q_c, v_f)
 
       !! Call the ADT approximate opacity routine for a layer at a single wavelength
       !call adt_1_s
