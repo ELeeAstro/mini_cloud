@@ -175,7 +175,7 @@ module mini_cloud_2_mod
     allocate(rtol(n_eq), atol(n_eq), rwork(rworkdim), iwork(iworkdim))
 
     itol = 4
-    rtol(:) = 1.0e-2_dp           ! Relative tolerances for each scalar
+    rtol(:) = 1.0e-3_dp           ! Relative tolerances for each scalar
     atol(:) = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
@@ -270,7 +270,7 @@ module mini_cloud_2_mod
 
     real(dp) :: f_coal, f_coag, f_nuc_hom, f_cond, f_nuc_het, f_seed_evap
     real(dp) :: m_c, r_c, Kn, beta, sat
-    real(dp) :: p_v, q_v, n_v
+    real(dp) :: p_v, n_v
 
     !! In this routine, you calculate the instanenous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -283,8 +283,7 @@ module mini_cloud_2_mod
 
     !! Find the true vapour VMR
     p_v = y(3) * Rd * T     !! Pressure of vapour
-    q_v = p_v/p               !! VMR of vapour
-    n_v = q_v * nd_atm        !! Number density of vapour
+    n_v = p_v/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
     m_c = max(y(2)/y(1), m_seed)
@@ -299,7 +298,7 @@ module mini_cloud_2_mod
     beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
 
     !! Find supersaturation ratio
-    sat = (q_v * p)/p_vap
+    sat = p_v/p_vap
 
     !! Calculate condensation rate
     call calc_cond(n_eq, y, r_c, Kn, f_cond)
@@ -308,7 +307,8 @@ module mini_cloud_2_mod
     call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
 
     !! Calculate hetrogenous nucleation rate
-    call calc_het_nuc(n_eq, y, sat, r_c, f_nuc_het)
+    !call calc_het_nuc(n_eq, y, sat, r_c, f_nuc_het)
+    f_nuc_het = 0.0_dp
 
     !! Calculate seed particle evaporation rate
     call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
@@ -346,82 +346,15 @@ module mini_cloud_2_mod
 
     real(dp), intent(out) :: dmdt
 
-    real(dp) :: Ak
-
-    !! Kelvin factor
-    Ak = exp((2.0_dp*V0*sig)/(kb*T*r_c))
-
     if (Kn >= 1.0_dp) then
       !! Kinetic regime [g s-1]
-      dmdt = 4.0_dp * pi * r_c**2 * vth * (y(3) - Ak*rho_s)
+      dmdt = 4.0_dp * pi * r_c**2 * vth * (y(3) - rho_s)
     else
       !! Diffusive limited regime [g s-1]
-      dmdt = 4.0_dp * pi * r_c * D * (y(3) - Ak*rho_s)
+      dmdt = 4.0_dp * pi * r_c * D * (y(3) - rho_s)
     end if
 
   end subroutine calc_cond
-
-  !! Classical hetrogenous nucleation theory
-  subroutine calc_het_nuc(n_eq, y, sat, r_c, J_het)
-    implicit none
-
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y
-    real(dp), intent(in) :: sat, r_c
-
-    real(dp), intent(out) :: J_het
-
-    real(dp) :: r_crit, FG, Theta, Zel, Nl
-    real(dp) :: f, mu_con, phi, f0, x
-    real(dp) :: c_surf, nu, F_des
-
-    if (sat > 1.0_dp) then
-
-      !! Critical particle size
-      r_crit = (2.0_dp * mol_w_sp * sig)/(rho_d*R_gas*T*log(sat))
-
-      !! Formation energy of critical cluster - classical approximation
-      FG = 4.0_dp/3.0_dp * pi * sig * r_crit**2
-
-      !! Cluster-cluster diffusive interaction rate 
-      Theta = p/(sqrt(2.0_dp*m0*kb*T))
-
-      !! Number of vapour units in critical cluster size
-      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp)
-
-      !! Zeldovich factor
-      Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
-
-      !! Cosine contact angle
-      mu_con = 0.5_dp
-
-      !! Begin shape factor calculation
-      x = r_c/r_crit
-      phi = sqrt(1.0_dp - 2.0_dp*mu_con*x + x**2)
-      f0 = (x - mu_con)/phi
-
-      !! Shape factor
-      f = 0.5_dp * (1.0_dp + ((1.0_dp-mu_con*x)/phi)**3 + x**3*(2.0_dp - 3.0_dp*f0 + f0**3) &
-        & + 3.0_dp*mu_con*x**2*(f0 - 1.0_dp))
-
-      !! Oscillation frequency
-      nu = 1e13_dp !~ 1e13 Hz
-
-      !! Desorption energy
-      F_des = 0.5_dp * eV !~ 0.5 eV
-
-      !! Number density of condensate molecules on the nucleating surface
-      c_surf = Theta/nu * exp(F_des/(kb*T))
-
-      !! Heterogenous nucleation rate [cm-3 s-1]
-      J_het = 4.0_dp * pi**2 * r_c**2 * r_crit**2 * Theta * c_surf * Zel * exp(-(FG*f)/(kb*T)) * y(1)
-
-    else
-      !! Unsaturated, zero nucleation
-      J_het = 0.0_dp
-    end if
-
-  end subroutine calc_het_nuc
 
   !! Classical nucleation theory (CNT)
   subroutine calc_hom_nuc(n_eq, y, sat, n_v, J_hom)
@@ -433,28 +366,44 @@ module mini_cloud_2_mod
 
     real(dp), intent(out) :: J_hom
 
-    real(dp) :: r_crit, FG, Theta, Zel, Nl
+    real(dp) :: ln_ss, theta_inf, N_inf, N_star, N_star_1, dg_rt, Zel, tau_gr
+    real(dp) :: f0, kbT
+
+    real(dp), parameter :: alpha = 1.0_dp
+    real(dp), parameter :: Nf = 10.0_dp
 
     if (sat > 1.0_dp) then
 
-      !! Critical particle size
-      r_crit = (2.0_dp * mol_w_sp * sig)/(rho_d*R_gas*T*log(sat))
+      ! Efficency Variables
+      ln_ss = log(sat) ! Natural log of saturation ratio
+      f0 = 4.0_dp * pi * r0**2 ! Monomer Area
+      kbT = kb * T         ! kb * T
 
-      !! Formation energy of critical cluster - classical approximation
-      FG = 4.0_dp/3.0_dp * pi * sig * r_crit**2
+      !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
+      theta_inf = (f0 * sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
+      N_inf = (((twothird) * theta_inf) / ln_ss)**3
 
-      !! Cluster-cluster diffusive interaction rate 
-      Theta = p/(sqrt(2.0_dp*m0*kb*T))
+      !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
+      N_star = 1.0_dp + (N_inf / 8.0_dp) &
+        & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
+        & - 2.0_dp*(Nf/N_inf)**third)**3
+      N_star = max(1.00001_dp, N_star) ! Ensure no div 0
+      N_star_1 = N_star - 1.0_dp
 
-      !! Number of vapour units in critical cluster size
-      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp) 
- 
-      !! Zeldovich factor
-      Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
+      !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
+      dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
 
-      !! Homogenous nucleation rate [cm-3 s-1]
-      J_hom = 4.0_dp * pi * r_crit**2 * Theta * Zel * n_v * exp(-FG/(kb*T))
-    else
+      !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
+      Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
+        & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
+
+      !! Calculate !!inverse!! of tau_gr
+      tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
+        & / (2.0_dp * pi * mol_w_sp * amu)) * n_v
+
+      !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
+      J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+    else 
       !! Unsaturated, zero nucleation
       J_hom = 0.0_dp
     end if
@@ -471,8 +420,7 @@ module mini_cloud_2_mod
 
     real(dp), intent(out) :: J_evap
 
-    real(dp), parameter  :: tau_evap = 1.0_dp
-    !real(dp) :: tau_evap
+    real(dp) :: tau_evap
 
     if ((f_cond >= 0.0_dp) .or. (y(1)/nd_atm <= 1e-29_dp)) then
 
@@ -483,9 +431,8 @@ module mini_cloud_2_mod
 
       !! Check if average mass is around 0.1% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <=  (1.001_dp * m_seed)) then
-        !tau_evap = m_c/abs(f_cond)
-
+      if (m_c <= (1.0001_dp * m_seed)) then
+        tau_evap = max(m_c/abs(f_cond),1.0_dp)
         !! Seed particle evaporation rate [cm-3 s-1]
         J_evap = -y(1)/tau_evap
       else
@@ -565,6 +512,68 @@ module mini_cloud_2_mod
     f_coal = -2.0_dp*pi*r_c**2*y(1)**2*d_vf*E
 
   end subroutine calc_coal
+
+  !! Classical hetrogenous nucleation theory
+  subroutine calc_het_nuc(n_eq, y, sat, r_c, J_het)
+    implicit none
+
+    integer, intent(in) :: n_eq
+    real(dp), dimension(n_eq), intent(in) :: y
+    real(dp), intent(in) :: sat, r_c
+
+    real(dp), intent(out) :: J_het
+
+    real(dp) :: r_crit, FG, Theta, Zel, Nl
+    real(dp) :: f, mu_con, phi, f0, x
+    real(dp) :: c_surf, nu, F_des
+
+    if (sat > 1.0_dp) then
+
+      !! Critical particle size
+      r_crit = (2.0_dp * mol_w_sp * sig)/(rho_d*R_gas*T*log(sat))
+
+      !! Formation energy of critical cluster - classical approximation
+      FG = 4.0_dp/3.0_dp * pi * sig * r_crit**2
+
+      !! Cluster-cluster diffusive interaction rate 
+      Theta = p/(sqrt(2.0_dp*m0*kb*T))
+
+      !! Number of vapour units in critical cluster size
+      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp)
+
+      !! Zeldovich factor
+      Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
+
+      !! Cosine contact angle
+      mu_con = 0.5_dp
+
+      !! Begin shape factor calculation
+      x = r_c/r_crit
+      phi = sqrt(1.0_dp - 2.0_dp*mu_con*x + x**2)
+      f0 = (x - mu_con)/phi
+
+      !! Shape factor
+      f = 0.5_dp * (1.0_dp + ((1.0_dp-mu_con*x)/phi)**3 + x**3*(2.0_dp - 3.0_dp*f0 + f0**3) &
+        & + 3.0_dp*mu_con*x**2*(f0 - 1.0_dp))
+
+      !! Desorption energy
+      F_des = 0.5_dp * eV !~ 0.5 eV (Gao & Powell 2021)
+
+      !! Oscillation frequency
+      nu = 10e11_dp  * sqrt(F_des/(kb*m0)) ! Gao per. comm.
+
+      !! Number density of condensate molecules on the nucleating surface
+      c_surf = Theta/nu * exp(F_des/(kb*T))
+      
+      !! Heterogenous nucleation rate [cm-3 s-1]
+      J_het = 4.0_dp * pi**2 * r_c**2 * r_crit**2 * Theta * c_surf * Zel * exp(-(FG*f)/(kb*T)) * y(1)
+
+    else
+      !! Unsaturated, zero nucleation
+      J_het = 0.0_dp
+    end if
+
+  end subroutine calc_het_nuc
 
   !! Dummy jacobian subroutine required for dlsode
   subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)

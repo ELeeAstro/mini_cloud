@@ -33,8 +33,8 @@ program test_mini_cloud_2
 
   !! Initial conditions
   q_v = 1.17e-7_dp  ! ~K abundance ratio at Solar (VMR)
-  q_0 = 0.0_dp    ! ~Zero clouds at start 
-  q_1 = 0.0_dp
+  q_0 = 1.0e-30_dp    ! ~Zero clouds at start 
+  q_1 = 1.0e-30_dp
 
  ! Start time iteration
   do tt = 1, n_it
