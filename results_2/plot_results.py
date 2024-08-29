@@ -64,8 +64,4 @@ ax2.set_ylabel('m,r')
 ax2.legend(loc=2)
 plt.yscale('log')
 
-
-fname = 'opac.txt'
-data = np.loadtxt(fname)
-
 plt.show()

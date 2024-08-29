@@ -36,8 +36,4 @@ ax2.set_ylabel('v_f [m s$^{-1}$]')
 ax2.legend(loc=2)
 plt.yscale('log')
 
-
-fname = 'opac.txt'
-data = np.loadtxt(fname)
-
 plt.show()

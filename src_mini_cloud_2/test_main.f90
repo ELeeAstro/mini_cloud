@@ -145,6 +145,7 @@ contains
     if (first_call .eqv. .True.) then
       open(newunit=u1,file='results_2/tracers.txt',action='readwrite')
       open(newunit=u2,file='results_2/opac.txt',action='readwrite')
+      write(u2,*) wl(:)
       first_call = .False.
     end if
 

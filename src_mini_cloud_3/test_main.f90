@@ -25,7 +25,7 @@ program test_mini_cloud_2
   t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 3000
+  n_it = 10000
 
   !! Start time
   time = 6840.0_dp
@@ -147,6 +147,7 @@ contains
     if (first_call .eqv. .True.) then
       open(newunit=u1,file='results_3/tracers.txt',action='readwrite')
       open(newunit=u2,file='results_3/opac.txt',action='readwrite')
+      write(u2,*) wl(:)
       first_call = .False.
     end if
 
