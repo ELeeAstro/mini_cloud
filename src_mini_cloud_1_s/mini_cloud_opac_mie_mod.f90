@@ -132,8 +132,8 @@ contains
     q_abs = q_ext - q_sca
 
   end subroutine rayleigh
-
-  subroutine adt(x, ri, q_abs, q_sca, q_ext, g)
+  
+  subroutine madt(x, ri, q_abs, q_sca, q_ext, g)
     implicit none
 
     real(dp), intent(in) :: x
@@ -141,68 +141,55 @@ contains
 
     real(dp), intent(out) :: q_abs, q_sca, q_ext, g
 
-    real(dp) :: rho1, rho2, rho0, beta0, beta, fac, fac2
-    complex(dp) ::  rho
+    real(dp) :: n, k, rho, beta, tan_b
+    real(dp) :: C1, C2, eps, q_edge, Cm
 
-    rho = 2.0_dp * x * (ri - 1.0_dp)
-    rho0 = abs(rho)
-    rho1 = real(rho, dp)
-    rho2 = aimag(rho)
+    n = real(ri,dp)
+    k = aimag(ri)
 
-    if (abs(rho1) > 0.0_dp) then
-      beta0 = atan(abs(rho2)/abs(rho1))
-      if (rho1 < 0.0_dp .and. rho2 > 0.0_dp) then
-        beta = pi - beta0
-      else if (rho1 < 0.0_dp .and. rho2 < 0.0_dp) then
-        beta = pi + beta0
-      else if (rho1 > 0.0_dp .and. rho2 < 0.0_dp) then 
-        beta = 2.0_dp*pi - beta0
-      else 
-        beta = beta0 
-      endif     
+    rho = 2.0_dp*x*(n - 1.0_dp)
+    beta = atan(k/(n - 1.0_dp))
+    tan_b = tan(beta)
+
+    if (k == 0.0_dp) then
+      q_sca = 2.0_dp - (4.0_dp/rho)*sin(rho) - (4.0_dp/rho**2)*(cos(rho) - 1.0_dp)
+      q_abs = 0.0_dp
+      q_ext = q_sca
     else
-      if (rho2 > 0.0_dp) then
-        beta = 0.5_dp*pi 
-      else
-        beta = 1.5_dp*pi
-      endif
-    end if
+      q_ext = 2.0_dp - 4.0_dp * exp(-rho*tan_b)*(cos(beta)/rho)*sin(rho-beta) &
+        & - 4.0_dp*exp(-rho*tan_b)*(cos(beta)/rho)**2*cos(rho-2.0_dp*beta) & 
+        & + 4.0_dp*(cos(beta)/rho)**2*cos(2.0_dp*beta)
+      q_abs = 1.0_dp + 2.0_dp*(exp(-4.0_dp*k*x)/(4.0_dp*k*x)) &
+        & + 2.0_dp*((exp(-4.0_dp*k*x)-1.0_dp)/(4.0_dp*k*x)**2)
 
-    if (rho0 < 1.0e-3_dp) then
-      q_ext = (4.0_dp/3.0_dp)*rho2 + 0.5_dp*(rho1**2 - rho2**2)
-      q_abs = (4.0_dp/3.0_dp)*rho2 - rho2**2
-      q_sca = 0.5_dp*rho0**2
-    else
-      fac = exp(-rho2)
-      fac2 = fac**2
-      q_ext = 2.0_dp + (4.0_dp/rho0**2)*(cos(2.0_dp*beta) - fac*(cos(rho1 - 2*beta) + rho0*sin(rho1 - beta)))
-      q_abs = 1.0_dp + fac2/rho2 + (fac2 - 1.0_dp)/(2.0_dp*rho2**2)
+      C1 = 0.25_dp * (1.0_dp + exp(-1167.0_dp*k))*(1.0_dp - q_abs)
+
+      eps = 0.25_dp + 0.61_dp*(1.0_dp - exp(-(8.0_dp*pi/3.0_dp)*k))**2
+      C2 = sqrt(2.0_dp*eps*(x/pi))*exp(0.5_dp - eps*(x/pi))*(0.79393_dp*n - 0.6069_dp)
+
+      q_abs = (1.0_dp + C1 + C2)*q_abs 
+
+      q_edge = (1.0_dp - exp(-0.06_dp*x))*x**(-2.0_dp/3.0_dp)
+
+      q_ext = (1.0_dp + 0.5_dp*C2)*q_ext + q_edge
+
       q_sca = q_ext - q_abs
-    end if
-
-    if (x >= 100.0_dp) then
-      q_ext = q_ext + 2.0_dp * x**(-2.0_dp/3.0_dp)
-    end if
-
-    if (aimag(ri) < 1) then
-
-      if (x <= 3.0_dp) then
-        g = 0.7_dp*(x/3.0_dp)**2
-      else
-        g = 0.7_dp
-      end if
-
-    else if (aimag(ri) >= 1) then
-
-      if (x <= 3.0_dp) then
-        g = 0.0_dp ! -0.2_dp
-      else
-        g = 0.5_dp
-      end if
 
     end if
 
-  end subroutine adt
+    !! Estimate g
+    if (k == 0.0_dp) then
+      Cm = (6.0_dp + 5.0_dp*n**2 + n**4)/(45.0_dp*30.0_dp*n**2)
+    else
+      Cm = (-2.0_dp*k**6+k**4*(13.0_dp-2.0_dp*n**2)+k**2*(2.0_dp*n**4+2.0_dp*n**2-27.0_dp) & 
+        & + 2.0_dp*n**6 + 13.0_dp*n**4 + 27.0_dp*n**2 + 18.0_dp) & 
+        & /(15.0_dp * (4.0_dp*k**4 + 4.0_dp*k**2*(2.0_dp*n**2 - 3.0_dp) + (2.0_dp*n**2 + 3.0_dp)**2))
+    end if
+
+    !! Rayleigh regime, but limit to 0.7 to try get the constant region
+    g = min(Cm * x**2, 0.7_dp)
+
+  end subroutine madt
 
   subroutine read_nk_tables(n_dust, sp, n_wl, wl)
     implicit none
