@@ -1,6 +1,7 @@
 program test_mini_cloud_2
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   use mini_cloud_2_mod, only : mini_cloud_2, rho_d, mol_w_sp
+  use mini_cloud_opac_mie_mod, only : opac_mie
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -15,9 +16,10 @@ program test_mini_cloud_2
   character(len=20) :: sp, sp_bg(3)
   real(dp) :: T_in, P_in, VMR_in(3), mu_in, grav_in, nd_atm, rho
   real(dp) :: q_0, q_1, q_v, v_f, r_c, m_c, Rd_v, p_v, rho_v
-  real(dp) :: k_ext, ssa, g
   real(dp) :: t_step, time
 
+  integer :: n_wl
+  real(dp), allocatable, dimension(:) :: wl_e, wl, k_ext, ssa, g
 
   !! time step
   t_step = 100.0_dp
@@ -35,6 +37,14 @@ program test_mini_cloud_2
   q_v = 1.17e-7_dp  ! ~K abundance ratio at Solar (VMR)
   q_0 = 1.0e-30_dp    ! ~Zero clouds at start 
   q_1 = 1.0e-30_dp
+
+
+  n_wl = 11
+  allocate(wl_e(n_wl+1), wl(n_wl), k_ext(n_wl), ssa(n_wl), g(n_wl))
+
+  !! Wavelengths to calculate opacity
+  wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
+  wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
  ! Start time iteration
   do tt = 1, n_it
@@ -87,11 +97,8 @@ program test_mini_cloud_2
       !! Call mini-cloud and perform integrations for a single layer
       call mini_cloud_2(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, sp_bg, q_v, q_0, q_1, v_f)
 
-      !! Call the ADT approximate opacity routine for a layer at a single wavelength
-      !call adt_1_s
-      k_ext = 0.0_dp
-      ssa = 0.0_dp
-      g = 0.0_dp
+      !! Calculate the opacity at the weavelength grid
+      call opac_mie(1, sp, T_in, mu_in, P_in, q_0, q_1, rho_d, n_wl, wl, k_ext, ssa, g)
 
       !! increment time
       time = time + t_step
@@ -108,7 +115,7 @@ program test_mini_cloud_2
 
       print*, 'q', tt, q_v, q_0, q_1, v_f
       print*, 'r', tt, m_c, r_c
-      print*, 'o', tt, k_ext, ssa, g
+      print*, 'o', tt, k_ext(1), ssa(1), g(1), k_ext(n_wl), ssa(n_wl), g(n_wl)
 
       !! mini-cloud test output
       call output(tt, time)
@@ -142,7 +149,7 @@ contains
     end if
 
     write(u1,*) t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0, q_1, v_f
-    write(u2,*) t, time, k_ext, ssa, g
+    write(u2,*) t, time, k_ext(:), ssa(:), g(:)
 
   end subroutine output
 

@@ -275,6 +275,9 @@ module mini_cloud_3_mod
     !! The current values of each moment (y) are typically kept constant
     !! Basically, you solve for the RHS of the ODE for each moment
 
+    !! Limit y values
+    y(:) = max(y(:),1e-30_dp)
+
     !! Convert y to real numbers to calculate f
     y(1) = y(1)*nd_atm ! Convert to real number density
     y(2) = y(2)*rho   ! Convert to real mass density

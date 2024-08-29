@@ -35,9 +35,11 @@ INCLUDES  =
 LFLAGS    = $(FFLAGS)
 
 OBJECTS = \
+lxmie_mod.o \
 dlsode.o \
 mini_cloud_2_mod.o \
-test_main.o \
+mini_cloud_opac_mie_mod.o \
+test_main.o 
 
 # executable statement
 EXECS  = ../mini_cloud_2
