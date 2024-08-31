@@ -98,7 +98,7 @@ contains
         !! Use Rayleigh approximation
         call rayleigh(x, N_eff, q_abs, q_sca, q_ext, g)
       else if (x > 10.0_dp) then
-        call adt(x, N_eff, q_abs, q_sca, q_ext, g)
+        call madt(x, N_eff, q_abs, q_sca, q_ext, g)
       else
         !! Call LX-MIE with negative k value
         N_eff = cmplx(real(N_eff,dp),-aimag(N_eff),dp)

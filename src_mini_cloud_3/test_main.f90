@@ -1,6 +1,7 @@
 program test_mini_cloud_2
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   use mini_cloud_3_mod, only : mini_cloud_3, rho_d, mol_w_sp
+  use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   implicit none
 
@@ -101,6 +102,10 @@ program test_mini_cloud_2
 
       !! Call mini-cloud and perform integrations for a single layer
       call mini_cloud_3(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, sp_bg, q_v, q_0, q_1, q_2, v_f)
+
+      !! Calculate settling velocity for this layer
+      call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_in, rho_d, sp_bg, q_0, q_1, v_f)
+
 
       !! Calculate the opacity at the weavelength grid
       call opac_mie(1, sp, T_in, mu_in, P_in, q_0, q_1, rho_d, n_wl, wl, k_ext, ssa, g)

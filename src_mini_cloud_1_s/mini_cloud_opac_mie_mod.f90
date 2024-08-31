@@ -95,8 +95,8 @@ contains
         !! Use Rayleigh approximation
         call rayleigh(x, N_eff, q_abs, q_sca, q_ext)
         g = 0.0_dp
-      else if (x > 100.0_dp) then
-        call adt(x, N_eff, q_abs, q_sca, q_ext, g)
+      else if (x > 10.0_dp) then
+        call madt(x, N_eff, q_abs, q_sca, q_ext, g)
       else
         !! Call LX-MIE with negative k value
         N_eff = cmplx(real(N_eff,dp),-aimag(N_eff),dp)
@@ -105,8 +105,8 @@ contains
 
       !! Calculate the opacity, abledo and mean cosine angle (asymmetry factor)
       k_ext(l) = (q_ext * xsec * n_d)/rho
-      alb(l) = q_sca/q_ext
-      gg(l) = g
+      alb(l) = max(q_sca/q_ext, 0.95_dp)
+      gg(l) = max(g, 0.0_dp)
 
     end do
 
