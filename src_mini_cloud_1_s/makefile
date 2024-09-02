@@ -5,11 +5,11 @@ F90 = gfortran
 F90LINKER =  gfortran
 
 #Debugging and development flags
-#FFLAGS	= -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
+FFLAGS	= -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
 #FFLAGS	= -Og -pipe -Wall -Wextra -g -fbacktrace
 
 #Serial flags
-FFLAGS  = -O3 -pipe
+#FFLAGS  = -O3 -pipe
 
 # for intel Compiler
 #====================
@@ -38,6 +38,7 @@ OBJECTS = \
 lxmie_mod.o \
 dopri5.o \
 mini_cloud_1_s_mod.o \
+mini_cloud_vf_mod.o \
 mini_cloud_opac_mie_mod.o \
 test_main.o
 

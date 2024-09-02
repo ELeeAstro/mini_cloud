@@ -13,6 +13,8 @@ module mini_cloud_1_s_mod
   real(dp) :: Kzz_deep
   real(dp) :: q_v_deep
 
+  real(dp) :: pl, p_vap, q_s, tau_deep
+
   real(dp), parameter :: bar = 1.0e6_dp ! bar to dyne
   real(dp), parameter :: atm = 1.01325e6_dp ! atm to dyne
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
@@ -24,54 +26,31 @@ module mini_cloud_1_s_mod
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g mol-1 (note, has to be cgs g mol-1 !!!)
   real(dp), parameter :: R_gas = 8.31446261815324e7_dp
 
-  !! Diameter, LJ potential and molecular weight for background gases ! Do everything in cgs for vf calculation
-  real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
-  real(dp), parameter :: d_H2 = 2.827e-8_dp, LJ_H2 = 59.7_dp * kb, molg_H2 = 2.01588_dp
-  real(dp), parameter :: d_H2O = 2.641e-8_dp, LJ_H2O = 809.1_dp * kb, molg_H2O = 18.01528_dp
-  real(dp), parameter :: d_H = 2.5e-8_dp, LJ_H =  30.0_dp * kb, molg_H = 1.00794_dp
-  real(dp), parameter :: d_CO = 3.690e-8_dp, LJ_CO = 91.7_dp * kb, molg_CO = 28.0101_dp
-  real(dp), parameter :: d_CO2 = 3.941e-8_dp, LJ_CO2 = 195.2_dp * kb, molg_CO2 = 44.0095_dp
-  real(dp), parameter :: d_O = 2.66e-8_dp, LJ_O = 70.0_dp * kb, molg_O = 15.99940_dp
-  real(dp), parameter :: d_CH4 = 3.758e-8_dp, LJ_CH4 = 148.6_dp * kb, molg_CH4 = 16.0425_dp
-  real(dp), parameter :: d_C2H2 = 4.033e-8_dp, LJ_C2H2 = 231.8_dp * kb, molg_C2H2 = 26.0373_dp
-  real(dp), parameter :: d_NH3 = 2.900e-8_dp, LJ_NH3 = 558.3_dp * kb, molg_NH3 = 17.03052_dp
-  real(dp), parameter :: d_N2 = 3.798e-8_dp, LJ_N2 = 71.4_dp * kb, molg_N2 = 14.0067_dp
-  real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
-  real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
-
-  !! Constuct required arrays for calculating gas mixtures
-  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g
 
   public :: mini_cloud_1_s, dqdt
-  private :: p_vap_sp, eta_construct
+  private :: p_vap_sp
 
 contains 
 
-  subroutine mini_cloud_1_s(deep_flag, T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_c, v_f)
+  subroutine mini_cloud_1_s(deep_flag, T_in, P_in, grav_in, mu_in, t_end, sp, q_v, q_c)
     implicit none
 
     logical, intent(in) :: deep_flag
     character(len=20), intent(in) :: sp
-    character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: t_end
     real(dp), intent(in) :: T_in, P_in, grav_in, mu_in
-    real(dp), dimension(:), intent(in)::  bg_VMR_in
     
-    real(dp), intent(inout) :: q_v, q_c, v_f
+    real(dp), intent(inout) :: q_v, q_c
 
-    integer :: k, n_gas
-    real(dp) :: Tl, pl, mu, grav
-    real(dp) :: p_vap, q_s, tau_deep, Hp, rV, eps
-    real(dp), allocatable, dimension(:) :: VMR_g
-
-    real(dp) :: top, bot, eta, mfp, beta, rho, eta_g, Kn
+    real(dp) :: Tl, mu, grav
+    real(dp) :: Hp, eps
 
     real(dp) :: t_now
 
     integer :: itol, iout, idid
     integer :: ipar
     real(dp) :: rtol, atol
-    real(dp), dimension(5) :: rpar
+    real(dp) :: rpar
 
     integer, parameter :: n = 2
     integer, parameter :: lwork = 37 !8*2
@@ -86,10 +65,6 @@ contains
     pl = P_in * 10.0_dp
     mu = mu_in 
     grav = grav_in * 100.0_dp
-
-    n_gas = size(bg_VMR_in)
-    allocate(VMR_g(n_gas))
-    VMR_g(:) = bg_VMR_in(:)
 
     !! Calculate deep replenishment rate of vapour
     Hp = (kb * Tl) / (mu * amu * grav)
@@ -119,12 +94,7 @@ contains
     if (deep_flag .eqv. .True.) then
       ipar = 1
     end if
-
-    rpar(1) = pl
-    rpar(2) = p_vap
-    rpar(3) = q_s
-    rpar(4) = q_v_deep
-    rpar(5) = tau_deep
+    rpar = 0.0_dp
 
 
     work(:) = 0.0_dp
@@ -147,46 +117,6 @@ contains
       print*, 'error in dopri5: ', idid
     end if
 
-    !! Calculate settling velocity !!
-
-    !! Mass density of layer
-    rho = (pl*mu*amu)/(kb * Tl) ! Mass density [g cm-3]
-
-    !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
-    top = 0.0_dp
-    bot = 0.0_dp
-    call eta_construct(sp_bg)
-    do k = 1, n_gas
-      eta_g = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(k)*amu)*kb*Tl)/(pi*d_g(k)**2)) &
-        & * ((((kb*Tl)/LJ_g(k))**(0.16_dp))/1.22_dp)
-      top = top + sqrt(molg_g(k))*VMR_g(k)*eta_g
-      bot = bot + sqrt(molg_g(k))*VMR_g(k)
-    end do
-
-    !! Mixture dynamical viscosity
-    eta = top/bot
-
-    !! Calculate mean free path for this layer
-    mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*Tl))
-
-    !! Volume (or mass) weighted mean radius of particle assuming log-normal distribution
-    rV = rm * exp(7.0_dp/2.0_dp * log(sigma)**2)
-
-    !! Knudsen number
-    Kn = mfp/rV
-
-    !! Cunningham slip factor
-    beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
-
-    !! Settling velocity
-    v_f = (2.0_dp * beta * grav * rV**2 * rho_c)/(9.0_dp * eta) & 
-      & * (1.0_dp + ((0.45_dp*grav*rV**3*rho*rho_c)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
-
-    !! Convert vf to mks
-    v_f = v_f / 100.0_dp 
-
-    deallocate(d_g, LJ_g, molg_g)
-
   end subroutine mini_cloud_1_s
 
   !! Calculate tracer fluxes
@@ -198,31 +128,30 @@ contains
 
     real(dp), intent(in) :: x 
     real(dp), dimension(n), intent(inout) :: y
-    real(dp), dimension(*), intent(in) :: rpar
+    real(dp), intent(in) :: rpar
 
     real(dp), dimension(n), intent(out) :: f
 
     real(dp) :: sat
 
     !y(1) = q_v, y(2) = q_c
-    !rpar(1) = pl(k), rpar(2) = p_vap, rpar(3) = q_s, rpar(4) = q_v_deep, rpar(5) = tau_deep
 
     y(1) = max(y(1),1e-30_dp)
     y(2) = max(y(2),1e-30_dp)
 
     !! Calculate dqdt for vapour and condensate
-    sat = (y(1) * rpar(1))/rpar(2)
+    sat = (y(1) * pl)/p_vap
 
     !! Calculate dqdt given the supersaturation ratio
     if (sat < 0.99_dp) then
 
       ! Evaporate from q_c
-      f(1) = min(rpar(3) - y(1), y(2))/tau_chem
+      f(1) = min(q_s - y(1), y(2))/tau_chem
 
     else if (sat > 1.01_dp) then
 
       ! Condense q_v toward the saturation ratio
-      f(1) = -(y(1) - rpar(3))/tau_chem
+      f(1) = -(y(1) - q_s)/tau_chem
 
     else
       f(1) = 0.0_dp
@@ -232,7 +161,7 @@ contains
 
     ! Add replenishment to lower boundary at the tau_deep rate
     if (ipar == 1) then
-      f(1) = f(1) - (y(1) - rpar(4))/rpar(5)
+      f(1) = f(1) - (y(1) - q_v_deep)/tau_deep
     end if
 
   end subroutine dqdt
@@ -362,83 +291,6 @@ contains
     end select
 
   end function p_vap_sp
-
-  !! eta for background gas
-  subroutine eta_construct(sp_bg)
-    implicit none
-
-    character(len=20), dimension(:), intent(in) :: sp_bg
-    
-    integer :: n_bg, i
-
-    n_bg = size(sp_bg)
-
-    !! Construct the background gas arrays for eta (dynamical viscosity) calculation
-    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg))
-
-    do i = 1, n_bg
-      select case(sp_bg(i))
-
-      case('OH')
-        d_g(i) = d_OH
-        LJ_g(i) = LJ_OH
-        molg_g(i) = molg_OH
-      case('H2')
-        d_g(i) = d_H2
-        LJ_g(i) = LJ_H2
-        molg_g(i) = molg_H2
-      case('H2O')
-        d_g(i) = d_H2O
-        LJ_g(i) = LJ_H2O
-        molg_g(i) = molg_H2O
-      case('H')
-        d_g(i) = d_H
-        LJ_g(i) = LJ_H
-        molg_g(i) = molg_H
-      case('CO')
-        d_g(i) = d_CO
-        LJ_g(i) = LJ_CO
-        molg_g(i) = molg_CO
-      case('CO2')
-        d_g(i) = d_CO2
-        LJ_g(i) = LJ_CO2
-        molg_g(i) = molg_CO2
-      case('O')
-        d_g(i) = d_O
-        LJ_g(i) = LJ_O
-        molg_g(i) = molg_O
-      case('CH4')
-        d_g(i) = d_CH4
-        LJ_g(i) = LJ_CH4
-        molg_g(i) = molg_CH4
-      case('C2H2')
-        d_g(i) = d_C2H2
-        LJ_g(i) = LJ_C2H2
-        molg_g(i) = molg_C2H2
-      case('NH3')
-        d_g(i) = d_NH3
-        LJ_g(i) = LJ_NH3
-        molg_g(i) = molg_NH3
-      case('N2')
-        d_g(i) = d_N2
-        LJ_g(i) = LJ_N2
-        molg_g(i) = molg_N2 
-      case('HCN')
-        d_g(i) = d_HCN
-        LJ_g(i) = LJ_HCN
-        molg_g(i) = molg_HCN
-      case('He')
-        d_g(i) = d_He
-        LJ_g(i) = LJ_He
-        molg_g(i) = molg_He
-      case default
-        print*, 'Background gas species data not found: ', trim(sp_bg(i)), 'STOP'
-        stop
-      end select
-
-    end do
-    
-  end subroutine eta_construct
 
 end module mini_cloud_1_s_mod
 
