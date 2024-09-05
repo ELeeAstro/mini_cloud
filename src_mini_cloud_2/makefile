@@ -38,6 +38,7 @@ OBJECTS = \
 lxmie_mod.o \
 dlsode.o \
 mini_cloud_2_mod.o \
+mini_cloud_vf_mod.o \
 mini_cloud_opac_mie_mod.o \
 test_main.o 
 

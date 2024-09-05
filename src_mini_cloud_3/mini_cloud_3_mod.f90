@@ -55,7 +55,7 @@ module mini_cloud_3_mod
 
   contains
 
-  subroutine mini_cloud_3(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1, q_2, v_f)
+  subroutine mini_cloud_3(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1, q_2)
     implicit none
 
     ! Input variables
@@ -66,7 +66,6 @@ module mini_cloud_3_mod
 
     ! Input/Output tracer values
     real(dp), intent(inout) :: q_v, q_0, q_1, q_2
-    real(dp), intent(out) :: v_f
 
     integer :: ncall, n
 
@@ -85,7 +84,6 @@ module mini_cloud_3_mod
     integer :: n_gas
     real(dp), allocatable, dimension(:) :: VMR_g
     real(dp) :: eta_g, bot, top
-    real(dp) :: m_c, r_c, Kn, beta
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
@@ -227,27 +225,6 @@ module mini_cloud_3_mod
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
 
-    !! Calculate vf from final results of interation
-    !! Mean mass of particle
-    m_c = max((y(2)*rho)/(y(1)*nd_atm), m_seed)
-
-    !! Mass weighted mean radius of particle
-    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
-
-    !! Knudsen number
-    Kn = mfp/r_c
-
-    !! Cunningham slip factor
-    beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
-
-    !! Settling velocity
-    v_f = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
-      & * (1.0_dp + & 
-      & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
-
-    !! Convert vf to mks
-    v_f = v_f / 100.0_dp 
-
     !! Give y values to tracers
     q_0 = y(1)
     q_1 = y(2)
@@ -286,7 +263,7 @@ module mini_cloud_3_mod
 
 
     !! Find the true vapour VMR
-    p_v = y(4) * Rd * T     !! Pressure of vapour
+    p_v = y(4) * Rd * T     !! Partial pressure of vapour
     n_v = p_v/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
@@ -305,7 +282,7 @@ module mini_cloud_3_mod
     sat = p_v/p_vap
 
     !! Calculate condensation rate
-    call calc_cond(n_eq, y, r_c, Kn, f_cond)
+    call calc_cond(n_eq, y, r_c, Kn, n_v, sat, f_cond)
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
@@ -344,21 +321,21 @@ module mini_cloud_3_mod
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(n_eq, y, r_c, Kn, dmdt)
+  subroutine calc_cond(n_eq, y, r_c, Kn, n_v, sat, dmdt)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, Kn
+    real(dp), intent(in) :: r_c, Kn, n_v, sat
 
     real(dp), intent(out) :: dmdt
 
     if (Kn >= 1.0_dp) then
       !! Kinetic regime [g s-1]
-      dmdt = 4.0_dp * pi * r_c**2 * vth * (y(4) - rho_s)
+      dmdt = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * (1.0_dp - 1.0_dp/sat)
     else
       !! Diffusive limited regime [g s-1]
-      dmdt = 4.0_dp * pi * r_c * D * (y(4) - rho_s)
+      dmdt = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat)
     end if
 
   end subroutine calc_cond
@@ -434,10 +411,10 @@ module mini_cloud_3_mod
       !! If growing or too little number density then evaporation can't take place
       J_evap = 0.0_dp
     else 
-      !! Check if average mass is around 0.01% the seed particle mass
+      !! Check if average mass is around 0.1% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <=  (1.0001_dp * m_seed)) then
-        tau_evap = max(m_c/abs(f_cond),1.0_dp)
+      if (m_c <=  (1.001_dp * m_seed)) then
+        tau_evap = 1.0_dp !max(m_c/abs(f_cond),1.0_dp)
         J_evap = -y(1)/tau_evap
       else
         !! There is still some mantle to evaporate from

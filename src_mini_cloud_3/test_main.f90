@@ -10,13 +10,11 @@ program test_mini_cloud_2
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
   real(dp), parameter :: kb = 1.380649e-23_dp
   real(dp), parameter :: amu = 1.66053906892e-27_dp
-  real(dp), parameter :: R_gas = 8.31446261815324_dp
-
 
   integer :: example, tt, n_it
   character(len=20) :: sp, sp_bg(3)
   real(dp) :: T_in, P_in, VMR_in(3), mu_in, grav_in, nd_atm, rho
-  real(dp) :: q_0, q_1, q_2, q_v, v_f, r_c, m_c, Rd_v, p_v, rho_v
+  real(dp) :: q_0, q_1, q_2, q_v, v_f, r_c, m_c
   real(dp) :: t_step, time
 
   integer :: n_wl
@@ -87,13 +85,7 @@ program test_mini_cloud_2
 
       !! Change vapur VMR to mass density ratio for first iteration
       if (tt == 1) then
-        Rd_v = R_gas/mu_in !! Specific gas constant of air
-        p_v = q_v * P_in! Get pressure of vapour
-        rho_v = p_v/(Rd_v*T_in) !! Mass density of species
-        q_v = rho_v/rho 
-        q_0 = q_0 / nd_atm
-        q_1 = q_1 / rho
-        q_2 = q_2 /rho**2
+        q_v = q_v * mol_w_sp/mu_in
       end if
 
 
@@ -101,11 +93,10 @@ program test_mini_cloud_2
       call output(tt, time)
 
       !! Call mini-cloud and perform integrations for a single layer
-      call mini_cloud_3(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, sp_bg, q_v, q_0, q_1, q_2, v_f)
+      call mini_cloud_3(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, sp_bg, q_v, q_0, q_1, q_2)
 
       !! Calculate settling velocity for this layer
       call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_in, rho_d, sp_bg, q_0, q_1, v_f)
-
 
       !! Calculate the opacity at the weavelength grid
       call opac_mie(1, sp, T_in, mu_in, P_in, q_0, q_1, rho_d, n_wl, wl, k_ext, ssa, g)
