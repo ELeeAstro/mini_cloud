@@ -70,7 +70,7 @@ contains
 
     m_c = (q_1*rho)/(q_0*nd_atm)
 
-    amean =  max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp), 1e-7_dp)
+    amean = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp), 1e-7_dp)
 
     n_d = q_0 * nd_atm
 
@@ -155,7 +155,7 @@ contains
     beta = atan(k/(n - 1.0_dp))
     tan_b = tan(beta)
 
-    if (k == 0.0_dp) then
+    if (k < 1.0e-20_dp) then
       q_sca = 2.0_dp - (4.0_dp/rho)*sin(rho) - (4.0_dp/rho**2)*(cos(rho) - 1.0_dp)
       q_abs = 0.0_dp
       q_ext = q_sca
@@ -182,7 +182,7 @@ contains
     end if
 
     !! Estimate g
-    if (k == 0.0_dp) then
+    if (k < 1.0e-20_dp) then
       Cm = (6.0_dp + 5.0_dp*n**2 + n**4)/(45.0_dp*30.0_dp*n**2)
     else
       Cm = (-2.0_dp*k**6+k**4*(13.0_dp-2.0_dp*n**2)+k**2*(2.0_dp*n**4+2.0_dp*n**2-27.0_dp) & 
@@ -190,8 +190,8 @@ contains
         & /(15.0_dp * (4.0_dp*k**4 + 4.0_dp*k**2*(2.0_dp*n**2 - 3.0_dp) + (2.0_dp*n**2 + 3.0_dp)**2))
     end if
 
-    !! Rayleigh regime, but limit to 0.7 to try get the constant region
-    g = min(Cm * x**2, 0.7_dp)
+    !! Rayleigh regime, but limit to 0.9 to try get the constant region
+    g = min(Cm * x**2, 0.9_dp)
 
   end subroutine madt
 
