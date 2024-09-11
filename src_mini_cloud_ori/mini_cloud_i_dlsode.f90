@@ -1,4 +1,4 @@
-module mini_cloud_i_dvode
+module mini_cloud_i_dlsode
   use mini_cloud_precision
   use mini_cloud_class
   use mini_cloud_saturation
@@ -10,12 +10,17 @@ module mini_cloud_i_dvode
   logical :: first_call = .True.
   !$omp threadprivate (first_call)
 
+  integer :: ipar
+  !$omp threadprivate (ipar)
+  real(dp) :: rpar
+  !$omp threadprivate (rpar)
+
   private :: first_call
-  public ::  mini_cloud_dvode, RHS_update, jac_dummy
+  public ::  mini_cloud_dlsode, RHS_update, jac_dum
 
 contains
 
-  subroutine mini_cloud_dvode(n_dust, T_in, P_in, t_end, sp, k, k3, VMR, VMR0)
+  subroutine mini_cloud_dlsode(n_dust, T_in, P_in, t_end, sp, k, k3, VMR, VMR0)
     implicit none
 
     integer, intent(in) :: n_dust
@@ -43,8 +48,6 @@ contains
     integer, allocatable, dimension(:) :: iwork
     integer :: itol, itask, istate, iopt, mf
     integer :: rworkdim, iworkdim
-    real(dp) :: rpar
-    integer :: ipar
 
     integer :: n
     real(dp) :: a_check, Ar_check, V_check, total_k3s
@@ -112,7 +115,7 @@ contains
     end if
 
     ! -----------------------------------------
-    ! ***  parameters for the dvode-solver  ***
+    ! ***  parameters for the dlsode-solver  ***
     ! -----------------------------------------
 
     itask = 1
@@ -120,26 +123,27 @@ contains
     iopt = 1
 
     ! Problem is stiff (usual)
+    ! mf = 21 - full jacobian matrix with jacobian save
+    ! mf = 22 - internal calculated jacobian
     mf = 22
-    rworkdim = 22 +  9*neq + 2*neq**2
-    iworkdim = 30 + neq
-    allocate(rtol(neq), atol(neq), rwork(rworkdim),iwork(iworkdim))
+    rworkdim = 22 + 9*neq + neq**2
+    iworkdim = 20 + neq
+    allocate(rtol(neq), atol(neq), rwork(rworkdim), iwork(iworkdim))
 
     itol = 4
-    rtol(:) = 1e-10_dp           ! Relative tolerances for each scalar
-    atol(:) = 1e-30_dp               ! Absolute tolerance for each scalar (floor value)
+    rtol(:) = 1.0e-10_dp           ! Relative tolerances for each scalar
+    atol(:) = 1.0e-99_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
     iwork(:) = 0
 
     rwork(1) = 0.0_dp               ! Critical T value (don't integrate past time here)
     rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DVODE)
-    rwork(6) = 1.0e-1_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
+    rwork(6) = 0.0_dp       ! Maximum timestep
 
-    iwork(5) = 5               ! Max order required
+    iwork(5) = 0               ! Max order required
     iwork(6) = 100000               ! Max number of internal steps
-    iwork(7) = 1                ! Number of error messages 
-
+    iwork(7) = 1                ! Number of error messages
 
     ! Prepare all species for the solver
     y(1:4) = max(k(:),1e-30_dp)
@@ -171,8 +175,8 @@ contains
 
       y(1:5+n_dust-1) = y(1:5+n_dust-1)/nd_atm
 
-      call DVODE (RHS_update, neq, y, t_now, t_end, itol, rtol, atol, itask, &
-        & istate, iopt, rwork, rworkdim, iwork, iworkdim, jac_dummy, mf, rpar, ipar)
+      call DLSODE (RHS_update, neq, y, t_now, t_end, itol, rtol, atol, itask, &
+        & istate, iopt, rwork, rworkdim, iwork, iworkdim, jac_dum, mf)
 
       y(1:5+n_dust-1) = y(1:5+n_dust-1) * nd_atm
 
@@ -252,17 +256,15 @@ contains
 
     deallocate(rtol, atol, rwork, iwork, y)
 
-  end subroutine mini_cloud_dvode
+  end subroutine mini_cloud_dlsode
 
-  subroutine RHS_update(neq, time, y, f, rpar, ipar)
+  subroutine RHS_update(neq, time, y, f)
     implicit none
 
     integer, intent(in) :: neq
     real(dp), intent(inout) :: time
     real(dp), dimension(neq), intent(inout) :: y
     real(dp), dimension(neq), intent(inout) :: f
-    real(dp), intent(inout) :: rpar
-    integer, intent(inout) :: ipar
 
     integer :: n
     real(dp) :: tot_k3s
@@ -296,13 +298,12 @@ contains
 
   end subroutine RHS_update
 
-  pure subroutine jac_dummy (NEQ, T, Y, ML, MU, PD, NROWPD, RPAR, IPAR)
+  !! Dummy jacobian subroutine required for dlsode
+  subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)
     integer, intent(in) :: NEQ, ML, MU, NROWPD
-    real(dp), intent(in) :: T
+    real(dp), intent(in) :: X
     real(dp), dimension(NEQ), intent(in) :: Y
-    real(dp), dimension(NROWPD,NEQ), intent(inout) :: PD
-    real(dp), intent(in) :: RPAR
-    integer, intent(in) :: IPAR
-  end subroutine jac_dummy
+    real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
+  end subroutine jac_dum
 
-end module mini_cloud_i_dvode
+end module mini_cloud_i_dlsode

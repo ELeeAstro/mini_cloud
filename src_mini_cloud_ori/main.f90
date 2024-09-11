@@ -1,9 +1,8 @@
 program main
   use mini_cloud_precision
   use mini_cloud_class
-  use mini_cloud_i_dvode
+  use mini_cloud_i_dlsode
   use mini_cloud_vf
-  use mini_cloud_opac_budaj
   use mini_cloud_opac_mie
   implicit none
 
@@ -50,18 +49,20 @@ program main
   wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
   wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
-  !! Number of iterations and start time
-  n_it = 5000
-  time = 6840.0_dp !0.0e0_dp
-
   !! input atmosphere properties
   T_in = 1500.0_dp
   P_in = 1.0e4_dp
   mu_in = 2.33_dp
   grav = 1000.0_dp
 
-  !! Time step
-  t_step = 10.0_dp
+  !! time step
+  t_step = 100.0_dp
+
+  !! Number of iterations
+  n_it = 10000
+
+  !! Start time
+  time = 6840.0_dp
 
   !! Select example
   example = 1
@@ -74,20 +75,19 @@ program main
 
       !! In this example, we timestep a call to mini-cloud while slowly increasing the temperature
 
-      ! Start sinusoid temperature variation
-      T_in = 1500.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.5_dp *  time)
+      !! Start sinusoid temperature variation [K]
+      T_in = 1600.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.01_dp *  time)
 
       ! DIHRT test output
       call output(tt, time)
 
       ! Call DIHRT and perform integrations
-      call mini_cloud_dvode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:), VMR0(:))
+      call mini_cloud_dlsode(n_dust, T_in, P_in, t_step, sp(:), k(:), k3(:), VMR(:), VMR0(:))
 
       ! Call the vertical falling rate routine
       call calc_vf(n_dust, T_in, P_in, mu_in, grav, k(:), k3(:), vf)
 
       !! Call the opaicity routine
-      !call opac_budaj_tables(n_dust, sp(:), T_in, mu_in, P_in, k(:), k3(:), n_wl, wl, k_ext, alb, gg)
       call opac_mie(n_dust, sp(:), T_in, mu_in, P_in, k(:), k3(:), n_wl, wl, k_ext, alb, gg)
 
 
@@ -97,9 +97,6 @@ program main
 
       ! increment time
       time = time + t_step
-
-      ! Start sinusoid temperature variation
-      T_in = 1500.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.5_dp *  time)
 
       ! Print to screen current progress
       print*, tt, time, P_in * 1e-5_dp, 'bar', T_in, 'K'
@@ -125,8 +122,8 @@ contains
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='tracers.txt',action='readwrite')
-      open(newunit=u2,file='opac.txt',action='readwrite')
+      open(newunit=u1,file='results_ori/tracers.txt',action='readwrite')
+      open(newunit=u2,file='results_ori/opac.txt',action='readwrite')
       first_call = .False.
     end if
 
