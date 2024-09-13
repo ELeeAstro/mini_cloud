@@ -40,29 +40,40 @@ contains
     real(dp), dimension(n_dust) :: b_mix
     real(dp) :: T, mu, P_cgs, a_av, rho,  rho_mix
     real(dp) :: nu_mix, nu_sum, phi_ij, phi_ij_top, phi_ij_bot
-    real(dp) :: l_scale, beta, Kn
+    real(dp) :: mfp, beta, Kn
 
+    !! Zero velocity if little amount of clouds
+    if (k(1) < 1e-10_dp) then
+      vf = 0.0_dp
+      return
+    end if
+
+    !! Convert to CGS
     T = T_in
     mu = mu_in
     P_cgs = P_in * 10.0_dp
     rho = (P_cgs * mu * amu)/(kb * T)
 
-    a_av = max(k(4)/k(3),a_seed)
+    !! Average volume
+    a_av = (4.0_dp*pi)/3.0_dp * (k(4)/k(1))
+
+    !! Find volume weighted average particle size - convert average volume to radius - limit to 1nm and 100 cm
+    a_av = max(((3.0_dp*a_av)/(4.0_dp*pi))**(1.0_dp/3.0_dp),1e-7_dp)
     a_av = min(a_av, 100.0_dp)
 
-    ! Find the mixing ratio of the grain composition
+    !! Find the mixing ratio of the grain composition
     b_mix(:) = max(k3(:)/k(4),1e-30_dp)
     b_mix(:) = min(k3(:)/k(4),1.0_dp)
     
-    ! Find weighted bulk density of mixed grain composition using volume fraction
+    !! Find weighted bulk density of mixed grain composition using volume fraction
     rho_mix = 0.0_dp
     do n = 1, n_dust
-        rho_mix = rho_mix + b_mix(n) * d_sp(n)%bulk_den
+      rho_mix = rho_mix + b_mix(n) * d_sp(n)%bulk_den
     end do
 
-    ! Find the dynamical viscosity of each gas
+    !! Find the dynamical viscosity of each gas
     do g = 1, ngmix
-      ! Dynamical viscosity formula - Rosner (2000/2012) using Ackerman & Marley (2001) constants
+      !! Dynamical viscosity formula - Rosner (2000/2012) using Ackerman & Marley (2001) constants
       nu_g(g) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(g)*amu)*kb*T)/(pi*d_g(g)**2)) &
         & * (((kb*T)/LJ_g(g))**(0.16_dp)/1.22_dp)
     end do
@@ -80,18 +91,19 @@ contains
       nu_mix = nu_mix + (mixr_g(i) * nu_g(i)) / nu_sum
     end do
 
-    !! For consistency, we now use the dynamical viscosity to find the mean free path of the layer
-    l_scale = (nu_mix/P_cgs) * sqrt((pi * kb * T) / (2.0_dp * mu * amu))
+    !! Calculate mean free path for this layer
+    mfp = (2.0_dp*nu_mix/rho) * sqrt((pi * mu)/(8.0_dp*Rgas*T))
 
-    !! Knudsen number and Cunningham slip factor at mean grain size
-    Kn = l_scale / a_av
-    beta = 1.0_dp + Kn * (1.256_dp + 0.4_dp * exp(-1.1_dp/Kn))
+    !! Knudsen number
+    Kn = mfp/a_av
 
-    ! Final v_f is negative (downward)
-    vf = -(2.0_dp * beta * a_av**2 * grav * (rho_mix - rho)) / (9.0_dp * nu_mix)
+    !! Cunningham slip factor
+    beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
 
-    ! Convert to pressure coordinates
-    vf = - rho * grav * vf
+    !! Settling velocity (cm s-1)
+    vf = (2.0_dp * beta * grav * a_av**2 * rho_mix)/(9.0_dp * nu_mix) & 
+      & * (1.0_dp + & 
+      & ((0.45_dp*grav*a_av**3*rho*rho_mix)/(54.0_dp*nu_mix**2))**(0.4_dp))**(-1.25_dp)
 
   end subroutine calc_vf
 

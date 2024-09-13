@@ -3,11 +3,13 @@ import matplotlib.pylab as plt
 
 ## Edit this code to plot the example output for testing
 ## TODO: add dimensionality to fortran output to avoid annoying editing of this script
-example = 1
 
-nwl = 11
+wl = np.loadtxt('opac.txt',max_rows=1)
+nwl = len(wl)
 
-data1 = np.loadtxt('opac.txt')
+print(wl)
+
+data1 = np.loadtxt('opac.txt',skiprows=1)
 it = data1[:,0]
 time = data1[:,1]
 nt = len(time)
@@ -23,22 +25,24 @@ g[:,:] = data1[:,2+nwl+nwl:]
 
 
 fig, ax1 = plt.subplots()
-plt.plot(time,k_ext[:,0])
-plt.plot(time,k_ext[:,-1])
-plt.ylabel('k_ext')
+for i in range(nwl):
+  plt.plot(time,k_ext[:,i],label='{:.2f}'.format(wl[i]))
+plt.ylabel('$\kappa_{ext}$ [cm$^{2}$ g$^{-1}$]')
 plt.yscale('log')
-plt.show()
+plt.legend()
 
 fig, ax1 = plt.subplots()
-plt.plot(time,a[:,0])
-plt.plot(time,a[:,-1])
+for i in range(nwl):
+  plt.plot(time,a[:,i],label='{:.2f}'.format(wl[i]))
 plt.ylabel('a')
 plt.yscale('log')
-plt.show()
+plt.legend()
 
 fig, ax1 = plt.subplots()
-plt.plot(time,g[:,0])
-plt.plot(time,g[:,-1])
+for i in range(nwl):
+  plt.plot(time,g[:,i],label='{:.2f}'.format(wl[i]))
 plt.ylabel('g')
 plt.yscale('log')
+plt.legend()
+
 plt.show()

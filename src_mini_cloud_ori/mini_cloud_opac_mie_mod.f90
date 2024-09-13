@@ -1,8 +1,13 @@
-module mini_cloud_opac_mie
-  use mini_cloud_precision
-  use mini_cloud_class
+module mini_cloud_opac_mie_mod
+  use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   use lxmie_mod, only : lxmie
   implicit none
+
+  integer, parameter :: dp = REAL64
+
+  real(dp), parameter :: pi = 4.0_dp*atan(1.0_dp) ! value of pi
+  real(dp), parameter :: kb = 1.380649e-16_dp
+  real(dp), parameter :: amu = 1.66053906660e-24_dp ! g mol-1 (note, has to be cgs g mol-1 !!!)
 
   type nk_table
 
@@ -30,7 +35,7 @@ contains
   subroutine opac_mie(n_dust, sp, T_in, mu_in, P_in, k, k3, n_wl, wl, k_ext, alb, gg)
     implicit none
 
-     integer, intent(in) :: n_dust, n_wl
+    integer, intent(in) :: n_dust, n_wl
     character(len=11), dimension(n_dust), intent(in) :: sp
     real(dp), intent(in) :: T_in, mu_in, P_in
     real(dp), dimension(4), intent(in) :: k
@@ -40,8 +45,8 @@ contains
     real(dp), dimension(n_wl), intent(out) :: k_ext, alb, gg
 
     integer :: l, n
-    real(dp) :: rho
-    real(dp) :: amean, x, xsec, q_ext, q_sca, q_abs, g
+    real(dp) :: rho, amean
+    real(dp) :: x, xsec, q_ext, q_sca, q_abs, g
     real(dp), dimension(n_dust) :: b_mix
     complex(dp) :: e_eff, e_eff0
     complex(dp) :: N_eff
@@ -54,17 +59,16 @@ contains
       first_call = .False.
     end if
 
-    if (k(1) < 1e-6_dp) then
+    if (k(1) < 1e-10_dp) then
       k_ext(:) = 0.0_dp
-      alb(:) = 0.0
+      alb(:) = 0.0_dp
       gg(:) = 0.0_dp
       return
     end if
 
     rho = (P_in * 10.0_dp * mu_in * amu)/(kb * T_in)
 
-    amean = max(k(2)/k(1),a_seed)
-    !amean = min(amean,0.1_dp)
+    amean = max(k(2)/k(1),1e-7_dp)
 
     xsec = pi * amean**2
     
@@ -89,12 +93,10 @@ contains
 
       if (x < 0.01_dp) then
         !! Use Rayleigh approximation
-        call rayleigh(x, N_eff, q_abs, q_sca, q_ext)
-        q_ext = q_abs + q_sca
-        g = 0.0_dp
-      else if (x > 100.0_dp) then
-        call adt(x, N_eff, q_abs, q_sca, q_ext)
-        g = 0.8_dp ! Guess g for large particles
+        call rayleigh(x, N_eff, q_abs, q_sca, q_ext, g)
+      else if (x > 10.0_dp) then
+        !! Use Modified Anonolous Diffraction Theory (MADT)
+        call madt(x, N_eff, q_abs, q_sca, q_ext, g)
       else
         !! Call LX-MIE with negative k value
         N_eff = cmplx(real(N_eff,dp),-aimag(N_eff),dp)
@@ -103,86 +105,94 @@ contains
 
       !! Calculate the opacity, abledo and mean cosine angle (asymmetry factor)
       k_ext(l) = (q_ext * xsec * k(1))/rho
-      alb(l) = q_sca/q_ext
-      gg(l) = g
+      alb(l) = min(q_sca/q_ext, 0.95_dp)
+      gg(l) = max(g, 0.0_dp)
 
     end do
 
   end subroutine opac_mie
 
-  ! Small dielectric sphere approximation, small particle limit x << 1
-  subroutine rayleigh(x, ri, q_abs, q_sca, q_ext)
+  ! Rayleigh regime approximation
+  subroutine rayleigh(x, ri, q_abs, q_sca, q_ext, g)
     implicit none
 
     real(dp), intent(in) :: x
     complex(dp), intent(in) :: ri
 
-    real(dp), intent(out) :: q_abs, q_sca, q_ext
+    real(dp), intent(out) :: q_abs, q_sca, q_ext, g
 
     complex(dp) :: alp
 
     alp = (ri**2 - 1.0_dp)/(ri**2 + 2.0_dp)
 
     q_sca = 8.0_dp/3.0_dp * x**4 * abs(alp)**2
-    q_ext = 4.0_dp * x * aimag(alp * (1.0_dp + x**2/15.0_dp*alp * ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp)))) + &
+    q_ext = 4.0_dp * x * aimag(alp * (1.0_dp + x**2/15.0_dp*alp * &
+     & ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp)))) + &
      & 8.0_dp/3.0_dp * x**4 * real(alp**2,dp)
 
     q_abs = q_ext - q_sca
 
+    g = 0.0_dp
+
   end subroutine rayleigh
 
-  subroutine adt(x, ri, q_abs, q_sca, q_ext)
+  subroutine madt(x, ri, q_abs, q_sca, q_ext, g)
     implicit none
 
     real(dp), intent(in) :: x
     complex(dp), intent(in) :: ri
 
-    real(dp), intent(out) :: q_abs, q_sca, q_ext
+    real(dp), intent(out) :: q_abs, q_sca, q_ext, g
 
-    real(dp) :: rho1, rho2, rho0, beta0, beta, fac, fac2
-    complex(dp) ::  rho
+    real(dp) :: n, k, rho, beta, tan_b
+    real(dp) :: C1, C2, eps, q_edge, Cm
 
-    rho = 2.0_dp * x * (ri - 1.0_dp)
-    rho0 = abs(rho)
-    rho1 = real(rho, dp)
-    rho2 = aimag(rho)
+    n = real(ri,dp)
+    k = aimag(ri)
 
-    if (abs(rho1) > 0.0_dp) then
-      beta0 = atan(abs(rho2)/abs(rho1))
-      if (rho1 < 0.0_dp .and. rho2 > 0.0_dp) then
-        beta = pi - beta0
-      else if (rho1 < 0.0_dp .and. rho2 < 0.0_dp) then
-        beta = pi + beta0
-      else if (rho1 > 0.0_dp .and. rho2 < 0.0_dp) then 
-        beta = 2.0_dp*pi - beta0
-      else 
-        beta = beta0 
-      endif     
+    rho = 2.0_dp*x*(n - 1.0_dp)
+    beta = atan(k/(n - 1.0_dp))
+    tan_b = tan(beta)
+
+    if (k < 1.0e-20_dp) then
+      q_sca = 2.0_dp - (4.0_dp/rho)*sin(rho) - (4.0_dp/rho**2)*(cos(rho) - 1.0_dp)
+      q_abs = 0.0_dp
+      q_ext = q_sca
     else
-      if (rho2 > 0.0_dp) then
-        beta = 0.5_dp*pi 
-      else
-        beta = 1.5_dp*pi
-      endif
-    end if
+      q_ext = 2.0_dp - 4.0_dp * exp(-rho*tan_b)*(cos(beta)/rho)*sin(rho-beta) &
+        & - 4.0_dp*exp(-rho*tan_b)*(cos(beta)/rho)**2*cos(rho-2.0_dp*beta) & 
+        & + 4.0_dp*(cos(beta)/rho)**2*cos(2.0_dp*beta)
+      q_abs = 1.0_dp + 2.0_dp*(exp(-4.0_dp*k*x)/(4.0_dp*k*x)) &
+        & + 2.0_dp*((exp(-4.0_dp*k*x)-1.0_dp)/(4.0_dp*k*x)**2)
 
-    if (rho0 < 1.0e-3_dp) then
-      q_ext = (4.0_dp/3.0_dp)*rho2 + 0.5_dp*(rho1**2 - rho2**2)
-      q_abs = (4.0_dp/3.0_dp)*rho2 - rho2**2
-      q_sca = 0.5_dp*rho0**2
-    else
-      fac = exp(-rho2)
-      fac2 = fac**2
-      q_ext = 2.0_dp + (4.0_dp/rho0**2)*(cos(2.0_dp*beta) - fac*(cos(rho1 - 2*beta) + rho0*sin(rho1 - beta)))
-      q_abs = 1.0_dp + fac2/rho2 + (fac2 - 1.0_dp)/(2.0_dp*rho2**2)
+      C1 = 0.25_dp * (1.0_dp + exp(-1167.0_dp*k))*(1.0_dp - q_abs)
+
+      eps = 0.25_dp + 0.61_dp*(1.0_dp - exp(-(8.0_dp*pi/3.0_dp)*k))**2
+      C2 = sqrt(2.0_dp*eps*(x/pi))*exp(0.5_dp - eps*(x/pi))*(0.79393_dp*n - 0.6069_dp)
+
+      q_abs = (1.0_dp + C1 + C2)*q_abs 
+
+      q_edge = (1.0_dp - exp(-0.06_dp*x))*x**(-2.0_dp/3.0_dp)
+
+      q_ext = (1.0_dp + 0.5_dp*C2)*q_ext + q_edge
+
       q_sca = q_ext - q_abs
+
     end if
 
-    if (x >= 100.0_dp) then
-      q_ext = q_ext + 2.0_dp * x**(-2.0_dp/3.0_dp)
+    !! Estimate g
+    if (k < 1.0e-20_dp) then
+      Cm = (6.0_dp + 5.0_dp*n**2 + n**4)/(45.0_dp*30.0_dp*n**2)
+    else
+      Cm = (-2.0_dp*k**6+k**4*(13.0_dp-2.0_dp*n**2)+k**2*(2.0_dp*n**4+2.0_dp*n**2-27.0_dp) & 
+        & + 2.0_dp*n**6 + 13.0_dp*n**4 + 27.0_dp*n**2 + 18.0_dp) & 
+        & /(15.0_dp * (4.0_dp*k**4 + 4.0_dp*k**2*(2.0_dp*n**2 - 3.0_dp) + (2.0_dp*n**2 + 3.0_dp)**2))
     end if
 
-  end subroutine adt
+    !! Rayleigh regime, but limit to 0.9 to try get the constant region
+    g = min(Cm * x**2, 0.9_dp)
+
+  end subroutine madt
 
   subroutine read_nk_tables(n_dust, sp, n_wl, wl)
     implicit none
@@ -222,6 +232,9 @@ contains
       case('MgSiO3') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'MgSiO3_amorph[s].dat'
+      case('KCl') 
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'KCl[s].dat'        
       case('C') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'C[s].dat'
@@ -390,4 +403,4 @@ contains
 
   end subroutine locate
 
-end module mini_cloud_opac_mie
+end module mini_cloud_opac_mie_mod

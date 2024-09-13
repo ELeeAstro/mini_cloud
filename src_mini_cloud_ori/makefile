@@ -42,7 +42,7 @@ mini_cloud_chem.o \
 mini_cloud_rhs.o \
 mini_cloud_i_dlsode.o \
 mini_cloud_vf.o \
-mini_cloud_opac_mie.o \
+mini_cloud_opac_mie_mod.o \
 main.o
 
 # executable statement

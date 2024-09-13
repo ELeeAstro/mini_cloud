@@ -3,7 +3,7 @@ program main
   use mini_cloud_class
   use mini_cloud_i_dlsode
   use mini_cloud_vf
-  use mini_cloud_opac_mie
+  use mini_cloud_opac_mie_mod, only : opac_mie
   implicit none
 
   integer, parameter :: n_dust = 4
@@ -124,6 +124,7 @@ contains
     if (first_call .eqv. .True.) then
       open(newunit=u1,file='results_ori/tracers.txt',action='readwrite')
       open(newunit=u2,file='results_ori/opac.txt',action='readwrite')
+      write(u2,*) wl(:)
       first_call = .False.
     end if
 
