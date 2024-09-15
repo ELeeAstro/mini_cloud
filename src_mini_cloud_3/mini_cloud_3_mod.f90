@@ -161,27 +161,28 @@ module mini_cloud_3_mod
     iopt = 1
 
     ! Problem is stiff (usual)
+    ! mf = 21 - full jacobian matrix with jacobian save
+    ! mf = 22 - internal calculated jacobian
+    
     mf = 22
-    rworkdim = 22 +  9*neq + 2*neq**2
-    iworkdim = 30 + neq
-    allocate(rtol(neq), atol(neq), rwork(rworkdim),iwork(iworkdim))
+    rworkdim = 22 + 9*n_eq + n_eq**2
+    iworkdim = 20 + n_eq
+    allocate(rtol(n_eq), atol(n_eq), rwork(rworkdim), iwork(iworkdim))
 
     itol = 4
-    rtol(:) = 1e-10_dp           ! Relative tolerances for each scalar
-    atol(:) = 1e-30_dp               ! Absolute tolerance for each scalar (floor value)
+    rtol(:) = 1.0e-3_dp           ! Relative tolerances for each scalar
+    atol(:) = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
     iwork(:) = 0
 
     rwork(1) = 0.0_dp               ! Critical T value (don't integrate past time here)
     rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DVODE)
-    rwork(6) = 1.0e-1_dp       ! Maximum timestep (for heavy evaporation ~0.1 is required)
+    rwork(6) = 0.0_dp       ! Maximum timestep
 
-    iwork(5) = 5               ! Max order required
+    iwork(5) = 0               ! Max order required
     iwork(6) = 100000               ! Max number of internal steps
-    iwork(7) = 1                ! Number of error messages 
-
-
+    iwork(7) = 1                ! Number of error messages
 
     allocate(y(n_eq))
 

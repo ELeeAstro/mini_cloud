@@ -131,7 +131,7 @@ contains
     allocate(rtol(neq), atol(neq), rwork(rworkdim), iwork(iworkdim))
 
     itol = 4
-    rtol(:) = 1.0e-10_dp           ! Relative tolerances for each scalar
+    rtol(:) = 1.0e-4_dp           ! Relative tolerances for each scalar
     atol(:) = 1.0e-99_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp

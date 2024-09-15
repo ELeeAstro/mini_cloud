@@ -56,6 +56,15 @@ module mini_cloud_vf_mod
     T = T_in             ! Convert temperature to K
     p = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
 
+    !! Number density [cm-3] of layer
+    nd_atm = p/(kb*T)  
+
+    !! Zero velocity if little amount of clouds
+    if (q_0*nd_atm < 1e-10_dp) then
+      v_f = 0.0_dp
+      return
+    end if
+
     n_gas = size(bg_VMR_in)
     allocate(VMR_g(n_gas))
     VMR_g(:) = bg_VMR_in(:)
@@ -65,9 +74,6 @@ module mini_cloud_vf_mod
 
     !! Change gravity to cgs [cm s-2]
     grav = grav_in * 100.0_dp
-
-    !! Number density [cm-3] of layer
-    nd_atm = p/(kb*T)  
 
     !! Mass density of layer
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]

@@ -58,7 +58,6 @@ contains
       first_call = .False.
     end if
 
-    rho = (P_in * 10.0_dp * mu_in * amu)/(kb * T_in)
     nd_atm = (P_in * 10.0_dp)/(kb * T_in)
 
     if (q_0*nd_atm < 1e-10_dp) then
@@ -67,6 +66,8 @@ contains
       gg(:) = 0.0_dp
       return
     end if
+
+    rho = (P_in * 10.0_dp * mu_in * amu)/(kb * T_in)
 
     m_c = (q_1*rho)/(q_0*nd_atm)
 
