@@ -75,10 +75,11 @@ module mini_cloud_3_mod
     ! DLSODE variables
     integer :: n_eq
     real(dp), allocatable, dimension(:) :: y
-    real(dp), allocatable, dimension(:) :: rwork, rtol, atol
+    real(dp), allocatable, dimension(:) :: rwork
     integer, allocatable, dimension(:) :: iwork
     integer :: itol, itask, istate, iopt, mf
     integer :: rworkdim, iworkdim
+    real(dp) :: rtol, atol
 
     !! Work variables
     integer :: n_gas
@@ -167,11 +168,11 @@ module mini_cloud_3_mod
     mf = 22
     rworkdim = 22 + 9*n_eq + n_eq**2
     iworkdim = 20 + n_eq
-    allocate(rtol(n_eq), atol(n_eq), rwork(rworkdim), iwork(iworkdim))
+    allocate(rwork(rworkdim), iwork(iworkdim))
 
-    itol = 4
-    rtol(:) = 1.0e-3_dp           ! Relative tolerances for each scalar
-    atol(:) = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
+    itol = 1
+    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
+    atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
     iwork(:) = 0
@@ -231,7 +232,7 @@ module mini_cloud_3_mod
     q_2 = y(3)
     q_v = y(4)
 
-    deallocate(y, rtol, atol, rwork, iwork, d_g, LJ_g, molg_g)
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g)
 
   end subroutine mini_cloud_3
 

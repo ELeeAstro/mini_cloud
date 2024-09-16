@@ -78,16 +78,16 @@ module mini_cloud_2_mod
     ! DLSODE variables
     integer :: n_eq
     real(dp), allocatable, dimension(:) :: y
-    real(dp), allocatable, dimension(:) :: rwork, rtol, atol
+    real(dp), allocatable, dimension(:) :: rwork
     integer, allocatable, dimension(:) :: iwork
     integer :: itol, itask, istate, iopt, mf
     integer :: rworkdim, iworkdim
+    real(dp) :: rtol, atol
 
     !! Work variables
     integer :: n_gas
     real(dp), allocatable, dimension(:) :: VMR_g
     real(dp) :: eta_g, bot, top
-    real(dp) :: m_c, r_c, Kn, beta
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
@@ -171,11 +171,11 @@ module mini_cloud_2_mod
     mf = 22
     rworkdim = 22 + 9*n_eq + n_eq**2
     iworkdim = 20 + n_eq
-    allocate(rtol(n_eq), atol(n_eq), rwork(rworkdim), iwork(iworkdim))
+    allocate(rwork(rworkdim), iwork(iworkdim))
 
-    itol = 4
-    rtol(:) = 1.0e-3_dp           ! Relative tolerances for each scalar
-    atol(:) = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
+    itol = 1
+    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
+    atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
     iwork(:) = 0
@@ -234,7 +234,7 @@ module mini_cloud_2_mod
     q_1 = y(2)
     q_v = y(3)
 
-    deallocate(y, rtol, atol, rwork, iwork, d_g, LJ_g, molg_g)
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g)
 
   end subroutine mini_cloud_2
 
