@@ -1,65 +1,63 @@
-# for gfortran Compiler
+# Compiler settings
 #===================
 
 F90 = gfortran
-F90LINKER =  gfortran
+F90LINKER = $(F90)
 
-#Debugging and development flags
-#FFLAGS	= -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
-#FFLAGS	= -Og -pipe -Wall -Wextra -g -fbacktrace
+# Default build type is release
+FFLAGS = -O3 -pipe  # Default release flags
 
-#Serial flags
-FFLAGS  = -O3 -pipe
+# Debugging flags
+DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
 
-#Parallel flags
-#FFLAGS	= -O2 -pipe -fopenmp
+# Source files (mix of .f and .f90 files)
+SRCS_F90 = \
+    lxmie_mod.f90 \
+    mini_cloud_precision.f90 \
+    mini_cloud_class.f90 \
+    mini_cloud_saturation.f90 \
+    mini_cloud_nucleation.f90 \
+    mini_cloud_chem.f90 \
+    mini_cloud_rhs.f90 \
+    mini_cloud_i_dlsode.f90 \
+    mini_cloud_vf.f90 \
+    mini_cloud_opac_mie_mod.f90 \
+    main.f90
 
-# for ifort Compiler
+SRCS_F = dlsode.f
+
+# Object files
+OBJECTS = $(SRCS_F90:.f90=.o) $(SRCS_F:.f=.o)
+
+# Executable
+EXECS = ../mini_cloud_ori
+
 #====================
+# Phony targets
+.PHONY: all clean debug release
 
-#F90 = ifort
-#F90LINKER = ifort
+# Default target (release by default)
+all: $(EXECS)
 
-#FFLAGS   = -O0 -g -traceback -fpp -prec-div -fp-model source -fpe0 -ipo
-#FFLAGS    = -O0 -g -traceback -xHost -fpp -fp-model source -qopenmp -ipo
-#FFLAGS    = -O3 -xHost -qopenmp -fpp -fp-model source -ipo
+# Debug build (overrides FFLAGS with debug flags)
+debug: FFLAGS = $(DEBUG_FLAGS)
+debug: clean all
 
-#====================
+# Release build (uses default release flags)
+release: clean all
 
-DEFS      =
-INCLUDES  =
-LFLAGS    = $(FFLAGS)
+# Linking the executable
+$(EXECS): $(OBJECTS)
+	$(F90LINKER) $(FFLAGS) $(OBJECTS) -o $(EXECS)
 
+# Pattern rule for compiling Fortran 90 files
+%.o: %.f90
+	$(F90) $(FFLAGS) -c $<
 
-OBJECTS = \
-dlsode.o \
-lxmie_mod.o \
-mini_cloud_precision.o \
-mini_cloud_class.o \
-mini_cloud_saturation.o \
-mini_cloud_nucleation.o \
-mini_cloud_chem.o \
-mini_cloud_rhs.o \
-mini_cloud_i_dlsode.o \
-mini_cloud_vf.o \
-mini_cloud_opac_mie_mod.o \
-main.o
+# Pattern rule for compiling Fortran 77 (.f) files
+%.o: %.f
+	$(F90) $(FFLAGS) -c $<
 
-# executable statement
-EXECS  = ../mini_cloud_ori
-
-.SUFFIXES : .o .f90 .f
-
-default: mini_cloud_ori
-
-mini_cloud_ori: $(OBJECTS)
-	$(F90LINKER) $(LFLAGS) $(OBJECTS) -o $(EXECS)
-
+# Clean target
 clean:
 	rm -f *.o *.mod *~ *__genmod.f90 $(EXECS)
-
-.f90.o:
-	$(F90) $(FFLAGS) $(DEFS) -c $<
-
-.f.o:
-	$(F90) $(FFLAGS) $(DEFS) -c $<

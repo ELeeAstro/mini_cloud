@@ -1,65 +1,57 @@
-# for gfortran Compiler
+# Compiler settings
 #===================
 
 F90 = gfortran
-F90LINKER =  gfortran
+F90LINKER = $(F90)
 
-#Debugging and development flags
-FFLAGS	= -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
-#FFLAGS	= -Og -pipe -Wall -Wextra -g -fbacktrace
+# Default build type is release
+FFLAGS = -O3 -pipe  # Default release flags
 
-#Serial flags
-#FFLAGS  = -O3 -pipe
+# Debugging flags
+DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
 
-# for intel Compiler
-#====================
+# Source files (mix of .f and .f90 files)
+SRCS_F90 = \
+    lxmie_mod.f90 \
+    mini_cloud_opac_mie_mod.f90 \
+    mini_cloud_vf_mod.f90 \
+    mini_cloud_1_s_mod.f90 \
+    test_main.f90
 
-#F90 = ifx
-#F90LINKER = ifx
+SRCS_F = dopri5.f
 
-#FFLAGS   = -O0 -g -traceback -fpp -prec-div -fp-model source -fpe0 -ipo
-#FFLAGS   = -O3 -fpp -fp-model source -ipo
+# Object files
+OBJECTS = $(SRCS_F90:.f90=.o) $(SRCS_F:.f=.o)
 
-# for nvfortran compiler
-#====================
-
-#F90 = nvfortran
-#F90LINKER = nvfortran
-
-#FFLAGS    = -O1
+# Executable
+EXECS = ../mini_cloud_1_s
 
 #====================
+# Phony targets
+.PHONY: all clean debug release
 
-DEFS      =
-INCLUDES  =
-LFLAGS    = $(FFLAGS)
+# Default target (release by default)
+all: $(EXECS)
 
-OBJECTS = \
-lxmie_mod.o \
-dopri5.o \
-mini_cloud_1_s_mod.o \
-mini_cloud_vf_mod.o \
-mini_cloud_opac_mie_mod.o \
-test_main.o
+# Debug build (overrides FFLAGS with debug flags)
+debug: FFLAGS = $(DEBUG_FLAGS)
+debug: clean all
 
-# executable statement
-EXECS  = ../mini_cloud_1_s
+# Release build (uses default release flags)
+release: clean all
 
-.SUFFIXES : .o .f90 .f .F90
+# Linking the executable
+$(EXECS): $(OBJECTS)
+	$(F90LINKER) $(FFLAGS) $(OBJECTS) -o $(EXECS)
 
-default: mini_chem_1_s
+# Pattern rule for compiling Fortran 90 files
+%.o: %.f90
+	$(F90) $(FFLAGS) -c $<
 
-mini_chem_1_s: $(OBJECTS)
-	$(F90LINKER) $(LFLAGS) $(OBJECTS) -o $(EXECS) $(LAPACK) $(BLAS)
+# Pattern rule for compiling Fortran 77 (.f) files
+%.o: %.f
+	$(F90) $(FFLAGS) -c $<
 
+# Clean target
 clean:
 	rm -f *.o *.mod *~ *__genmod.f90 $(EXECS)
-
-.f90.o:
-	$(F90) $(FFLAGS) $(DEFS) -c $<
-
-.F90.o:
-	$(F90) $(FFLAGS) $(DEFS) -c $<
-
-.f.o:
-	$(F90) $(FFLAGS) $(DEFS) -c $<

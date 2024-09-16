@@ -4,9 +4,11 @@
 F90 = gfortran
 F90LINKER = $(F90)
 
-# Compilation flags
+# Default build type is release
+FFLAGS = -O3 -pipe  # Default release flags
+
+# Debugging flags
 DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
-RELEASE_FLAGS = -O3
 
 # Source files (mix of .f and .f90 files)
 SRCS_F90 = \
@@ -28,15 +30,14 @@ EXECS = ../mini_cloud_3
 # Phony targets
 .PHONY: all clean debug release
 
-# Default target
+# Default target (release by default)
 all: $(EXECS)
 
-# Debug build
+# Debug build (overrides FFLAGS with debug flags)
 debug: FFLAGS = $(DEBUG_FLAGS)
 debug: clean all
 
-# Release build
-release: FFLAGS = $(RELEASE_FLAGS)
+# Release build (uses default release flags)
 release: clean all
 
 # Linking the executable
@@ -54,3 +55,4 @@ $(EXECS): $(OBJECTS)
 # Clean target
 clean:
 	rm -f *.o *.mod *~ *__genmod.f90 $(EXECS)
+
