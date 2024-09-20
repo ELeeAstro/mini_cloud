@@ -1,16 +1,13 @@
-module mini_cloud_class_mod
-  use, intrinsic :: iso_fortran_env ! Requires fortran 2008
+module mini_cloud_class
+  use mini_cloud_precision
   implicit none
 
-  ! Fortran 2008 intrinsic precisions - reccomended if possible
-  !integer, parameter :: sp = REAL32
-  integer, parameter :: dp = REAL64
-  !integer, parameter :: qp = REAL128
-
-  !! Constants
-  real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
-  real(dp), parameter :: third = 1.0_dp/3.0_dp
-  real(dp), parameter :: twothird = 2.0_dp/3.0_dp
+  !! Common constants and geometric conversions
+  real(dp), parameter :: pi = 4.0_dp*atan(1.0_dp)
+  real(dp), parameter :: twopi = 2.0_dp*pi, fourpi = 4.0_dp*pi
+  real(dp), parameter :: half = 1.0_dp/2.0_dp
+  real(dp), parameter :: third = 1.0_dp/3.0_dp, twothird = 2.0_dp/3.0_dp
+  real(dp), parameter :: fourpi3 = fourpi/3.0_dp
 
   !! Common physical constants - CODATA 2018
   real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
@@ -19,7 +16,6 @@ module mini_cloud_class_mod
   real(dp), parameter :: c_s = 2.99792458e10_dp ! cm s^-1 - Vacuum speed of light
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
   real(dp), parameter :: N_A = 6.02214076e23_dp ! mol^-1 - Avogadro's constant
-  real(dp), parameter :: eV = 1.60217663e-12_dp
   real(dp), parameter :: gam = 1.4_dp
   real(dp), parameter :: Rgas = 8.31446261815324e7_dp, Rgas_si = 8.31446261815324_dp
   real(dp), parameter :: cal = 4.184e7_dp, cal_si = 4.184_dp ! Carlories
@@ -30,6 +26,10 @@ module mini_cloud_class_mod
   real(dp), parameter :: atm = 1.01325e6_dp ! atm to dyne
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
   real(dp), parameter :: mmHg = 1333.2239_dp  ! mmHg to dyne
+
+  real(dp) :: P_cgs, T, nd_atm
+  !$omp threadprivate (P_cgs, T, nd_atm)
+  real(dp) :: a_seed, Ar_seed, V_seed
 
   type dust
     integer :: idx
