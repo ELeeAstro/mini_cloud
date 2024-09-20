@@ -5,7 +5,7 @@ F90 = gfortran
 F90LINKER = $(F90)
 
 # Default build type is release
-FFLAGS = -O3 -pipe # Default release flags
+FFLAGS = -O3 # Default release flags
 
 # Debugging flags
 DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow

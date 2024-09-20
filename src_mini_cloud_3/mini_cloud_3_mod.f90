@@ -30,7 +30,10 @@ module mini_cloud_3_mod
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp) :: V_seed, m_seed
 
-  real(dp) :: mfp, eta
+  real(dp) :: mfp, eta, nu, eps_d
+
+  !! Kolmogorov scale
+  real(dp), parameter :: l_k = 1.0_dp
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -51,7 +54,8 @@ module mini_cloud_3_mod
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g
 
   public :: mini_cloud_3, RHS_mom, jac_dum
-  private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_het_nuc, calc_seed_evap
+  private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
+    & p_vap_sp, surface_tension, eta_construct, calc_turb_inert, calc_turb_shear
 
   contains
 
@@ -126,6 +130,12 @@ module mini_cloud_3_mod
 
     !! Mixture dynamical viscosity
     eta = top/bot
+
+    !! Mixture kinematic viscosity
+    nu = eta/rho
+
+    !! dissipation of turbulent kinetic energy
+    eps_d = nu**3/l_k**4
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
@@ -245,7 +255,8 @@ module mini_cloud_3_mod
     real(dp), dimension(n_eq), intent(inout) :: f
 
     real(dp) :: f_coal_0, f_coal_3, f_coag_0, f_coag_3 
-    real(dp) :: f_nuc_hom, f_cond, f_nuc_het, f_seed_evap
+    real(dp) :: f_ti_0, f_ti_3, f_tsh_0, f_tsh_3
+    real(dp) :: f_nuc_hom, f_cond, f_seed_evap
     real(dp) :: m_c, r_c, Kn, beta, sat
     real(dp) :: p_v, n_v
 
@@ -288,10 +299,6 @@ module mini_cloud_3_mod
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
 
-    !! Calculate hetrogenous nucleation rate
-    !call calc_het_nuc(n_eq, y, sat, r_c, f_nuc_het)
-    f_nuc_het = 0.0_dp ! Ignore hetrogenous nucleation until later papers
-
     !! Calculate seed particle evaporation rate
     call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
 
@@ -301,10 +308,19 @@ module mini_cloud_3_mod
     !! Calculate the coalesence rate
     call calc_coal(n_eq, y, r_c, Kn, beta, f_coal_0, f_coal_3)
 
+    !! Calculate the turbulent inertial collisions
+    call calc_turb_inert(n_eq, y, r_c, beta, f_ti_0, f_ti_3)
+
+    !! Calculate the turbulent shear collisions
+    call calc_turb_shear(n_eq, y, r_c, f_tsh_0, f_tsh_3)
+
+
     !! Calculate final net flux rate for each tracer
-    f(1) = f_nuc_hom + f_nuc_het + f_seed_evap + f_coag_0 + f_coal_0
-    f(2) = m_seed*(f_nuc_hom + f_nuc_het + f_seed_evap) + f_cond*y(1)
-    f(3) = m_seed**2*(f_nuc_hom + f_nuc_het + f_seed_evap) + 2.0_dp*f_cond*y(2) + f_coag_3 + f_coal_3
+    f(1) = f_nuc_hom + f_seed_evap &
+      & + f_coag_0 + f_coal_0 + f_ti_0 + f_tsh_0
+    f(2) = m_seed*(f_nuc_hom + f_seed_evap) + f_cond*y(1)
+    f(3) = m_seed**2*(f_nuc_hom + f_seed_evap) + 2.0_dp*f_cond*y(2) & 
+      & + f_coag_3 + f_coal_3 + f_ti_3 + f_tsh_3
     f(4) = -f(2)
 
     !! Convert f to ratios
@@ -496,67 +512,50 @@ module mini_cloud_3_mod
 
   end subroutine calc_coal
 
-  !! Classical hetrogenous nucleation theory
-  subroutine calc_het_nuc(n_eq, y, sat, r_c, J_het)
+  !! Particle-particle turbulent inertial collisions
+  subroutine calc_turb_inert(n_eq, y, r_c, beta, f_ti_0, f_ti_3)
     implicit none
 
     integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y
-    real(dp), intent(in) :: sat, r_c
+    real(dp), dimension(n_eq), intent(in) :: y 
+    real(dp), intent(in) :: r_c, beta
 
-    real(dp), intent(out) :: J_het
+    real(dp), intent(out) :: f_ti_0, f_ti_3
 
-    real(dp) :: r_crit, FG, Theta, Zel, Nl
-    real(dp) :: f, mu_con, phi, f0, x
-    real(dp) :: c_surf, nu, F_des
+    real(dp) :: vf, d_vf
+    real(dp), parameter :: eps = 0.5_dp
 
-    if (sat > 1.0_dp) then
+    !! Settling velocity
+    vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
+      & * (1.0_dp &
+      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
-      !! Critical particle size
-      r_crit = (2.0_dp * mol_w_sp * sig)/(rho_d*R_gas*T*log(sat))
+    !! Estimate differential velocity
+    d_vf = eps * vf
 
-      !! Formation energy of critical cluster - classical approximation
-      FG = 4.0_dp/3.0_dp * pi * sig * r_crit**2
+    !! Turbulent inertial collision rate [cm-3 s-1]
+    f_ti_0 = -2.0_dp*((pi*eps_d**0.75_dp)/(grav*nu**0.25_dp)) * d_vf * r_c**2 * y(1)**2
 
-      !! Cluster-cluster diffusive interaction rate 
-      Theta = p/(sqrt(2.0_dp*m0*kb*T))
+    f_ti_3 = 4.0_dp*((pi*eps_d**0.75_dp)/(grav*nu**0.25_dp)) * d_vf * r_c**2 * y(2)**2
 
-      !! Number of vapour units in critical cluster size
-      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp)
+  end subroutine calc_turb_inert
 
-      !! Zeldovich factor
-      Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
+  !! Particle-particle turbulent shear collisions
+  subroutine calc_turb_shear(n_eq, y, r_c, f_tsh_0, f_tsh_3)
+    implicit none
 
-      !! Cosine contact angle
-      mu_con = 0.5_dp
+    integer, intent(in) :: n_eq
+    real(dp), dimension(n_eq), intent(in) :: y 
+    real(dp), intent(in) :: r_c
 
-      !! Begin shape factor calculation
-      x = r_c/r_crit
-      phi = sqrt(1.0_dp - 2.0_dp*mu_con*x + x**2)
-      f0 = (x - mu_con)/phi
+    real(dp), intent(out) :: f_tsh_0, f_tsh_3
 
-      !! Shape factor
-      f = 0.5_dp * (1.0_dp + ((1.0_dp-mu_con*x)/phi)**3 + x**3*(2.0_dp - 3.0_dp*f0 + f0**3) &
-        & + 3.0_dp*mu_con*x**2*(f0 - 1.0_dp))
+    !! Turbulent shear collision rate [cm-3 s-1]
+    f_tsh_0 = -4.0_dp*sqrt((8.0_dp*pi*eps_d)/(15.0_dp*nu)) * r_c**3 * y(1)**2
 
-      !! Desorption energy
-      F_des = 0.5_dp * eV !~ 0.5 eV (Gao & Powell 2021)
+    f_tsh_3 = 8.0_dp*sqrt((8.0_dp*pi*eps_d)/(15.0_dp*nu)) * r_c**3 * y(2)**2
 
-      !! Oscillation frequency
-      nu = 10e11_dp  * sqrt(F_des/(kb*m0)) ! Gao per. comm.
-
-      !! Number density of condensate molecules on the nucleating surface
-      c_surf = Theta/nu * exp(F_des/(kb*T))
-
-      !! Heterogenous nucleation rate [cm-3 s-1]
-      J_het = 4.0_dp * pi**2 * r_c**2 * r_crit**2 * Theta * c_surf * Zel * exp(-(FG*f)/(kb*T)) * y(1)
-
-    else
-      !! Unsaturated, zero nucleation
-      J_het = 0.0_dp
-    end if
-
-  end subroutine calc_het_nuc
+  end subroutine calc_turb_shear
 
   !! Dummy jacobian subroutine required for dlsode
   subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)

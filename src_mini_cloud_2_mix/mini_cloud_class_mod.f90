@@ -1,6 +1,8 @@
-module mini_cloud_class
-  use mini_cloud_precision
+module mini_cloud_class_mod
+  use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
+
+  integer, parameter :: dp = REAL64
 
   !! Common constants and geometric conversions
   real(dp), parameter :: pi = 4.0_dp*atan(1.0_dp)
@@ -381,4 +383,4 @@ contains
 
   end subroutine mini_cloud_init
 
-end module mini_cloud_class
+end module mini_cloud_class_mod
