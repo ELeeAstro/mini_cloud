@@ -57,7 +57,7 @@ module mini_cloud_2_mod
 
   public :: mini_cloud_2, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
-    & p_vap_sp, surface_tension, eta_construct, calc_turb_inert, calc_turb_shear
+    & p_vap_sp, surface_tension, eta_construct, calc_turb_acc, calc_turb_shear, calc_turb_couple
 
   contains
 
@@ -255,9 +255,10 @@ module mini_cloud_2_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
+    real(dp) :: w_sh2, w_acc2, w_co2
     real(dp) :: f_nuc_hom, f_cond, f_seed_evap
-    real(dp) :: f_coal, f_coag, f_ti, f_tsh
-    real(dp) :: m_c, r_c, Kn, beta, sat
+    real(dp) :: f_coal, f_coag, f_turb
+    real(dp) :: m_c, r_c, Kn, beta, sat, vf
     real(dp) :: p_v, n_v
 
     !! In this routine, you calculate the instanenous new fluxes (f) for each moment
@@ -288,6 +289,11 @@ module mini_cloud_2_mod
     !! Cunningham slip factor
     beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
 
+    !! Settling velocity
+    vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
+      & * (1.0_dp &
+      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+
     !! Find supersaturation ratio
     sat = p_v/p_vap
 
@@ -304,16 +310,22 @@ module mini_cloud_2_mod
     call calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
 
     !! Calculate the coalesence rate
-    call calc_coal(n_eq, y, r_c, Kn, beta, f_coal)
+    call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
 
-    !! Calculate the turbulent inertial collisions
-    call calc_turb_inert(n_eq, y, r_c, beta, f_ti)
+    !! Calculate the turbulent shear collision velocity
+    call calc_turb_shear(n_eq, y, r_c, w_sh2)
 
-    !! Calculate the turbulent shear collisions
-    call calc_turb_shear(n_eq, y, r_c, f_tsh)
+    !! Calculate the turbulent acceleration collision velocity
+    call calc_turb_acc(n_eq, y, vf, w_acc2)
+
+    !! Calculate the turbulent fluid coupling collision velocity
+    call calc_turb_couple(n_eq, y, r_c, vf, w_co2)
+
+    !! Combine turbulent velocities into collision rate using total kernel
+    f_turb = -pi * (2.0_dp*r_c)**2 * sqrt(2.0_dp/pi) * sqrt(w_sh2 + w_acc2 + w_co2) * y(1)**2
 
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom + f_seed_evap) + f_coag + f_coal + f_ti + f_tsh
+    f(1) = (f_nuc_hom + f_seed_evap) + f_coag + f_coal + f_turb
     f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond*y(1)
     f(3) = -f(2)
 
@@ -471,22 +483,17 @@ module mini_cloud_2_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(n_eq, y, r_c, Kn, beta, f_coal)
+  subroutine calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, Kn, beta
+    real(dp), intent(in) :: r_c, Kn, vf
 
     real(dp), intent(out) :: f_coal
 
-    real(dp) :: d_vf, vf, Stk, E
+    real(dp) :: d_vf,  Stk, E
     real(dp), parameter :: eps = 0.5_dp
-
-    !! Settling velocity
-    vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
-      & * (1.0_dp &
-      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
     !! Estimate differential velocity
     d_vf = eps * vf
@@ -506,46 +513,71 @@ module mini_cloud_2_mod
 
   end subroutine calc_coal
 
-  !! Particle-particle turbulent inertial collisions
-  subroutine calc_turb_inert(n_eq, y, r_c, beta, f_ti)
-    implicit none
-
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, beta
-
-    real(dp), intent(out) :: f_ti
-
-    real(dp) :: vf, d_vf
-    real(dp), parameter :: eps = 0.5_dp
-
-    !! Settling velocity
-    vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
-      & * (1.0_dp &
-      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
-
-    !! Estimate differential velocity
-    d_vf = eps * vf
-
-    !! Turbulent inertial collision rate [cm-3 s-1]
-    f_ti = -2.0_dp*((pi*eps_d**0.75_dp)/(grav*nu**0.25_dp)) * d_vf * r_c**2 * y(1)**2
-
-  end subroutine calc_turb_inert
-
   !! Particle-particle turbulent shear collisions
-  subroutine calc_turb_shear(n_eq, y, r_c, f_tsh)
+  subroutine calc_turb_shear(n_eq, y, r_c, w_sh2)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
     real(dp), intent(in) :: r_c
 
-    real(dp), intent(out) :: f_tsh
+    real(dp), intent(out) :: w_sh2
 
-    !! Turbulent shear collision rate [cm-3 s-1]
-    f_tsh = -4.0_dp*sqrt((8.0_dp*pi*eps_d)/(15.0_dp*nu)) * r_c**3 * y(1)**2
+    !! Shear relative velocity (Wang et al. 1998)
+    w_sh2 = 1.0_dp/15.0_dp * (2.0_dp*r_c)**2 * eps_d/nu
 
   end subroutine calc_turb_shear
+
+  !! Particle-particle turbulent acceleration collisions
+  subroutine calc_turb_acc(n_eq, y, vf, w_acc2)
+    implicit none
+
+    integer, intent(in) :: n_eq
+    real(dp), dimension(n_eq), intent(in) :: y 
+    real(dp), intent(in) :: vf
+
+    real(dp), intent(out) :: w_acc2
+
+    real(dp), parameter :: gam = 10.0_dp
+    real(dp) :: u2, tau_i, b, T_l, th_i, c1, c2
+
+    !! Follows Wang et al. (2001) 
+    !! - see also Park et el. (2002) and Kruis & Kusters (1997)
+
+    u2 = (gam * sqrt(eps_d*nu))/0.183_dp
+    b = (3.0_dp*rho)/(2.0_dp*rho_d + rho)
+    T_L = (0.4_dp*u2)/eps_d
+
+    tau_i = vf/grav
+    th_i = tau_i/T_L
+
+    c1 = sqrt((1.0_dp + th_i + th_i)/((1.0_dp + th_i)*(1.0_dp + th_i)))
+    c2 = (1.0_dp/(((1.0_dp + th_i)*(1.0_dp + th_i))) - 1.0_dp/(((1.0_dp + gam*th_i)*(1.0_dp + gam*th_i))))
+
+    w_acc2 = 3.0_dp*(1.0_dp-b)**2*u2*(gam/(gam-1.0_dp)) & 
+      & * (((th_i + th_i)**2 - 4.0_dp*th_i*th_i*c1)/(th_i + th_i)) * c2
+
+  end subroutine calc_turb_acc
+
+  !! Particle-particle turbulent fluid coupling collisions
+  subroutine calc_turb_couple(n_eq, y, r_c, vf, w_co2)
+    implicit none
+
+    integer, intent(in) :: n_eq
+    real(dp), dimension(n_eq), intent(in) :: y 
+    real(dp), intent(in) :: r_c, vf
+
+    real(dp), intent(out) :: w_co2
+
+    real(dp), parameter :: lam_d = 10.0_dp
+    real(dp) :: dudt2, tau
+
+    !! Fluid coupling turbulent term (Wang et al. 1998)
+    tau = vf/grav
+    dudt2 = 1.16_dp * eps_d**(1.5_dp)/sqrt(nu)
+    w_co2 = 2.0_dp*(1.0_dp - rho/rho_d)**2 * tau**2 * dudt2 * ((2.0_dp*r_c)**2/lam_d**2)
+
+  end subroutine calc_turb_couple
 
   !! Dummy jacobian subroutine required for dlsode
   subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)
