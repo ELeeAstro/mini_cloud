@@ -1,6 +1,6 @@
-program test_mini_cloud_2
+program test_mini_cloud_2_mix
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_2_mod, only : mini_cloud_2, rho_d, mol_w_sp
+  use mini_cloud_2_mix_mod, only : mini_cloud_2_mix, rho_d, mol_w_sp
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   implicit none
@@ -11,18 +11,19 @@ program test_mini_cloud_2
   real(dp), parameter :: kb = 1.380649e-23_dp
   real(dp), parameter :: amu = 1.66053906892e-27_dp
 
-  integer :: example, tt, n_it
-  character(len=20) :: sp_bg(3)
-  real(dp) :: T_in, P_in, VMR_in(3), mu_in, grav_in, nd_atm, rho
-  real(dp) :: v_f, r_c, m_c
+  integer, parameter ::  n_bg = 3, n_dust = 4
+  integer :: example, tt, n_it,
+
+  real(dp) :: T_in, P_in, mu_in, grav_in, nd_atm, rho
+  real(dp) :: q_0, v_f, r_c, m_c
   real(dp) :: t_step, time
 
-  !! Cloud parameters and arrays
-  integer, parameter :: n_s = 4
-  character(len=20), dimension(n_s) :: sp
-  real(dp), dimension(n_s) :: q_vs, q_1s
-  real(dp) :: q_0, q_1
+  !! Background
+  character(len=20), dimension(n_bg) :: sp_bg, VMR_bg
 
+  !! Dust details
+  character(len=20), dimension(n_dust) :: sp, q_1s, q_v
+  real(dp), dimension(n_dust) :: rho_s, mw_s
 
   integer :: n_wl
   real(dp), allocatable, dimension(:) :: wl_e, wl, k_ext, ssa, g
@@ -39,19 +40,11 @@ program test_mini_cloud_2
   !! example select
   example = 1
 
-  !! Chose name of individual species
-  sp(1) = 'TiO2   '
-  sp(2) = 'Mg2SiO4'
-  sp(3) = 'Fe     '
-  sp(4) = 'Al2O3  '
-
-  !! Initial moments and species VMR
-  q_vs(1) = 1.041e-7_dp
-  q_vs(2) = 3.588e-5_dp
-  q_vs(3) = 2.231e-5_dp
-  q_vs(4) = 2.771e-6_dp
-  q_0 = 1.0e-30_dp
+  !! Initial conditions
+  q_v(:) = (/1.041e-7_dp, 2.771e-6_dp, 2.231e-5_dp, 3.588e-5_dp/)  !Ti, Mg, Fe and Al abundances at start
+  q_0 = 1.0e-30_dp    ! ~Zero clouds at start 
   q_1s(:) = 1.0e-30_dp
+
 
   n_wl = 11
   allocate(wl_e(n_wl+1), wl(n_wl), k_ext(n_wl), ssa(n_wl), g(n_wl))
@@ -76,16 +69,17 @@ program test_mini_cloud_2
       P_in = 1e5_dp
 
        !! Assume constant H2, He and H background VMR @ approx solar
-      sp_bg = (/'H2','He','H '/)
-      VMR_in(1) = 0.85_dp
-      VMR_in(2) = 0.15_dp
-      VMR_in(3) = 1e-6_dp
-
+      sp_bg(:) = (/'H2','He','H '/)
+      VMR_bg(:) = (/0.85_dp,0.15_dp,1e-6/)
+  
       !! Assume constant background gas mean molecular weight [g mol-1] @ approx solar
       mu_in = 2.33_dp
 
       !! Assume constant gravity [m s-2]
       grav_in = 10.0_dp
+
+      !! Assumed condensate species
+      sp(:) = (/'TiO2', 'Al2O3', 'Fe', 'MgSiO3'/)
 
       !! Number density [m-3] of layer
       nd_atm = P_in/(kb*T_in)  
@@ -93,19 +87,14 @@ program test_mini_cloud_2
       !! Mass density of layer
       rho = (P_in*mu_in*amu)/(kb * T_in) ! Mass density [kg m-3]
 
-      !! Change vapur VMR to mass density ratio for first iteration
-      if (tt == 1) then
-        q_v = q_v * mol_w_sp/mu_in
-      end if
-
       !! Call mini-cloud and perform integrations for a single layer
-      call mini_cloud_2(T_in, P_in, grav_in, mu_in, VMR_in, t_step, sp, sp_bg, q_v, q_0, q_1)
+      call mini_cloud_2_mix(n_dust, T_in, P_in, grav_in, mu_in, VMR_bg, t_step, sp, sp_bg, q_v, q_0, q_1s)
 
       !! Calculate settling velocity for this layer
-      call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_in, rho_d, sp_bg, q_0, q_1, v_f)
+      call mini_cloud_vf(n_dust, T_in, P_in, grav_in, mu_in, VMR_bg, rho_d, sp_bg, q_0, q_1s, v_f)
 
       !! Calculate the opacity at the weavelength grid
-      call opac_mie(1, sp, T_in, mu_in, P_in, q_0, q_1, rho_d, n_wl, wl, k_ext, ssa, g)
+      call opac_mie(n_dust, sp, T_in, mu_in, P_in, q_0, q_1s, rho_d, n_wl, wl, k_ext, ssa, g)
 
       !! increment time
       time = time + t_step
@@ -114,7 +103,7 @@ program test_mini_cloud_2
       print*, tt, time, P_in * 1e-5_dp, 'bar ', T_in, 'K ', mu_in, 'g mol-1 ',  trim(sp)
 
       !! Mean mass of particle
-      m_c = (q_1*rho)/(q_0*nd_atm)
+      m_c = (sum(q_1s*rho))/(q_0*nd_atm)
 
       !! Mass weighted mean radius of particle
       r_c = ((3.0_dp*m_c)/(4.0_dp*pi*rho_d*1000.0_dp))**(1.0_dp/3.0_dp) * 1e6_dp
@@ -161,4 +150,4 @@ contains
 
   end subroutine output
 
-end program test_mini_cloud_2
+end program test_mini_cloud_2_mix
