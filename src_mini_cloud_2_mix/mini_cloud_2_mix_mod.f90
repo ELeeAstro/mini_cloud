@@ -17,18 +17,18 @@ module mini_cloud_2_mix_mod
 
   contains
 
-  subroutine mini_cloud_2_mix(n_dust, T_in, P_in, grav_in, mu_in, VMR_bg_in, t_end, sp, sp_bg, q_v, q_0, q_1s)
+  subroutine mini_cloud_2_mix(T_in, P_in, grav_in, mu_in, VMR_bg_in, t_end, sp, sp_bg, q_v, q_0, q_1s)
     implicit none
 
     ! Input variables
-    character(len=20), dimension(n_dust), intent(in) :: sp
+    character(len=20), dimension(:), intent(in) :: sp
     character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end
     real(dp), dimension(:), intent(in) :: VMR_bg_in
 
     ! Input/Output tracer values
-    real(dp), intent(inout) :: q_v, q_0
-    real(dp), dimension(n_dust), intent(inout) :: q_1s
+    real(dp), intent(inout) :: q_0
+    real(dp), dimension(:), intent(inout) :: q_v, q_1s
 
     integer :: ncall, n
 
@@ -49,6 +49,8 @@ module mini_cloud_2_mix_mod
     real(dp), allocatable, dimension(:) :: VMR_bg
     real(dp) :: eta_g, bot, top
 
+    n_dust = size(sp)
+
     if (first_call .eqv. .True.) then
       call mini_cloud_init(n_dust, sp)
       first_call = .False.
@@ -58,11 +60,6 @@ module mini_cloud_2_mix_mod
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
     p = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
-
-    !! Allocate bg gas VMR
-    n_bg = size(VMR_bg_in)
-    allocate(VMR_bg(n_bg))
-    VMR_bg(:) = VMR_bg_in(:)
 
     !! Change mu_in to mu
     mu = mu_in ! Convert mean molecular weight to mu [g mol-1]
@@ -77,7 +74,12 @@ module mini_cloud_2_mix_mod
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
 
     !! Specific gas constant of layer [erg g-1 K-1]
-    Rd = R_gas/mu
+    Rd = Rgas/mu
+
+    !! Allocate bg gas VMR
+    n_bg = size(VMR_bg_in)
+    allocate(VMR_bg(n_bg))
+    VMR_bg(:) = VMR_bg_in(:)
 
     !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
     call eta_construct(n_bg, sp_bg)
@@ -100,17 +102,17 @@ module mini_cloud_2_mix_mod
     eps_d = nu**3/l_k**4
 
     !! Calculate mean free path for this layer
-    mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
+    mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*Rgas*T))
 
     !! Find saturation vapour pressure for each species
     call p_vap_sp(n_dust, T)
 
-    !! Thermal velocity
+    !! Thermal velocity of gas species
     d_sp(:)%vth = sqrt((kb*T)/(2.0_dp*pi*d_sp(:)%m0))
 
-    !! Gaseous diffusion constant
-    d_sp(:)%D = = 5.0_dp/(16.0_dp*N_A*d_sp(:)%d0**2*rho) * &
-      & sqrt((R_gas*T*mu)/(2.0_dp*pi) * (d_sp(:)%mw + mu)/d_sp(:)%mw)
+    !! Gaseous diffusion constant of gas species
+    d_sp(:)%D = 5.0_dp/(16.0_dp*N_A*d_sp(:)%d0**2*rho) * &
+      & sqrt((Rgas*T*mu)/(2.0_dp*pi) * (d_sp(:)%mw + mu)/d_sp(:)%mw)
 
     !! Surface tension of each material
     call surface_tension(n_dust, T)
@@ -123,6 +125,8 @@ module mini_cloud_2_mix_mod
     istate = 1
     iopt = 1
 
+    n_eq = 1 + n_dust + n_dust
+
     ! Problem is stiff (usual)
     ! mf = 21 - full jacobian matrix with jacobian save
     ! mf = 22 - internal calculated jacobian
@@ -132,7 +136,7 @@ module mini_cloud_2_mix_mod
     allocate(rwork(rworkdim), iwork(iworkdim))
 
     itol = 1
-    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
+    rtol = 1.0e-4_dp           ! Relative tolerances for each scalar
     atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
@@ -146,13 +150,11 @@ module mini_cloud_2_mix_mod
     iwork(6) = 100000               ! Max number of internal steps
     iwork(7) = 1                ! Number of error messages
 
-
-    n_eq = 1 + n_dust + n_dust
     allocate(y(n_eq))
 
     !! Give tracer values to y
-    y(1) :: q_0
-    y(2:2+n_dust-1) :: q_1s(:)
+    y(1) = q_0
+    y(2:2+n_dust-1) = q_1s(:)
     y(2+n_dust:2+n_dust+n_dust-1) = q_v(:)
 
     !! Limit y values
@@ -184,10 +186,8 @@ module mini_cloud_2_mix_mod
 
     end do
 
-
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
-
 
     !! Give y values to tracers
     q_0 = y(1)
@@ -207,38 +207,37 @@ module mini_cloud_2_mix_mod
     real(dp), dimension(n_eq), intent(inout) :: f
 
     real(dp) :: w_sh2, w_acc2, w_co2
-    real(dp) :: f_nuc_hom, f_cond, f_seed_evap
     real(dp) :: f_coal, f_coag, f_turb
-    real(dp) :: m_c, r_c, Kn, beta, sat, vf
-    real(dp) :: p_v, n_v
+    real(dp) :: m_c, r_c, Kn, beta, vf
 
     real(dp) :: n_d, rho_t, rho_d
-    real(dp), dimension(n_dust) :: rho_s, q_v, p_v, sat, n_v, dmdt
+    real(dp), dimension(n_dust) :: J_hom, J_het, J_evap
+    real(dp), dimension(n_dust) :: rho_s, rho_v, p_v, sat, n_v, dmdt
+    real(dp), dimension(n_dust) :: V_frac
 
     !! In this routine, you calculate the instanenous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
     !! Basically, you solve for the RHS of the ODE for each moment
 
     !! Limit y values
-    y(:) = max(y(:),1e-30_dp)
+    !y(:) = max(y(:),1e-30_dp)
 
     !! Convert y to real physical numbers to calculate f
     n_d = y(1) * nd_atm ! Convert to real number density
     rho_s(:) = y(2:2+n_dust-1) * rho   ! Convert to real mass density
     rho_v(:)= y(2+n_dust:2+n_dust+n_dust-1) * rho   ! Convert to real number density
 
-    rho_t = sum(rho_s(:))
-
     !! Find the true vapour VMR
     p_v(:) = rho_v(:) * Rd * T     !! Pressure of vapour
     n_v(:) = p_v(:)/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
-    m_c = max(n_d/rho_t, m_seed)
+    rho_t = sum(rho_s(:))
+    m_c = max(rho_t/n_d, m_seed)
 
     !! Find weighted bulk density of mixed grain composition using volume fraction
-    V_frac(:) = rho_s(:)/rho_t
-    rho_d = sum(V_frac(:)*d_sp(n)%rho_s)
+    V_frac(:) = max(rho_s(:)/rho_t,1e-30_dp)
+    rho_d = sum(V_frac(:)*d_sp(:)%rho)
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
@@ -258,13 +257,17 @@ module mini_cloud_2_mix_mod
     sat(:) = p_v(:)/d_sp(:)%p_vap
 
     !! Calculate condensation rate
-    call calc_cond(n_dust, y, r_c, Kn, n_v, sat, dmdt)
+    call calc_cond(n_dust, r_c, Kn, n_v, sat, V_frac, dmdt)
 
     !! Calculate homogenous nucleation rate
-    call calc_hom_nuc(n_dust sat, n_v, f_nuc_hom)
+    call calc_hom_nuc(n_dust, sat, n_v, J_hom)
+
+    !! Calculate hetrogenous nucleation rate
+    call calc_het_nuc(n_dust, n_d, sat, r_c, J_het)
+    J_het(:) = 0.0_dp
 
     !! Calculate seed particle evaporation rate
-    call calc_seed_evap(n_dust, n_d, m_c, dmdt, f_seed_evap)
+    call calc_seed_evap(n_dust, n_d, m_c, dmdt, J_evap)
 
     !! Calculate the coagulation rate
     call calc_coag(n_d, m_c, r_c, beta, f_coag)
@@ -276,17 +279,17 @@ module mini_cloud_2_mix_mod
     call calc_turb_shear(r_c, w_sh2)
 
     !! Calculate the turbulent acceleration collision velocity
-    call calc_turb_acc(vf, w_acc2)
+    call calc_turb_acc(vf, rho_d, w_acc2)
 
     !! Calculate the turbulent fluid coupling collision velocity
-    call calc_turb_couple(r_c, vf, w_co2)
+    call calc_turb_couple(r_c, vf, rho_d, w_co2)
 
     !! Combine turbulent velocities into collision rate using total kernel
     f_turb = -pi * (2.0_dp*r_c)**2 * sqrt(2.0_dp/pi) * sqrt(w_sh2 + w_acc2 + w_co2) * n_d**2
 
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = sum(f_nuc_hom(:) + f_seed_evap(:)) + f_coag + f_coal + f_turb
-    f(2:2+n_dust-1) = d_sp(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) + dmdt(:)*n_d
+    f(1) = sum(J_hom(:) + J_het(:) + J_evap(:)) + f_coag + f_coal + f_turb
+    f(2:2+n_dust-1) = m_seed*(J_hom(:) + J_het(:) + J_evap(:)) + dmdt(:)*n_d
     f(2+n_dust:2+n_dust+n_dust-1) = -f(2:2+n_dust-1)
 
     !! Convert f to ratios
@@ -297,22 +300,28 @@ module mini_cloud_2_mix_mod
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(n_dust, r_c, Kn, n_v, sat, dmdt)
+  subroutine calc_cond(n_dust, r_c, Kn, n_v, sat, V_frac, dmdt)
     implicit none
 
+    integer, intent(in) :: n_dust
     real(dp), intent(in) :: r_c, Kn
-    real(dp), dimension(n_dust) :: n_v, sat
+    real(dp), dimension(n_dust) :: n_v, sat, V_frac
 
     real(dp), dimension(n_dust), intent(out) :: dmdt
 
+    integer :: n
+    real(dp) :: Ak
+
     do n = 1, n_dust
+
+      Ak = 1.0_dp!exp((2.0_dp*d_sp(n)%V0*d_sp(n)%sig)/(kb * T * r_c))
 
       if (Kn >= 1.0_dp) then
         !! Kinetic regime [g s-1]
-        dmdt(n) = 4.0_dp * pi * r_c**2 * d_sp(n)%th * d_sp(n)%m0 * n_v(n) * (1.0_dp - 1.0_dp/sat(n))
+        dmdt(n) = 4.0_dp * pi * r_c**2 * d_sp(n)%vth * d_sp(n)%m0 * n_v(n) * (1.0_dp - Ak/sat(n)) * V_frac(n)
       else
         !! Diffusive limited regime [g s-1]
-        dmdt(n) = 4.0_dp * pi * r_c * d_sp(n)%D * d_sp(n)%m0 * n_v(n) * (1.0_dp - 1.0_dp/sat(n))
+        dmdt(n) = 4.0_dp * pi * r_c * d_sp(n)%D * d_sp(n)%m0 * n_v(n) * (1.0_dp - Ak/sat(n)) * V_frac(n)
       end if
 
     end do
@@ -323,11 +332,13 @@ module mini_cloud_2_mix_mod
   subroutine calc_hom_nuc(n_dust, sat, n_v, J_hom)
     implicit none
 
-    integer, intent(in) :: n_eq
+    integer, intent(in) :: n_dust
     real(dp), dimension(n_dust), intent(in) :: sat, n_v
 
     real(dp), dimension(n_dust), intent(out) :: J_hom
 
+    integer :: n
+    real(dp), parameter :: alpha = 1.0_dp
     real(dp) :: ln_ss, theta_inf, N_inf, N_star, N_star_1, dg_rt, Zel, tau_gr
     real(dp) :: f0, kbT
 
@@ -365,7 +376,7 @@ module mini_cloud_2_mix_mod
           & * ((1.0_dp + 2.0_dp*(d_sp(n)%Nf/N_star_1)**third)/(1.0_dp + (d_sp(n)%Nf/N_star_1)**third)**3))
 
         !! Calculate !!inverse!! of tau_gr
-        tau_gr = (f0 * N_star**(twothird)) * 1.0_dp * sqrt(kbT &
+        tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
           & / (2.0_dp * pi * d_sp(n)%mw * amu)) * n_v(n)
 
         !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
@@ -380,64 +391,74 @@ module mini_cloud_2_mix_mod
   end subroutine calc_hom_nuc
 
   !! Classical hetrogenous nucleation theory
-  subroutine calc_het_nuc(n_eq, y, sat, r_c, J_het)
+  subroutine calc_het_nuc(n_dust, n_d, sat, r_c, J_het)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y
-    real(dp), intent(in) :: sat, r_c
+    integer, intent(in) :: n_dust
+    real(dp), intent(in) :: r_c, n_d
+    real(dp), dimension(n_dust), intent(in) :: sat
 
-    real(dp), intent(out) :: J_het
+    real(dp), dimension(n_dust), intent(out) :: J_het
 
+    integer :: n
     real(dp) :: r_crit, FG, Theta, Zel, Nl
     real(dp) :: f, mu_con, phi, f0, x
     real(dp) :: c_surf, nu, F_des
 
-    if (sat > 1.0_dp) then
+    do n = 1, n_dust
 
-      !! Critical particle size
-      r_crit = (2.0_dp * mol_w_sp * sig)/(rho_d*R_gas*T*log(sat))
+      if (d_sp(n)%inuc == 0) then
+        J_het(n) = 0.0_dp
+        cycle
+      end if
 
-      !! Formation energy of critical cluster - classical approximation
-      FG = 4.0_dp/3.0_dp * pi * sig * r_crit**2
+      if (sat(n) > 1.0_dp) then
 
-      !! Cluster-cluster diffusive interaction rate 
-      Theta = p/(sqrt(2.0_dp*m0*kb*T))
+        !! Critical particle size
+        r_crit = (2.0_dp * d_sp(n)%mw * d_sp(n)%sig)/(d_sp(n)%rho*Rgas*T*log(sat(n)))
 
-      !! Number of vapour units in critical cluster size
-      Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/V0, 1.0_dp)
+        !! Formation energy of critical cluster - classical approximation
+        FG = 4.0_dp/3.0_dp * pi * d_sp(n)%sig * r_crit**2
 
-      !! Zeldovich factor
-      Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
+        !! Cluster-cluster diffusive interaction rate 
+        Theta = p/(sqrt(2.0_dp*d_sp(n)%m0*kb*T))
 
-      !! Cosine contact angle
-      mu_con = 0.5_dp
+        !! Number of vapour units in critical cluster size
+        Nl = max((4.0_dp/3.0_dp * pi * r_crit**3)/d_sp(n)%V0, 1.0_dp)
 
-      !! Begin shape factor calculation
-      x = r_c/r_crit
-      phi = sqrt(1.0_dp - 2.0_dp*mu_con*x + x**2)
-      f0 = (x - mu_con)/phi
+        !! Zeldovich factor
+        Zel = sqrt(FG/(3.0_dp*pi*kb*T*Nl**2))
 
-      !! Shape factor
-      f = 0.5_dp * (1.0_dp + ((1.0_dp-mu_con*x)/phi)**3 + x**3*(2.0_dp - 3.0_dp*f0 + f0**3) &
-        & + 3.0_dp*mu_con*x**2*(f0 - 1.0_dp))
+        !! Cosine contact angle from surface tension
+        mu_con = 0.5_dp
 
-      !! Desorption energy
-      F_des = 0.5_dp * eV !~ 0.5 eV (Gao & Powell 2021)
+        !! Begin shape factor calculation
+        x = r_c/r_crit
+        phi = sqrt(1.0_dp - 2.0_dp*mu_con*x + x**2)
+        f0 = (x - mu_con)/phi
 
-      !! Oscillation frequency
-      nu = 10e11_dp  * sqrt(F_des/(kb*m0)) ! Gao per. comm.
+        !! Shape factor
+        f = 0.5_dp * (1.0_dp + ((1.0_dp-mu_con*x)/phi)**3 + x**3*(2.0_dp - 3.0_dp*f0 + f0**3) &
+          & + 3.0_dp*mu_con*x**2*(f0 - 1.0_dp))
 
-      !! Number density of condensate molecules on the nucleating surface
-      c_surf = Theta/nu * exp(F_des/(kb*T))
-      
-      !! Heterogenous nucleation rate [cm-3 s-1]
-      J_het = 4.0_dp * pi**2 * r_c**2 * r_crit**2 * Theta * c_surf * Zel * exp(-(FG*f)/(kb*T)) * y(1)
+        !! Desorption energy
+        F_des = 0.5_dp * eV !~ 0.5 eV (Gao & Powell 2021)
 
-    else
-      !! Unsaturated, zero nucleation
-      J_het = 0.0_dp
-    end if
+        !! Oscillation frequency
+        nu = 10e11_dp  * sqrt(F_des/(kb*d_sp(n)%m0)) ! Gao per. comm.
+
+        !! Number density of condensate molecules on the nucleating surface
+        c_surf = Theta/nu * exp(F_des/(kb*T))
+        
+        !! Heterogenous nucleation rate [cm-3 s-1]
+        J_het(n) = 4.0_dp * pi**2 * r_c**2 * r_crit**2 * Theta * c_surf * Zel * exp(-(FG*f)/(kb*T)) * n_d
+
+      else
+        !! Unsaturated, zero nucleation
+        J_het(n) = 0.0_dp
+      end if
+
+    end do
 
   end subroutine calc_het_nuc
 
@@ -449,8 +470,9 @@ module mini_cloud_2_mix_mod
     real(dp), intent(in) :: n_d, m_c
     real(dp), dimension(n_dust), intent(in) :: dmdt
 
-    real(dp), intent(out) :: J_evap
+    real(dp), dimension(n_dust), intent(out) :: J_evap
 
+    integer :: n
     real(dp) :: tau_evap
 
     do n = 1, n_dust
@@ -469,7 +491,7 @@ module mini_cloud_2_mix_mod
 
         !! Check if average mass is around 0.1% the seed particle mass
         !! This means the core is (probably) exposed to the air and can evaporate freely
-        if (m_c <= (1.001_dp * d_sp(n)%m_seed)) then
+        if (m_c <= (1.001_dp * m_seed)) then
           tau_evap = 1.0_dp !max(m_c/abs(f_cond),1.0_dp)
           !! Seed particle evaporation rate [cm-3 s-1]
           J_evap(n) = -n_d/tau_evap
@@ -542,7 +564,7 @@ module mini_cloud_2_mix_mod
     end if
 
     !! Coalesence flux (Zeroth moment) [cm-3 s-1]
-    f_coal = -2.0_dp*pi*r_c**2*n_d**2*d_vf*E
+    f_coal = -2.0_dp*pi*r_c**2*d_vf*E*n_d**2
 
   end subroutine calc_coal
 
@@ -560,10 +582,10 @@ module mini_cloud_2_mix_mod
   end subroutine calc_turb_shear
 
   !! Particle-particle turbulent acceleration collisions
-  subroutine calc_turb_acc(vf, w_acc2)
+  subroutine calc_turb_acc(vf, rho_d, w_acc2)
     implicit none
 
-    real(dp), intent(in) :: vf
+    real(dp), intent(in) :: vf, rho_d
 
     real(dp), intent(out) :: w_acc2
 
@@ -589,10 +611,10 @@ module mini_cloud_2_mix_mod
   end subroutine calc_turb_acc
 
   !! Particle-particle turbulent fluid coupling collisions
-  subroutine calc_turb_couple(r_c, vf, w_co2)
+  subroutine calc_turb_couple(r_c, vf, rho_d, w_co2)
     implicit none
 
-    real(dp), intent(in) :: r_c, vf
+    real(dp), intent(in) :: r_c, vf, rho_d
 
     real(dp), intent(out) :: w_co2
 

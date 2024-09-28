@@ -1,6 +1,6 @@
 program test_mini_cloud_2_mix
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_2_mix_mod, only : mini_cloud_2_mix, rho_d, mol_w_sp
+  use mini_cloud_2_mix_mod, only : mini_cloud_2_mix
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   implicit none
@@ -8,22 +8,24 @@ program test_mini_cloud_2_mix
   integer, parameter :: dp = REAL64
 
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
-  real(dp), parameter :: kb = 1.380649e-23_dp
-  real(dp), parameter :: amu = 1.66053906892e-27_dp
+  real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
+  real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
 
   integer, parameter ::  n_bg = 3, n_dust = 4
-  integer :: example, tt, n_it,
+  integer :: example, tt, n_it
 
   real(dp) :: T_in, P_in, mu_in, grav_in, nd_atm, rho
   real(dp) :: q_0, v_f, r_c, m_c
   real(dp) :: t_step, time
 
   !! Background
-  character(len=20), dimension(n_bg) :: sp_bg, VMR_bg
+  character(len=20), dimension(n_bg) :: sp_bg
+  real(dp), dimension(n_bg) :: VMR_bg
 
   !! Dust details
-  character(len=20), dimension(n_dust) :: sp, q_1s, q_v
-  real(dp), dimension(n_dust) :: rho_s, mw_s
+  character(len=20), dimension(n_dust) :: sp
+  real(dp), dimension(n_dust) :: rho_s, mw, q_1s, q_v, V_frac
+  real(dp) :: rho_t, rho_d
 
   integer :: n_wl
   real(dp), allocatable, dimension(:) :: wl_e, wl, k_ext, ssa, g
@@ -42,6 +44,9 @@ program test_mini_cloud_2_mix
 
   !! Initial conditions
   q_v(:) = (/1.041e-7_dp, 2.771e-6_dp, 2.231e-5_dp, 3.588e-5_dp/)  !Ti, Mg, Fe and Al abundances at start
+  !q_v(:) = (/1.17e-7_dp/)
+  !q_v(:) = (/1.041e-7_dp, 2.771e-6_dp/)
+
   q_0 = 1.0e-30_dp    ! ~Zero clouds at start 
   q_1s(:) = 1.0e-30_dp
 
@@ -63,14 +68,14 @@ program test_mini_cloud_2_mix
       !! In this example, we timestep a call to mini-cloud while slowly increasing the temperature
 
       !! Start sinusoid temperature variation [K]
-      T_in = 1600.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.01_dp *  time)
+      T_in = 2000.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.01_dp *  time)
 
       !! Assume constant pressure [pa]
       P_in = 1e5_dp
 
        !! Assume constant H2, He and H background VMR @ approx solar
       sp_bg(:) = (/'H2','He','H '/)
-      VMR_bg(:) = (/0.85_dp,0.15_dp,1e-6/)
+      VMR_bg(:) = (/0.85_dp,0.15_dp,1e-6_dp/)
   
       !! Assume constant background gas mean molecular weight [g mol-1] @ approx solar
       mu_in = 2.33_dp
@@ -79,38 +84,58 @@ program test_mini_cloud_2_mix
       grav_in = 10.0_dp
 
       !! Assumed condensate species
-      sp(:) = (/'TiO2', 'Al2O3', 'Fe', 'MgSiO3'/)
+      sp(:) = (/'TiO2  ', 'Al2O3 ', 'Fe    ', 'MgSiO3'/)
+      rho_s(:) = (/4.23_dp,3.986_dp,7.87_dp, 3.19_dp/)
+      mw(:) = (/79.866_dp,101.961_dp,55.845_dp,100.389_dp/)
 
-      !! Number density [m-3] of layer
-      nd_atm = P_in/(kb*T_in)  
+      !sp(:) = (/'KCl'/)
+      !rho_s(:) = (/1.99_dp/)
+      !mw(:) = (/74.551_dp/)
+
+      ! sp(:) = (/'TiO2  ', 'Al2O3 '/)
+      ! rho_s(:) = (/4.23_dp,3.986_dp/)
+      ! mw(:) = (/79.866_dp,101.961_dp/) 
+
+      !! Change vapur VMR to mass density ratio for first iteration
+      if (tt == 1) then
+        q_v(:) = q_v(:) * mw(:)/mu_in
+      end if
+
+      !! Number density [cm-3] of layer
+      nd_atm = (P_in*10.0_dp)/(kb*T_in)  
 
       !! Mass density of layer
-      rho = (P_in*mu_in*amu)/(kb * T_in) ! Mass density [kg m-3]
+      rho = (P_in*10.0_dp*mu_in*amu)/(kb * T_in) ! Mass density [g cm-3]
 
       !! Call mini-cloud and perform integrations for a single layer
-      call mini_cloud_2_mix(n_dust, T_in, P_in, grav_in, mu_in, VMR_bg, t_step, sp, sp_bg, q_v, q_0, q_1s)
+      call mini_cloud_2_mix(T_in, P_in, grav_in, mu_in, VMR_bg, t_step, sp, sp_bg, q_v, q_0, q_1s)
 
       !! Calculate settling velocity for this layer
-      call mini_cloud_vf(n_dust, T_in, P_in, grav_in, mu_in, VMR_bg, rho_d, sp_bg, q_0, q_1s, v_f)
+      call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_bg, rho_s, sp_bg, q_0, q_1s, v_f)
 
       !! Calculate the opacity at the weavelength grid
-      call opac_mie(n_dust, sp, T_in, mu_in, P_in, q_0, q_1s, rho_d, n_wl, wl, k_ext, ssa, g)
+      call opac_mie(n_dust, sp, T_in, mu_in, P_in, q_0, q_1s, rho_s, n_wl, wl, k_ext, ssa, g)
 
       !! increment time
       time = time + t_step
 
       !! Print to screen current progress
-      print*, tt, time, P_in * 1e-5_dp, 'bar ', T_in, 'K ', mu_in, 'g mol-1 ',  trim(sp)
+      print*, tt, time, P_in * 1e-5_dp, 'bar ', T_in, 'K ', mu_in, 'g mol-1 ', sp(:)
+
+      !! Find weighted bulk density of mixed grain composition using volume fraction
+      rho_t = sum(q_1s(:))
+      V_frac(:) = max(q_1s(:)/rho_t,1e-30_dp)
+      rho_d = sum(V_frac(:)*rho_s(:))
 
       !! Mean mass of particle
-      m_c = (sum(q_1s*rho))/(q_0*nd_atm)
+      m_c = (rho_t*rho)/(q_0*nd_atm)
 
       !! Mass weighted mean radius of particle
-      r_c = ((3.0_dp*m_c)/(4.0_dp*pi*rho_d*1000.0_dp))**(1.0_dp/3.0_dp) * 1e6_dp
+      r_c = ((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp) * 1e4_dp
 
 
-      print*, 'q', tt, q_v, q_0, q_1, v_f
-      print*, 'r', tt, m_c, r_c
+      print*, 'q', tt, q_v, q_0, q_1s, v_f
+      print*, 'r', tt, m_c, r_c, rho_d
       print*, 'o', tt, k_ext(1), ssa(1), g(1), k_ext(n_wl), ssa(n_wl), g(n_wl)
 
       !! mini-cloud test output
@@ -145,7 +170,7 @@ contains
       first_call = .False.
     end if
 
-    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0, q_1, v_f
+    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, rho_d, VMR_bg(:), q_v(:), q_0, q_1s(:), v_f
     write(u2,*) t, time, k_ext(:), ssa(:), g(:)
 
   end subroutine output

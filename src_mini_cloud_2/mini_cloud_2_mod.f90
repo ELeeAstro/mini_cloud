@@ -234,7 +234,6 @@ module mini_cloud_2_mod
 
     end do
 
-
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
 

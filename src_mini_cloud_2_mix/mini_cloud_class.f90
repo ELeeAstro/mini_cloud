@@ -17,7 +17,7 @@ module mini_cloud_class_mod
   real(dp), parameter :: sb_c = 5.670374419e-5_dp ! erg cm-2 s-1 K^-4 - Stefan-Boltzmann's constant
   real(dp), parameter :: hp = 6.62607015e-27_dp ! erg s - Planck's constant
   real(dp), parameter :: c_s = 2.99792458e10_dp ! cm s^-1 - Vacuum speed of light
-  real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
+  real(dp), parameter :: amu = 1.66053906892e-24_dp ! g - Atomic mass unit
   real(dp), parameter :: N_A = 6.02214076e23_dp ! mol^-1 - Avogadro's constant
   real(dp), parameter :: eV = 1.60217663e-12_dp
   real(dp), parameter :: gam = 1.4_dp
@@ -31,6 +31,9 @@ module mini_cloud_class_mod
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
   real(dp), parameter :: mmHg = 1333.2239_dp  ! mmHg to dyne
 
+  !! Seed particle size
+  real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp) :: V_seed, m_seed
 
   !! Turbulent scales
   real(dp), parameter :: l_k = 1.0_dp
@@ -58,12 +61,10 @@ module mini_cloud_class_mod
     integer :: idx
     character(len=20) :: name
 
-    real(dp) :: rho_s
+    real(dp) :: rho
     real(dp) :: mw
 
     real(dp) :: m0, r0, V0, d0
-
-    real(dp) :: r_seed
 
     real(dp) :: p_vap
     real(dp) :: sat
@@ -78,8 +79,15 @@ module mini_cloud_class_mod
 
   end type dust
 
-  type(dust), allocatable, dimension(:) :: d_sp
-  !$omp threadprivate (d_sp)
+  type gas
+
+    integer :: idx
+    character(len=20) :: name
+
+  end type gas
+
+  type(dust), allocatable, dimension(:) :: d_sp, g_sp
+  !$omp threadprivate (d_sp, g_sp)
 
 contains
 
@@ -90,7 +98,7 @@ contains
 
     integer :: n
 
-    allocate(d_sp(n_dust))
+    allocate(d_sp(n_dust), g_sp(n_dust))
 
     !! Large loop to hardcoded values
     do n = 1, n_dust
@@ -105,29 +113,31 @@ contains
         d_sp(n)%idx = n
         d_sp(n)%name = sp(n)
 
-        d_sp(n)%rho_s = 4.23_dp
+        d_sp(n)%rho = 4.23_dp
         d_sp(n)%mw = 79.866_dp
         d_sp(n)%m0 = d_sp(n)%mw * amu
-        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho_s
+        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho
         d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
-        d_sp(n)%d0 = 2.0_dp * r0 
+        d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
 
         d_sp(n)%inuc = 1
-        d_sp(n)%r_seed = 1e-7_dp
-        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * d_sp(n)%r_seed**3) / d_sp(n)%V0
+        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 0.0_dp
+
+        V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+        m_seed = V_seed * d_sp(n)%rho
 
       case ('Al2O3')
 
         d_sp(n)%idx = n
         d_sp(n)%name = sp(n)
 
-        d_sp(n)%rho_s = 3.986_dp
+        d_sp(n)%rho = 3.986_dp
         d_sp(n)%mw = 101.961_dp
         d_sp(n)%m0 = d_sp(n)%mw * amu
-        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho_s
+        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho
         d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
-        d_sp(n)%d0 = 2.0_dp * r0 
+        d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
 
         d_sp(n)%inuc = 0
 
@@ -136,12 +146,12 @@ contains
         d_sp(n)%idx = n
         d_sp(n)%name = sp(n)
 
-        d_sp(n)%rho_s = 7.87_dp
+        d_sp(n)%rho = 7.87_dp
         d_sp(n)%mw = 55.845_dp
         d_sp(n)%m0 = d_sp(n)%mw * amu
-        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho_s
+        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho
         d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
-        d_sp(n)%d0 = 2.0_dp * r0 
+        d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
 
         d_sp(n)%inuc = 0
 
@@ -150,17 +160,36 @@ contains
         d_sp(n)%idx = n
         d_sp(n)%name = sp(n)
 
-        d_sp(n)%rho_s = 3.19_dp
+        d_sp(n)%rho = 3.19_dp
         d_sp(n)%mw = 100.389_dp
         d_sp(n)%m0 = d_sp(n)%mw * amu
-        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho_s
+        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho
         d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
-        d_sp(n)%d0 = 2.0_dp * r0 
+        d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
 
         d_sp(n)%inuc = 0
 
+      case('KCl')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 1.99_dp
+        d_sp(n)%mw = 74.551_dp
+        d_sp(n)%m0 = d_sp(n)%mw * amu
+        d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho
+        d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
+        d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
+
+        d_sp(n)%inuc = 1
+        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
+        d_sp(n)%Nf = 10.0_dp
+
+        V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+        m_seed = V_seed * d_sp(n)%rho
+
       case default
-        print*, 'Class: Species not included yet: ', d_sp(:)%name, 'stopping'
+        print*, 'Class: Species not included yet: ', trim(d_sp(n)%name), 'stopping'
         stop
       end select
 
@@ -175,6 +204,7 @@ contains
     integer, intent(in) :: n_dust
     real(dp), intent(in) :: T
 
+    integer :: n
     real(dp) :: TC
 
     TC = T - 273.15_dp
@@ -199,6 +229,9 @@ contains
       case('MgSiO3','MgSiO3_amorph')
         ! Ackerman & Marley (2001)
         d_sp(n)%p_vap = exp(-58663.0_dp/T + 25.37_dp) * bar
+      case('KCl')
+        ! Morley et al. (2012)
+        d_sp(n)%p_vap = 10.0_dp**(7.611_dp - 11382_dp/T) * bar        
       case default
         print*, 'Vapour pressure species not found: ', trim(d_sp(n)%name), 'STOP'
         stop
@@ -215,6 +248,7 @@ contains
     integer, intent(in) :: n_dust
     real(dp), intent(in) :: T
 
+    integer :: n
     real(dp) :: TC
 
     TC = T - 273.15_dp
@@ -235,6 +269,9 @@ contains
       case('MgSiO3')
         ! Janz 1988
         d_sp(n)%sig = 197.3_dp + 0.098_dp * T
+      case('KCl')
+        ! Janz 1988
+        d_sp(n)%sig = 175.57_dp - 0.07321_dp * T        
       case default
         print*, 'Species surface tension not found: ', trim(d_sp(n)%name), 'STOP'
         stop
@@ -322,4 +359,4 @@ contains
     
   end subroutine eta_construct
 
-end module mini_cloud_class
+end module mini_cloud_class_mod

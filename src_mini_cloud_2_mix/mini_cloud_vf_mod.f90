@@ -37,20 +37,22 @@ module mini_cloud_vf_mod
 
   contains
 
-  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, q_0, q_1, v_f)
+  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_s, sp_bg, q_0, q_1s, v_f)
     implicit none
 
     ! Input variables
     character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, rho_d, q_0, q_1
-    real(dp), dimension(:), intent(in) :: bg_VMR_in
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, q_0
+    real(dp), dimension(:), intent(in) :: bg_VMR_in, q_1s, rho_s
 
     real(dp), intent(out) :: v_f
 
-    integer :: n_gas, n
-    real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta
-    real(dp), allocatable, dimension(:) :: VMR_g
+    integer :: n_gas, n, n_dust
+    real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, rho_d, rho_t
+    real(dp), allocatable, dimension(:) :: VMR_g, V_frac
     real(dp) :: top, bot, eta_g, m_c, r_c, Kn, beta
+
+    n_dust = size(q_1s)
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -96,8 +98,13 @@ module mini_cloud_vf_mod
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
     !! Calculate vf from final results of interation
+    rho_t = sum(q_1s(:))
+    allocate(V_frac(n_dust))
+    V_frac(:) = q_1s(:)/rho_t
+    rho_d = sum(V_frac(:)*rho_s(:))
+
     !! Mean mass of particle
-    m_c = (q_1*rho)/(q_0*nd_atm)
+    m_c = (rho_t*rho)/(q_0*nd_atm)
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
@@ -113,7 +120,7 @@ module mini_cloud_vf_mod
       & * (1.0_dp + & 
       & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
-    deallocate(d_g, LJ_g, molg_g)
+    deallocate(d_g, LJ_g, molg_g, V_frac)
 
   end subroutine mini_cloud_vf
 

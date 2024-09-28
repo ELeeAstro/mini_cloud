@@ -8,8 +8,8 @@ program test_mini_cloud_2
   integer, parameter :: dp = REAL64
 
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
-  real(dp), parameter :: kb = 1.380649e-23_dp
-  real(dp), parameter :: amu = 1.66053906892e-27_dp
+  real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
+  real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
 
   integer :: example, tt, n_it
   character(len=20) :: sp, sp_bg(3)
@@ -77,11 +77,11 @@ program test_mini_cloud_2
       rho_d = 1.99_dp
       mol_w_sp = 74.551_dp
 
-      !! Number density [m-3] of layer
-      nd_atm = P_in/(kb*T_in)  
+      !! Number density [cm-3] of layer
+      nd_atm = (P_in*10.0_dp)/(kb*T_in)  
 
       !! Mass density of layer
-      rho = (P_in*mu_in*amu)/(kb * T_in) ! Mass density [kg m-3]
+      rho = (P_in*10.0_dp*mu_in*amu)/(kb * T_in) ! Mass density [g cm-3]
 
       !! Change vapur VMR to mass density ratio for first iteration
       if (tt == 1) then
@@ -103,15 +103,15 @@ program test_mini_cloud_2
       !! Print to screen current progress
       print*, tt, time, P_in * 1e-5_dp, 'bar ', T_in, 'K ', mu_in, 'g mol-1 ',  trim(sp)
 
-      !! Mean mass of particle
+      !! Mean mass of particle [g]
       m_c = (q_1*rho)/(q_0*nd_atm)
 
-      !! Mass weighted mean radius of particle
-      r_c = ((3.0_dp*m_c)/(4.0_dp*pi*rho_d*1000.0_dp))**(1.0_dp/3.0_dp) * 1e6_dp
+      !! Mass weighted mean radius of particle [um]
+      r_c = ((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp) * 1e4_dp
 
 
       print*, 'q', tt, q_v, q_0, q_1, v_f
-      print*, 'r', tt, m_c, r_c
+      print*, 'r', tt, m_c, r_c, rho_d
       print*, 'o', tt, k_ext(1), ssa(1), g(1), k_ext(n_wl), ssa(n_wl), g(n_wl)
 
       !! mini-cloud test output
