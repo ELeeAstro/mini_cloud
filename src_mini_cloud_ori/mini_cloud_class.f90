@@ -1,14 +1,12 @@
-module mini_cloud_class_mod
-  use, intrinsic :: iso_fortran_env ! Requires fortran 2008
+module mini_cloud_class
+  use mini_cloud_precision
   implicit none
-
-  ! Fortran 2008 intrinsic precisions - reccomended if possible
-  !integer, parameter :: sp = REAL32
-  integer, parameter :: dp = REAL64
-  !integer, parameter :: qp = REAL128
 
   !! Constants
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
+  real(dp), parameter :: twopi = 2.0_dp * atan(1.0_dp)
+  real(dp), parameter :: fourpi = 4.0_dp * pi
+  real(dp), parameter :: fourpi3 = 4.0_dp/3.0_dp * pi
   real(dp), parameter :: third = 1.0_dp/3.0_dp
   real(dp), parameter :: twothird = 2.0_dp/3.0_dp
 
@@ -30,6 +28,10 @@ module mini_cloud_class_mod
   real(dp), parameter :: atm = 1.01325e6_dp ! atm to dyne
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
   real(dp), parameter :: mmHg = 1333.2239_dp  ! mmHg to dyne
+
+  real(dp) :: P_cgs, T, nd_atm
+  !$omp threadprivate (P_cgs, T, nd_atm)
+  real(dp) :: a_seed, Ar_seed, V_seed
 
   type dust
     integer :: idx
