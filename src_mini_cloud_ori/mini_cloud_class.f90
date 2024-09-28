@@ -4,7 +4,7 @@ module mini_cloud_class
 
   !! Constants
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
-  real(dp), parameter :: twopi = 2.0_dp * atan(1.0_dp)
+  real(dp), parameter :: twopi = 2.0_dp * pi
   real(dp), parameter :: fourpi = 4.0_dp * pi
   real(dp), parameter :: fourpi3 = 4.0_dp/3.0_dp * pi
   real(dp), parameter :: third = 1.0_dp/3.0_dp
@@ -15,7 +15,7 @@ module mini_cloud_class
   real(dp), parameter :: sb_c = 5.670374419e-5_dp ! erg cm-2 s-1 K^-4 - Stefan-Boltzmann's constant
   real(dp), parameter :: hp = 6.62607015e-27_dp ! erg s - Planck's constant
   real(dp), parameter :: c_s = 2.99792458e10_dp ! cm s^-1 - Vacuum speed of light
-  real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
+  real(dp), parameter :: amu = 1.66053906892e-24_dp ! g - Atomic mass unit
   real(dp), parameter :: N_A = 6.02214076e23_dp ! mol^-1 - Avogadro's constant
   real(dp), parameter :: eV = 1.60217663e-12_dp
   real(dp), parameter :: gam = 1.4_dp
