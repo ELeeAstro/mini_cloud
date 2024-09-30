@@ -136,7 +136,7 @@ module mini_cloud_2_mix_mod
     allocate(rwork(rworkdim), iwork(iworkdim))
 
     itol = 1
-    rtol = 1.0e-4_dp           ! Relative tolerances for each scalar
+    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
     atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
@@ -211,16 +211,17 @@ module mini_cloud_2_mix_mod
     real(dp) :: m_c, r_c, Kn, beta, vf
 
     real(dp) :: n_d, rho_t, rho_d
+    real(dp), dimension(n_dust) :: m_c_s
     real(dp), dimension(n_dust) :: J_hom, J_het, J_evap
     real(dp), dimension(n_dust) :: rho_s, rho_v, p_v, sat, n_v, dmdt
-    real(dp), dimension(n_dust) :: V_frac
+    real(dp), dimension(n_dust) :: V_frac, V_c_s
 
     !! In this routine, you calculate the instanenous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
     !! Basically, you solve for the RHS of the ODE for each moment
 
     !! Limit y values
-    !y(:) = max(y(:),1e-30_dp)
+    !y(:) = max(y(:),1e-99_dp)
 
     !! Convert y to real physical numbers to calculate f
     n_d = y(1) * nd_atm ! Convert to real number density
@@ -234,10 +235,21 @@ module mini_cloud_2_mix_mod
     !! Mean mass of particle
     rho_t = sum(rho_s(:))
     m_c = max(rho_t/n_d, m_seed)
-
     !! Find weighted bulk density of mixed grain composition using volume fraction
-    V_frac(:) = max(rho_s(:)/rho_t,1e-30_dp)
+    V_frac(:) = max(rho_s(:)/rho_t,1e-99_dp)
     rho_d = sum(V_frac(:)*d_sp(:)%rho)
+
+    ! !! Mean mass of particle per species
+    ! m_c_s(:) = rho_s(:)/n_d
+    ! !! Mean volumes of particle per species
+    ! V_c_s(:) = m_c_s(:)/d_sp(:)%rho
+    ! !! Volume fraction of species in grain
+    ! V_frac(:) = V_c_s(:)/sum(V_c_s(:))
+    ! !! Volume weighted bulk density
+    ! rho_d = sum(V_frac(:)*d_sp(:)%rho)
+    ! !! Mean particle mass [g]
+    ! rho_t = sum(rho_s(:))
+    ! m_c = max(rho_t/n_d,m_seed)
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
@@ -314,7 +326,7 @@ module mini_cloud_2_mix_mod
 
     do n = 1, n_dust
 
-      Ak = 1.0_dp!exp((2.0_dp*d_sp(n)%V0*d_sp(n)%sig)/(kb * T * r_c))
+      Ak = exp((2.0_dp*d_sp(n)%V0*d_sp(n)%sig)/(kb * T * r_c))
 
       if (Kn >= 1.0_dp) then
         !! Kinetic regime [g s-1]

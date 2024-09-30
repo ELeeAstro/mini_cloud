@@ -21,6 +21,7 @@ module mini_cloud_2_mod
   real(dp), parameter :: bar = 1.0e6_dp ! bar to dyne
   real(dp), parameter :: atm = 1.01325e6_dp ! atm to dyne
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
+  real(dp), parameter :: mmHg = 1.3328e3_dp ! mmHg to dyne
 
   !! Global variables
   real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
@@ -601,13 +602,20 @@ module mini_cloud_2_mod
       p_vap_sp = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
     !case('TiC')
     !case('SiC')
-    !case('CaTiO3')
+    case('CaTiO3')
+      ! Kozasa et al. (1987)
+      p_vap_sp = exp(-79568.2_dp/T + 42.0204_dp) * atm
     case('TiO2')
-      ! Woitke & Helling (2004)
-      p_vap_sp = exp(35.8027_dp - 74734.7_dp/T)
+      ! GGChem 5 polynomial NIST fit
+      p_vap_sp = exp(-7.70443e4_dp/T +  4.03144e1_dp - 2.59140e-3_dp*T &
+        &  + 6.02422e-7_dp*T**2 - 6.86899e-11_dp*T**3)
+    case('VO')
+      ! NIST 5 param fit
+      p_vap = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
+        & + 5.72078e-7_dp*T**2 - 7.41840e-11_dp*T**3)
     case('Al2O3')
-      ! Kozasa et al. (1989)
-      p_vap_sp = exp(-73503.0_dp/T + 22.01_dp) * atm
+      ! Kozasa et al. (1987)
+      p_vap_sp = exp(-73503.0_dp/T + 22.005_dp) * atm
     case('Fe')
       ! Elspeth note: Changed to Ackerman & Marley et al. (2001) expression
       if (T > 1800.0_dp) then
@@ -615,22 +623,35 @@ module mini_cloud_2_mod
       else
         p_vap_sp = exp(15.71_dp - 47664.0_dp/T) * bar
       end if
+    case('FeS')
+      ! GGChem 5 polynomial NIST fit
+      p_vap_sp = exp(-5.69922e4_dp/T + 3.86753e1_dp - 4.68301e-3_dp*T &
+        & + 1.03559e-6_dp*T**2 - 8.42872e-11_dp*T**3)
+    case('FeO')
+      ! GGChem 5 polynomial NIST fit
+      p_vap_sp = exp(-6.30018e4_dp/T + 3.66364e1_dp - 2.42990e-3_dp*T &
+        & + 3.18636e-7_dp*T**2)
     case('Mg2SiO4')
       ! Kozasa et al. (1989)
-      p_vap_sp = exp(-62279_dp/T + 20.944_dp) * atm
+      p_vap_sp = exp(-62279.0_dp/T + 20.944_dp) * atm
     case('MgSiO3','MgSiO3_amorph')
       ! Ackerman & Marley (2001)
       p_vap_sp = exp(-58663.0_dp/T + 25.37_dp) * bar
+    case('MgO')
+      ! GGChem 5 polynomial NIST fit
+      p_vap_sp = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
+        &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
     case('SiO2','SiO2_amorph')
-      ! NIST 5 param fit
+      ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-7.28086e4_dp/T + 3.65312e1_dp - 2.56109e-4_dp*T &
-      & - 5.24980e-7_dp*T**2 + 1.53343E-10_dp*T**3) * bar
+      & - 5.24980e-7_dp*T**2 + 1.53343E-10_dp*T**3) 
     case('SiO')
       ! Gail et al. (2013)
       p_vap_sp = exp(-49520.0_dp/T + 32.52_dp)
     case('Cr')
-      ! Morley et al. (2012)
-      p_vap_sp = 10.0_dp**(7.490_dp - 20592_dp/T) * bar
+      ! GGChem 5 polynomial NIST fit
+      p_vap_sp = exp(-4.78455e+4_dp/T + 3.22423e1_dp - 5.28710e-4_dp*T & 
+        &  - 6.17347e-8_dp*T**2 + 2.88469e-12_dp*T**3)
      case('MnS')
       ! Morley et al. (2012)
       p_vap_sp = 10.0_dp**(11.532_dp - 23810.0_dp/T) * bar
@@ -641,15 +662,13 @@ module mini_cloud_2_mod
       ! Morley et al. (2012)
       p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
     case('KCl')
-      ! Morley et al. (2012)
-      p_vap_sp = 10.0_dp**(7.611_dp - 11382_dp/T) * bar
+      ! GGChem 5 polynomial NIST fit
+      p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
+        & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
     case('NaCl')
-      ! Stull (1947)
-      if (T < 83.0_dp) then ! Limiter for very cold T
-        p_vap_sp = 10.0_dp**(5.07184_dp - 8388.497_dp / (83.0_dp - 82.638_dp)) * bar
-      else
-        p_vap_sp = 10.0_dp**(5.07184_dp - 8388.497_dp / (T - 82.638_dp)) * bar
-      end if
+      ! GGChem 5 polynomial NIST fit
+      p_vap_sp = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e3_dp*T & 
+        & + 5.30965e-7_dp*T**2 -2.59584e-12_dp*T**3)
     case('NH4Cl')
       p_vap_sp = 10.0_dp**(7.0220_dp - 4302.0_dp/T) * bar
     case('H2O')
@@ -698,6 +717,17 @@ module mini_cloud_2_mod
       else
         p_vap_sp = exp(9.6_dp - 7510.0_dp/T) * bar
       end if
+    case('CO')
+      ! Yaws
+      p_vap_sp = 10.0_dp**(51.8145e0_dp - 7.8824e2_dp/T - 2.2734e1_dp*log10(T) &
+        & + 5.1225e-2_dp*T + 4.6603e-11_dp*T**2) * mmHg
+    case('CO2')
+      ! Yaws
+      p_vap_sp = 10.0_dp**(35.0187e0_dp - 1.5119e3_dp/T - 1.1335e1_dp*log10(T) &
+        & + 9.3383e-3_dp*T + 7.7626e-10_dp*T**2) * mmHg
+    case('H2SO4')
+      ! GGChem 5 polynomial NIST fit
+      p_vap_sp = exp(-1.01294e4_dp/T + 3.55465e1_dp - 8.34848e-3_dp*T)
     case default
       print*, 'Vapour pressure species not found: ', trim(sp), 'STOP'
       stop
@@ -721,10 +751,15 @@ module mini_cloud_2_mod
     case('C')
       ! Tabak et al. (1995)
       sig = 1400.0_dp
-    case('CaTiO3')
-      sig = 915.0_dp
     case('TiC')
-      sig = 1240.0_dp
+      ! Chigai et al. (1999)
+      sig = 1242.0_dp
+    case ('SiC')
+      ! Nozawa et al. (2003)
+      sig = 1800.0_dp
+    case('CaTiO3')
+      ! Kozasa et al. (1987)
+      sig = 494.0_dp      
     case('TiO2')
       ! Sindel et al. (2022)
       sig = 589.79_dp - 0.0708_dp * T
@@ -749,9 +784,6 @@ module mini_cloud_2_mod
     case('Mg2SiO4')
       ! Kozasa et al. (1989)
       sig = 436.0_dp
-    case('SiC')
-      ! Nozawa et al. (2003)
-      sig = 1800.0_dp
     case('SiO')
       ! Gail and Sedlmayr (1986)
       sig = 500.0_dp
