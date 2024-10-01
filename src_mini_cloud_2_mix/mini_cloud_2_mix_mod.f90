@@ -5,7 +5,7 @@ module mini_cloud_2_mix_mod
   !! Global variables
   real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
 
-  real(dp) :: mfp, eta, nu, eps_d
+  real(dp) :: mfp, eta, nu, eps_d, kappa_a
 
   logical :: first_call = .True.
 
@@ -46,8 +46,9 @@ module mini_cloud_2_mix_mod
 
     !! Work variables
     integer :: n_bg
+    real(dp), allocatable, dimension(:) :: rho_old_tot
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: eta_g, bot, top
+    real(dp) :: eta_g, bot, top, diff
 
     n_dust = size(sp)
 
@@ -104,6 +105,9 @@ module mini_cloud_2_mix_mod
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*Rgas*T))
 
+    !! Calculate atmospheric conductivity of this layer
+    kappa_a = atm_conduct(T)
+
     !! Find saturation vapour pressure for each species
     call p_vap_sp(n_dust, T)
 
@@ -136,7 +140,7 @@ module mini_cloud_2_mix_mod
     allocate(rwork(rworkdim), iwork(iworkdim))
 
     itol = 1
-    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
+    rtol = 1.0e-4_dp           ! Relative tolerances for each scalar
     atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
@@ -147,7 +151,7 @@ module mini_cloud_2_mix_mod
     rwork(6) = 0.0_dp       ! Maximum timestep
 
     iwork(5) = 0               ! Max order required
-    iwork(6) = 100000               ! Max number of internal steps
+    iwork(6) = 1000000               ! Max number of internal steps
     iwork(7) = 1                ! Number of error messages
 
     allocate(y(n_eq))
@@ -156,6 +160,10 @@ module mini_cloud_2_mix_mod
     y(1) = q_0
     y(2:2+n_dust-1) = q_1s(:)
     y(2+n_dust:2+n_dust+n_dust-1) = q_v(:)
+
+    !! Check convergence
+    allocate(rho_old_tot(n_dust))
+    rho_old_tot(:) = q_1s(:) + q_v(:)
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
@@ -174,6 +182,9 @@ module mini_cloud_2_mix_mod
         & istate, iopt, rwork, rworkdim, iwork, iworkdim, jac_dum, mf)
 
       ncall = ncall + 1
+
+      !! Limit y values
+      y(:) = max(y(:),1e-30_dp)
 
       if (mod(ncall,10) == 0) then
         istate = 1
@@ -194,7 +205,19 @@ module mini_cloud_2_mix_mod
     q_1s(:) = y(2:2+n_dust-1)
     q_v(:) = y(2+n_dust:2+n_dust+n_dust-1)
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g)
+    ! Check total mass was (mostly conserved)
+    !if ((istate < -1)) then
+    do n = 1, n_dust
+      diff = (q_1s(n) + q_v(n))/rho_old_tot(n)
+      if (abs(diff) > 1.05_dp) then
+        print*, 'not conserved', n, rho_old_tot(n), (q_1s(n) + q_v(n))
+        stop
+      end if
+      
+    end do
+    !end if
+
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, rho_old_tot)
 
   end subroutine mini_cloud_2_mix
 
@@ -210,6 +233,7 @@ module mini_cloud_2_mix_mod
     real(dp) :: f_coal, f_coag, f_turb
     real(dp) :: m_c, r_c, Kn, beta, vf
 
+    integer :: i
     real(dp) :: n_d, rho_t, rho_d
     real(dp), dimension(n_dust) :: m_c_s
     real(dp), dimension(n_dust) :: J_hom, J_het, J_evap
@@ -221,7 +245,7 @@ module mini_cloud_2_mix_mod
     !! Basically, you solve for the RHS of the ODE for each moment
 
     !! Limit y values
-    !y(:) = max(y(:),1e-99_dp)
+    y(:) = max(y(:),1e-30_dp)
 
     !! Convert y to real physical numbers to calculate f
     n_d = y(1) * nd_atm ! Convert to real number density
@@ -266,7 +290,7 @@ module mini_cloud_2_mix_mod
       & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
     !! Find supersaturation ratio
-    sat(:) = p_v(:)/d_sp(:)%p_vap
+    sat(:) = max(p_v(:)/d_sp(:)%p_vap,1e-99_dp)
 
     !! Calculate condensation rate
     call calc_cond(n_dust, r_c, Kn, n_v, sat, V_frac, dmdt)
@@ -306,8 +330,9 @@ module mini_cloud_2_mix_mod
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm
-    f(2:2+n_dust-1) = f(2:2+n_dust-1)/rho
-    f(2+n_dust:2+n_dust+n_dust-1) = f(2+n_dust:2+n_dust+n_dust-1)/rho
+    !f(2:2+n_dust-1) = f(2:2+n_dust-1)/rho
+    !f(2+n_dust:2+n_dust+n_dust-1) = f(2+n_dust:2+n_dust+n_dust-1)/rho
+    f(2:) = f(2:)/rho
 
   end subroutine RHS_mom
 
@@ -322,19 +347,29 @@ module mini_cloud_2_mix_mod
     real(dp), dimension(n_dust), intent(out) :: dmdt
 
     integer :: n
-    real(dp) :: Ak
+    real(dp) :: Ak, Lambda, bot
 
     do n = 1, n_dust
 
-      Ak = exp((2.0_dp*d_sp(n)%V0*d_sp(n)%sig)/(kb * T * r_c))
+      !if (sat(n) < 1.1_dp) then
+        Ak = 1.0_dp
+      !else
+      !Ak = exp((2.0_dp*d_sp(n)%V0*d_sp(n)%sig)/(kb * T * r_c))
+      !end if
 
       if (Kn >= 1.0_dp) then
         !! Kinetic regime [g s-1]
         dmdt(n) = 4.0_dp * pi * r_c**2 * d_sp(n)%vth * d_sp(n)%m0 * n_v(n) * (1.0_dp - Ak/sat(n)) * V_frac(n)
       else
-        !! Diffusive limited regime [g s-1]
-        dmdt(n) = 4.0_dp * pi * r_c * d_sp(n)%D * d_sp(n)%m0 * n_v(n) * (1.0_dp - Ak/sat(n)) * V_frac(n)
+        !! Diffusive limited regime [g s-1] - including latent heat effect
+        Lambda = max((d_sp(n)%L/(kappa_a*T))*((d_sp(n)%L*d_sp(n)%mw)/(Rgas*T) - 1.0_dp), 0.0_dp)
+        bot = 1.0_dp + d_sp(n)%D * d_sp(n)%m0 * n_v(n) * Lambda
+        dmdt(n) = (4.0_dp * pi * r_c * d_sp(n)%D * d_sp(n)%m0 * n_v(n) * (1.0_dp - Ak/sat(n)))/bot * V_frac(n)
       end if
+
+      ! if ((dmdt(n) < 0.0_dp) .and. (V_frac(n) < 1e-30_dp)) then
+      !   dmdt(n) = 0.0_dp
+      ! end if
 
     end do
 
@@ -503,7 +538,7 @@ module mini_cloud_2_mix_mod
 
         !! Check if average mass is around 0.1% the seed particle mass
         !! This means the core is (probably) exposed to the air and can evaporate freely
-        if (m_c <= (1.001_dp * m_seed)) then
+        if (m_c <= (1.0001_dp * m_seed)) then
           tau_evap = 1.0_dp !max(m_c/abs(f_cond),1.0_dp)
           !! Seed particle evaporation rate [cm-3 s-1]
           J_evap(n) = -n_d/tau_evap

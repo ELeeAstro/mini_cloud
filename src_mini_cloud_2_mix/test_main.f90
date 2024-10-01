@@ -43,9 +43,9 @@ program test_mini_cloud_2_mix
   example = 1
 
   !! Initial conditions
-  q_v(:) = (/1.041e-7_dp, 2.771e-6_dp, 2.231e-5_dp, 3.588e-5_dp/)  !Ti, Mg, Fe and Al abundances at start
+  q_v(:) = (/1.041e-7_dp,  3.588e-5_dp, 2.231e-5_dp,  2.771e-6_dp/)  !Ti, Mg, Fe and Al abundances at start
   !q_v(:) = (/1.17e-7_dp/)
-  !q_v(:) = (/1.041e-7_dp, 2.771e-6_dp/)
+  !q_v(:) = (/1.041e-7_dp, 3.588e-5_dp, 2.231e-5_dp/)
 
   q_0 = 1.0e-30_dp    ! ~Zero clouds at start 
   q_1s(:) = 1.0e-30_dp
@@ -84,17 +84,17 @@ program test_mini_cloud_2_mix
       grav_in = 10.0_dp
 
       !! Assumed condensate species
-      sp(:) = (/'TiO2  ', 'Al2O3 ', 'Fe    ', 'MgSiO3'/)
-      rho_s(:) = (/4.23_dp,3.986_dp,7.87_dp, 3.19_dp/)
-      mw(:) = (/79.866_dp,101.961_dp,55.845_dp,100.389_dp/)
+      sp(:) = (/'TiO2  ','MgSiO3', 'Fe    ', 'Al2O3 ' /)
+      rho_s(:) = (/4.23_dp,3.19_dp ,7.87_dp ,3.986_dp/)
+      mw(:) = (/79.866_dp,100.389_dp,55.845_dp,101.961_dp/)
 
-      !sp(:) = (/'KCl'/)
-      !rho_s(:) = (/1.99_dp/)
-      !mw(:) = (/74.551_dp/)
+      ! sp(:) = (/'KCl'/)
+      ! rho_s(:) = (/1.99_dp/)
+      ! mw(:) = (/74.551_dp/)
 
-      ! sp(:) = (/'TiO2  ', 'Al2O3 '/)
-      ! rho_s(:) = (/4.23_dp,3.986_dp/)
-      ! mw(:) = (/79.866_dp,101.961_dp/) 
+      ! sp(:) = (/'TiO2   ', 'MgSiO3 ','Fe     '/)
+      ! rho_s(:) = (/4.23_dp,3.19_dp,7.87_dp/)
+      ! mw(:) = (/79.866_dp,100.389_dp,55.845_dp/) 
 
       !! Change vapur VMR to mass density ratio for first iteration
       if (tt == 1) then

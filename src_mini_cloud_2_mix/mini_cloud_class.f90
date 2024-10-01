@@ -70,7 +70,7 @@ module mini_cloud_class_mod
     real(dp) :: sat
     real(dp) :: vth, D
 
-    real(dp) :: sig
+    real(dp) :: sig, L
 
     integer :: inuc
     real(dp) :: Nl, Nf, a0, alpha
@@ -124,6 +124,8 @@ contains
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 0.0_dp
 
+        d_sp(n)%L = 7.70443e4_dp * Rgas / d_sp(n)%mw 
+
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
 
@@ -139,6 +141,8 @@ contains
         d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
         d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
 
+        d_sp(n)%L = 73503.0_dp * Rgas / d_sp(n)%mw 
+
         d_sp(n)%inuc = 0
 
       case ('Fe')
@@ -153,6 +157,8 @@ contains
         d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
         d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
 
+        d_sp(n)%L = 37120.0_dp * Rgas / d_sp(n)%mw 
+
         d_sp(n)%inuc = 0
 
       case('MgSiO3')
@@ -166,6 +172,8 @@ contains
         d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho
         d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
         d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
+
+        d_sp(n)%L = 58663.0_dp * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0
 
@@ -185,6 +193,8 @@ contains
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 10.0_dp
 
+        d_sp(n)%L = 2.69250e4 * Rgas / d_sp(n)%mw
+
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
 
@@ -196,6 +206,42 @@ contains
     end do
 
   end subroutine mini_cloud_init
+
+  function atm_conduct(T) result(kap)
+    implicit none
+
+    real(dp), intent(in) :: T
+    real(dp) :: kap
+
+    real(dp), dimension(7), parameter :: A1 = &
+      & (/-3.40976e-1_dp, 4.58820e0_dp, -1.45080e0_dp, &
+      &    3.26394e-1_dp, 3.16939e-3_dp, 1.90592e-4_dp, -1.13900e-6_dp/)
+    real(dp), dimension(4), parameter :: A2 = &
+      & (/1.38497e2_dp, -2.21878e1_dp, 4.57151e0_dp, 1.0e0_dp/)
+    real(dp), parameter :: Tc = 33.145_dp
+
+    integer :: i
+    real(dp) :: TTc, top, bot
+
+    !! Pure Hydrogen dilute limit fitting function from Assael et al. (2011):
+    !! Correlation of the Thermal Conductivity of Normal and Parahydrogen from the Triple Point to 1000 K and up to 100 MPa
+
+    TTc = T/Tc
+
+    top = 0.0_dp
+    do i = 1, 7
+      top = top + A1(i)*TTc**(i-1)
+    end do
+
+    bot = 0.0_dp
+    do i = 1, 4
+      bot = bot + A2(i)*TTc**(i-1)
+    end do
+
+    !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
+    kap = top/bot * 1e5_dp 
+
+  end function atm_conduct
 
   !! Vapour pressure for each species
   subroutine p_vap_sp(n_dust,T)
@@ -214,8 +260,9 @@ contains
       ! Return vapour pressure in dyne
       select case(trim(d_sp(n)%name))
       case('TiO2')
-        ! Woitke & Helling (2004)
-        d_sp(n)%p_vap = exp(35.8027_dp - 74734.7_dp/T)
+        ! GGChem 5 polynomial NIST fit
+        d_sp(n)%p_vap = exp(-7.70443e4_dp/T +  4.03144e1_dp - 2.59140e-3_dp*T &
+        &  + 6.02422e-7_dp*T**2 - 6.86899e-11_dp*T**3)
       case('Al2O3')
         ! Kozasa et al. (1989)
         d_sp(n)%p_vap = exp(-73503.0_dp/T + 22.01_dp) * atm
@@ -230,8 +277,9 @@ contains
         ! Ackerman & Marley (2001)
         d_sp(n)%p_vap = exp(-58663.0_dp/T + 25.37_dp) * bar
       case('KCl')
-        ! Morley et al. (2012)
-        d_sp(n)%p_vap = 10.0_dp**(7.611_dp - 11382_dp/T) * bar        
+        ! GGChem 5 polynomial NIST fit
+        d_sp(n)%p_vap = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
+        & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)       
       case default
         print*, 'Vapour pressure species not found: ', trim(d_sp(n)%name), 'STOP'
         stop
