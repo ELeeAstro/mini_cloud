@@ -36,7 +36,7 @@ module mini_cloud_2_mix_mod
     real(dp) :: t_now
 
     ! DLSODE variables
-    integer :: n_eq
+    integer :: n_eq, maxord, lwm
     real(dp), allocatable, dimension(:) :: y
     real(dp), allocatable, dimension(:) :: rwork
     integer, allocatable, dimension(:) :: iwork
@@ -46,9 +46,9 @@ module mini_cloud_2_mix_mod
 
     !! Work variables
     integer :: n_bg
-    real(dp), allocatable, dimension(:) :: rho_old_tot
+    real(dp), allocatable, dimension(:) :: q_1s_old, q_v_old
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: eta_g, bot, top, diff
+    real(dp) :: eta_g, bot, top, diff, new_frac
 
     n_dust = size(sp)
 
@@ -56,7 +56,6 @@ module mini_cloud_2_mix_mod
       call mini_cloud_init(n_dust, sp)
       first_call = .False.
     end if
-
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -135,35 +134,42 @@ module mini_cloud_2_mix_mod
     ! mf = 21 - full jacobian matrix with jacobian save
     ! mf = 22 - internal calculated jacobian
     mf = 22
-    rworkdim = 22 + 9*n_eq + n_eq**2
+
+    ! Calcuate array sizes
+    maxord = 1
+    lwm = n_eq**2 + 2
+
+    rworkdim = 20 + n_eq*(maxord + 1) + 3*n_eq + lwm
     iworkdim = 20 + n_eq
     allocate(rwork(rworkdim), iwork(iworkdim))
 
     itol = 1
     rtol = 1.0e-4_dp           ! Relative tolerances for each scalar
-    atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
+    atol = 1.0e-30_dp          ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
     iwork(:) = 0
 
-    rwork(1) = 0.0_dp               ! Critical T value (don't integrate past time here)
-    rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DVODE)
-    rwork(6) = 0.0_dp       ! Maximum timestep
+    rwork(1) = 0.0_dp           ! Critical T value (don't integrate past time here)
+    rwork(5) = 0.0_dp           ! Initial starting timestep (start low, will adapt in DVODE)
+    rwork(6) = 0.0_dp           ! Maximum timestep
+    rwork(7) = 0.0_dp           ! Miniumum timestep
 
-    iwork(5) = 0               ! Max order required
-    iwork(6) = 1000000               ! Max number of internal steps
+    iwork(5) = maxord           ! Max order required
+    iwork(6) = 1000000          ! Max number of internal steps
     iwork(7) = 1                ! Number of error messages
 
-    allocate(y(n_eq))
 
-    !! Give tracer values to y
+    !! Save old values for later mass check
+    allocate(q_1s_old(n_dust), q_v_old(n_dust))
+    q_1s_old(:) = max(q_1s(:),1e-30_dp)
+    q_v_old(:) = max(q_v(:),1e-30_dp)
+
+    !! Give initial tracer values to y
+    allocate(y(n_eq))
     y(1) = q_0
     y(2:2+n_dust-1) = q_1s(:)
     y(2+n_dust:2+n_dust+n_dust-1) = q_v(:)
-
-    !! Check convergence
-    allocate(rho_old_tot(n_dust))
-    rho_old_tot(:) = q_1s(:) + q_v(:)
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
@@ -186,38 +192,46 @@ module mini_cloud_2_mix_mod
       !! Limit y values
       y(:) = max(y(:),1e-30_dp)
 
-      if (mod(ncall,10) == 0) then
-        istate = 1
-      else  if (istate == -1) then
-        istate = 2
-      else if (istate < -1) then
-        print*, 'dlsode: ', istate
+      select case(istate)
+      case(1,2)
+        !! End state reached - exit
         exit
-      end if
-
+      case(-1)
+        !! Exessive work needed, call again
+        istate = 2
+        cycle
+      case(-6:-2)
+        !! Error in dlsode integration, panic exit loop
+        print*, 'dlsode: ', istate
+        exit        
+      case default
+        print*, 'non valid dlsode istate: ', istate, 'STOP'
+        stop
+      end select
     end do
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
 
-    !! Give y values to tracers
+    !! Give final y values to tracers
     q_0 = y(1)
     q_1s(:) = y(2:2+n_dust-1)
     q_v(:) = y(2+n_dust:2+n_dust+n_dust-1)
 
-    ! Check total mass was (mostly conserved)
-    !if ((istate < -1)) then
+    ! Check total mass was (mostly) conserved for each species
     do n = 1, n_dust
-      diff = (q_1s(n) + q_v(n))/rho_old_tot(n)
-      if (abs(diff) > 1.05_dp) then
-        print*, 'not conserved', n, rho_old_tot(n), (q_1s(n) + q_v(n))
-        stop
-      end if
-      
+      diff = (q_1s(n) + q_v(n))/(q_1s_old(n) + q_v_old(n))
+      if (abs(diff) > 1.0001_dp) then
+        !! If greater than 0.1% mass loss/gain, attempt recovery
+        print*, 'not conserved', n, (q_1s_old(n) + q_v_old(n)), (q_1s(n) + q_v(n)), diff
+        new_frac = q_1s(n)/(q_1s(n) + q_v(n))
+        q_1s(n) = (q_1s_old(n) + q_v_old(n)) * new_frac
+        q_v(n) = (q_1s_old(n) + q_v_old(n)) - q_1s(n)
+        !stop
+      end if 
     end do
-    !end if
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, rho_old_tot)
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, q_1s_old, q_v_old)
 
   end subroutine mini_cloud_2_mix
 
@@ -330,8 +344,6 @@ module mini_cloud_2_mix_mod
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm
-    !f(2:2+n_dust-1) = f(2:2+n_dust-1)/rho
-    !f(2+n_dust:2+n_dust+n_dust-1) = f(2+n_dust:2+n_dust+n_dust-1)/rho
     f(2:) = f(2:)/rho
 
   end subroutine RHS_mom
@@ -351,11 +363,7 @@ module mini_cloud_2_mix_mod
 
     do n = 1, n_dust
 
-      !if (sat(n) < 1.1_dp) then
-        Ak = 1.0_dp
-      !else
-      !Ak = exp((2.0_dp*d_sp(n)%V0*d_sp(n)%sig)/(kb * T * r_c))
-      !end if
+      Ak = exp((2.0_dp*d_sp(n)%V0*d_sp(n)%sig)/(kb * T * r_c))
 
       if (Kn >= 1.0_dp) then
         !! Kinetic regime [g s-1]
@@ -366,10 +374,6 @@ module mini_cloud_2_mix_mod
         bot = 1.0_dp + d_sp(n)%D * d_sp(n)%m0 * n_v(n) * Lambda
         dmdt(n) = (4.0_dp * pi * r_c * d_sp(n)%D * d_sp(n)%m0 * n_v(n) * (1.0_dp - Ak/sat(n)))/bot * V_frac(n)
       end if
-
-      ! if ((dmdt(n) < 0.0_dp) .and. (V_frac(n) < 1e-30_dp)) then
-      !   dmdt(n) = 0.0_dp
-      ! end if
 
     end do
 
@@ -530,23 +534,19 @@ module mini_cloud_2_mix_mod
       end if
 
       if ((dmdt(n) >= 0.0_dp) .or. (n_d/nd_atm <= 1e-29_dp)) then
-
         !! If growing or too little number density then evaporation can't take place
         J_evap(n) = 0.0_dp
-
       else 
-
         !! Check if average mass is around 0.1% the seed particle mass
         !! This means the core is (probably) exposed to the air and can evaporate freely
         if (m_c <= (1.0001_dp * m_seed)) then
-          tau_evap = 1.0_dp !max(m_c/abs(f_cond),1.0_dp)
+          tau_evap = 10.0_dp !max(m_c/abs(f_cond),1.0_dp)
           !! Seed particle evaporation rate [cm-3 s-1]
           J_evap(n) = -n_d/tau_evap
         else
           !! There is still some mantle to evaporate from
           J_evap(n) = 0.0_dp
         end if
-
       end if
 
     end do

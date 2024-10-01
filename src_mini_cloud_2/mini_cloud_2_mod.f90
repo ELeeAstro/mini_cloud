@@ -21,7 +21,7 @@ module mini_cloud_2_mod
   real(dp), parameter :: bar = 1.0e6_dp ! bar to dyne
   real(dp), parameter :: atm = 1.01325e6_dp ! atm to dyne
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
-  real(dp), parameter :: mmHg = 1.3328e3_dp ! mmHg to dyne
+  real(dp), parameter :: mmHg = 1333.22387415_dp  ! mmHg to dyne
 
   !! Global variables
   real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
