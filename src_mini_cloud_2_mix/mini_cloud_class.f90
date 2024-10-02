@@ -112,7 +112,7 @@ contains
         d_sp(n)%idx = n
         d_sp(n)%name = sp(n)
 
-        d_sp(n)%rho = 2.10_dp
+        d_sp(n)%rho = 2.27_dp
         d_sp(n)%mw = 12.01070_dp
 
         d_sp(n)%L = 8.65139e4_dp * Rgas / d_sp(n)%mw 
@@ -143,7 +143,7 @@ contains
         d_sp(n)%idx = n
         d_sp(n)%name = sp(n)
 
-        d_sp(n)%rho = 3.986_dp
+        d_sp(n)%rho = 3.97_dp
         d_sp(n)%mw = 101.961_dp
 
         d_sp(n)%L = 73503.0_dp * Rgas / d_sp(n)%mw 
@@ -167,6 +167,18 @@ contains
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
 
+      case('VO')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 5.76_dp
+        d_sp(n)%mw = 66.94090_dp
+
+        d_sp(n)%L = 6.74603e4_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
       case('Fe')
 
         d_sp(n)%idx = n
@@ -176,6 +188,42 @@ contains
         d_sp(n)%mw = 55.845_dp
 
         d_sp(n)%L = 37120.0_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
+      case('FeS')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 4.83_dp
+        d_sp(n)%mw = 87.91_dp
+
+        d_sp(n)%L = 5.69922e4_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
+      case('FeO')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 5.99_dp
+        d_sp(n)%mw = 71.8444_dp
+
+        d_sp(n)%L = 6.30018e4_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
+      case('Mg2SiO4')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 3.21_dp
+        d_sp(n)%mw = 140.6931_dp
+
+        d_sp(n)%L = 62279.0_dp * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0
 
@@ -191,6 +239,90 @@ contains
 
         d_sp(n)%inuc = 0
 
+      case('MgO')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 3.58_dp
+        d_sp(n)%mw = 40.30440_dp
+
+        d_sp(n)%L = 7.91838e4_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
+      case('SiO2')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 2.648_dp
+        d_sp(n)%mw = 60.08430_dp
+
+        d_sp(n)%L = 7.28086e4_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
+      case('SiO')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 2.18_dp
+        d_sp(n)%mw = 44.08490_dp
+
+        d_sp(n)%L = 49520.0_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 1
+
+      case('Cr')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 7.19_dp
+        d_sp(n)%mw = 51.99610_dp
+
+        d_sp(n)%L = 4.78455e4_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
+      case('MnS')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 4.08_dp
+        d_sp(n)%mw = 87.0030_dp
+
+        d_sp(n)%L = 23810.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
+      case('Na2S')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 1.86_dp
+        d_sp(n)%mw = 78.0445_dp
+
+        d_sp(n)%L = 13889.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0        
+     
+      case('ZnS')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 4.09_dp
+        d_sp(n)%mw = 97.4450_dp
+
+        d_sp(n)%L = 15873.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0  
+        
       case('KCl')
 
         d_sp(n)%idx = n
@@ -208,6 +340,155 @@ contains
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
 
+      case('NaCl')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 2.165_dp
+        d_sp(n)%mw = 58.4428_dp
+
+        d_sp(n)%L = 2.79146e4_dp * Rgas / d_sp(n)%mw
+
+        d_sp(n)%inuc = 1
+        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
+        d_sp(n)%Nf = 10.0_dp
+
+        V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+        m_seed = V_seed * d_sp(n)%rho
+
+      case('NH4Cl')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 1.52_dp
+        d_sp(n)%mw = 53.4915_dp
+
+        d_sp(n)%L = 4302.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0  
+
+      case('H2O')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 0.93_dp
+        d_sp(n)%mw = 18.01528_dp
+
+        d_sp(n)%L = 2257.0e7_dp ! Vapourisation assumed
+
+        d_sp(n)%inuc = 0  
+
+      case('NH3')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 0.87_dp
+        d_sp(n)%mw = 17.03052_dp
+
+        d_sp(n)%L = 1371.0e7_dp ! Vapourisation assumed
+
+        d_sp(n)%inuc = 0 
+
+      case('CH4')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 0.656_dp
+        d_sp(n)%mw = 16.0425_dp
+
+        d_sp(n)%L = 480.6e7_dp ! Vapourisation assumed
+
+        d_sp(n)%inuc = 0
+
+      case('NH4SH')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 1.17_dp
+        d_sp(n)%mw = 51.1114_dp
+
+        d_sp(n)%L = 2409.4_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw
+
+        d_sp(n)%inuc = 0
+
+      case('H2S')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 1.12_dp
+        d_sp(n)%mw = 34.0809_dp
+
+        d_sp(n)%L = 958.587_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw
+
+        d_sp(n)%inuc = 0
+
+      case('S2')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 2.07_dp
+        d_sp(n)%mw = 64.1300_dp
+
+        d_sp(n)%L = 14000.0_dp * Rgas / d_sp(n)%mw
+
+        d_sp(n)%inuc = 0
+
+      case('S8')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 2.07_dp
+        d_sp(n)%mw = 256.5200_dp
+
+        d_sp(n)%L = 7510.0_dp * Rgas / d_sp(n)%mw
+
+        d_sp(n)%inuc = 0
+
+      case('CO')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 1.14_dp
+        d_sp(n)%mw = 28.0101_dp
+
+        d_sp(n)%L = 7.8824e2_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw
+
+        d_sp(n)%inuc = 0   
+
+      case('CO2')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 1.98_dp
+        d_sp(n)%mw = 44.0095_dp
+
+        d_sp(n)%L = 1.5119e3_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw
+
+        d_sp(n)%inuc = 0
+
+      case('H2SO4')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 1.6_dp
+        d_sp(n)%mw = 98.0785_dp
+
+        d_sp(n)%L = 1.01294e4_dp * Rgas / d_sp(n)%mw
+
+        d_sp(n)%inuc = 0
+
       case default
         print*, 'Class: Species not included yet: ', trim(d_sp(n)%name), 'stopping'
         stop
@@ -223,42 +504,6 @@ contains
     end do
 
   end subroutine mini_cloud_init
-
-  function atm_conduct(T) result(kap)
-    implicit none
-
-    real(dp), intent(in) :: T
-    real(dp) :: kap
-
-    real(dp), dimension(7), parameter :: A1 = &
-      & (/-3.40976e-1_dp, 4.58820e0_dp, -1.45080e0_dp, &
-      &    3.26394e-1_dp, 3.16939e-3_dp, 1.90592e-4_dp, -1.13900e-6_dp/)
-    real(dp), dimension(4), parameter :: A2 = &
-      & (/1.38497e2_dp, -2.21878e1_dp, 4.57151e0_dp, 1.0e0_dp/)
-    real(dp), parameter :: Tc = 33.145_dp
-
-    integer :: i
-    real(dp) :: TTc, top, bot
-
-    !! Pure Normal Hydrogen (H2) dilute limit fitting function from Assael et al. (2011):
-    !! Correlation of the Thermal Conductivity of Normal and Parahydrogen from the Triple Point to 1000 K and up to 100 MPa
-
-    TTc = T/Tc
-
-    top = 0.0_dp
-    do i = 1, 7
-      top = top + A1(i)*TTc**(i-1)
-    end do
-
-    bot = 0.0_dp
-    do i = 1, 4
-      bot = bot + A2(i)*TTc**(i-1)
-    end do
-
-    !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
-    kap = top/bot * 1e5_dp 
-
-  end function atm_conduct
 
   !! Vapour pressure for each species
   subroutine p_vap_sp(n_dust,T)
@@ -324,7 +569,7 @@ contains
         d_sp(n)%p_vap = exp(-49520.0_dp/T + 32.52_dp)
       case('Cr')
         ! GGChem 5 polynomial NIST fit
-        d_sp(n)%p_vap = exp(-4.78455e+4_dp/T + 3.22423e1_dp - 5.28710e-4_dp*T & 
+        d_sp(n)%p_vap = exp(-4.78455e4_dp/T + 3.22423e1_dp - 5.28710e-4_dp*T & 
           &  - 6.17347e-8_dp*T**2 + 2.88469e-12_dp*T**3)
       case('MnS')
         ! Morley et al. (2012)
@@ -337,7 +582,7 @@ contains
         d_sp(n)%p_vap = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar                   
       case('KCl')
         ! GGChem 5 polynomial NIST fit
-        d_sp(n)%p_vap = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
+        d_sp(n)%p_vap = exp(-2.69250e4_dp/T + 3.39574e1_dp - 2.04903e-3_dp*T &
           & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
       case('NaCl')
         ! GGChem 5 polynomial NIST fit
@@ -584,5 +829,41 @@ contains
     end do
     
   end subroutine eta_construct
+
+  function atm_conduct(T) result(kap)
+    implicit none
+
+    real(dp), intent(in) :: T
+    real(dp) :: kap
+
+    real(dp), dimension(7), parameter :: A1 = &
+      & (/-3.40976e-1_dp, 4.58820e0_dp, -1.45080e0_dp, &
+      &    3.26394e-1_dp, 3.16939e-3_dp, 1.90592e-4_dp, -1.13900e-6_dp/)
+    real(dp), dimension(4), parameter :: A2 = &
+      & (/1.38497e2_dp, -2.21878e1_dp, 4.57151e0_dp, 1.0e0_dp/)
+    real(dp), parameter :: Tc = 33.145_dp
+
+    integer :: i
+    real(dp) :: TTc, top, bot
+
+    !! Pure Normal Hydrogen (H2) dilute limit fitting function from Assael et al. (2011):
+    !! Correlation of the Thermal Conductivity of Normal and Parahydrogen from the Triple Point to 1000 K and up to 100 MPa
+
+    TTc = T/Tc
+
+    top = 0.0_dp
+    do i = 1, 7
+      top = top + A1(i)*TTc**(i-1)
+    end do
+
+    bot = 0.0_dp
+    do i = 1, 4
+      bot = bot + A2(i)*TTc**(i-1)
+    end do
+
+    !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
+    kap = top/bot * 1e5_dp 
+
+  end function atm_conduct
 
 end module mini_cloud_class_mod
