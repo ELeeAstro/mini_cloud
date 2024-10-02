@@ -110,15 +110,15 @@ contains
         d_sp(n)%idx = n
         d_sp(n)%name = sp(n)
 
-        d_sp(n)%rho = 2.27_dp
+        d_sp(n)%rho = 2.5_dp
         d_sp(n)%mw = 12.01070_dp
 
-        d_sp(n)%L = 8.65139e4_dp * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 41523.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 1
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 5.0_dp
-        d_sp(n)%al = 0.3_dp
+        d_sp(n)%al = 0.39_dp
 
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
@@ -131,9 +131,15 @@ contains
         d_sp(n)%rho = 4.93_dp
         d_sp(n)%mw = 59.8777_dp
 
-        d_sp(n)%L = 3.10648095e5 * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 33600_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
 
-        d_sp(n)%inuc = 0
+        d_sp(n)%inuc = 1
+        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
+        d_sp(n)%Nf = 5.0_dp
+        d_sp(n)%al = 0.29_dp
+
+        V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+        m_seed = V_seed * d_sp(n)%rho
 
       case('SiC')
 
@@ -565,11 +571,12 @@ contains
       ! Return vapour pressure in dyne
       select case(trim(d_sp(n)%name))
       case('C')
-        d_sp(n)%p_vap = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
+        !d_sp(n)%p_vap = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
+        ! Kimura et al. (2023)
+        d_sp(n)%p_vap = 10.0_dp**(-41523.0_dp/T + 10.609_dp) * atm
       case('TiC')
-        ! Elspeth estimate from TiC -> Ti + C delta G
-        d_sp(n)%p_vap = exp(-3.10648095e5_dp/T + 1.08927969e2_dp - 6.69640962e-3_dp*T &
-          & + 2.24743501e-6_dp*T**2 - 3.20605422e-10_dp*T**3)
+        ! Kimura et al. (2023)
+        d_sp(n)%p_vap = 10.0_dp**(-33600.0_dp/T + 7.652_dp) * atm
       case('SiC')
         ! Elspeth 5 polynomial JANAF-NIST fit
         d_sp(n)%p_vap = exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
@@ -729,10 +736,10 @@ contains
       select case (trim(d_sp(n)%name))
       case('C')
         ! Tabak et al. (1995)
-        d_sp(n)%sig = 1400.0_dp
+        d_sp(n)%sig = 4200.0_dp
       case('TiC')
         ! Chigai et al. (1999)
-        d_sp(n)%sig = 1242.0_dp
+        d_sp(n)%sig = 2700.0_dp
       case ('SiC')
         ! Nozawa et al. (2003)
         d_sp(n)%sig = 1800.0_dp   
