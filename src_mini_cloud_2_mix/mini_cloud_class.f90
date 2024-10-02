@@ -113,7 +113,7 @@ contains
         d_sp(n)%rho = 2.5_dp
         d_sp(n)%mw = 12.01070_dp
 
-        d_sp(n)%L = 41523.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 41523.0_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 1
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
@@ -131,7 +131,7 @@ contains
         d_sp(n)%rho = 4.93_dp
         d_sp(n)%mw = 59.8777_dp
 
-        d_sp(n)%L = 33600_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 33600_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 1
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
@@ -342,7 +342,7 @@ contains
         d_sp(n)%rho = 4.08_dp
         d_sp(n)%mw = 87.0030_dp
 
-        d_sp(n)%L = 23810.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 23810.0_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0
 
@@ -354,7 +354,7 @@ contains
         d_sp(n)%rho = 1.86_dp
         d_sp(n)%mw = 78.0445_dp
 
-        d_sp(n)%L = 13889.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 13889.0_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0        
      
@@ -414,7 +414,7 @@ contains
         d_sp(n)%rho = 1.52_dp
         d_sp(n)%mw = 53.4915_dp
 
-        d_sp(n)%L = 4302.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 4302.0_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0  
 
@@ -462,7 +462,7 @@ contains
         d_sp(n)%rho = 1.17_dp
         d_sp(n)%mw = 51.1114_dp
 
-        d_sp(n)%L = 2409.4_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw
+        d_sp(n)%L = 2409.4_dp * log(10.0_dp) * Rgas / d_sp(n)%mw
 
         d_sp(n)%inuc = 0
 
@@ -474,7 +474,7 @@ contains
         d_sp(n)%rho = 1.12_dp
         d_sp(n)%mw = 34.0809_dp
 
-        d_sp(n)%L = 958.587_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw
+        d_sp(n)%L = 958.587_dp * log(10.0_dp) * Rgas / d_sp(n)%mw
 
         d_sp(n)%inuc = 0
 
@@ -510,7 +510,7 @@ contains
         d_sp(n)%rho = 1.14_dp
         d_sp(n)%mw = 28.0101_dp
 
-        d_sp(n)%L = 7.8824e2_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw
+        d_sp(n)%L = 7.8824e2_dp * log(10.0_dp) * Rgas / d_sp(n)%mw
 
         d_sp(n)%inuc = 0   
 
@@ -522,7 +522,7 @@ contains
         d_sp(n)%rho = 1.98_dp
         d_sp(n)%mw = 44.0095_dp
 
-        d_sp(n)%L = 1.5119e3_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw
+        d_sp(n)%L = 1.5119e3_dp * log(10.0_dp) * Rgas / d_sp(n)%mw
 
         d_sp(n)%inuc = 0
 
