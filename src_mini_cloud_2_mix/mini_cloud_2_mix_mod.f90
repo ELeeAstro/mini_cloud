@@ -403,6 +403,11 @@ module mini_cloud_2_mix_mod
 
       if (sat(n) > 1.0_dp) then
 
+        if (d_sp(n)%name == trim('SiO')) then
+          J_hom(n) = n_v(n)**2 * exp(1.33_dp - 4.40e12_dp / (T**3 * log(sat(n))**2))
+          cycle
+        end if
+
         ! Efficency Variables
         ln_ss = log(sat(n)) ! Natural log of saturation ratio
         f0 = 4.0_dp * pi * d_sp(n)%r0**2 ! Monomer Area
@@ -427,7 +432,7 @@ module mini_cloud_2_mix_mod
           & * ((1.0_dp + 2.0_dp*(d_sp(n)%Nf/N_star_1)**third)/(1.0_dp + (d_sp(n)%Nf/N_star_1)**third)**3))
 
         !! Calculate !!inverse!! of tau_gr
-        tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
+        tau_gr = (f0 * N_star**(twothird)) * d_sp(n)%al * sqrt(kbT &
           & / (2.0_dp * pi * d_sp(n)%mw * amu)) * n_v(n)
 
         !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here

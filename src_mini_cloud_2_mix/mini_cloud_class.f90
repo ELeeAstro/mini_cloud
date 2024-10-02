@@ -73,9 +73,7 @@ module mini_cloud_class_mod
     real(dp) :: sig, L
 
     integer :: inuc
-    real(dp) :: Nl, Nf, a0, alpha
-    real(dp) :: Vl, Vl13, Vl23
-    real(dp) :: Js
+    real(dp) :: Nl, Nf, a0, al
 
   end type dust
 
@@ -119,13 +117,36 @@ contains
 
         d_sp(n)%inuc = 1
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
-        d_sp(n)%Nf = 0.0_dp
+        d_sp(n)%Nf = 5.0_dp
+        d_sp(n)%al = 0.3_dp
 
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
 
-      !case('TiC')
-      !case('SiC')
+      case('TiC')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 4.93_dp
+        d_sp(n)%mw = 59.8777_dp
+
+        d_sp(n)%L = 0.0_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+
+      case('SiC')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 3.21_dp
+        d_sp(n)%mw = 40.0962_dp
+
+        d_sp(n)%L = 9.51431385e4_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0
+        
       case('CaTiO3')
 
         d_sp(n)%idx = n
@@ -163,6 +184,7 @@ contains
         d_sp(n)%inuc = 1
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 0.0_dp
+        d_sp(n)%al = 0.2_dp
 
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
@@ -239,6 +261,18 @@ contains
 
         d_sp(n)%inuc = 0
 
+      case('MgS')
+
+        d_sp(n)%idx = n
+        d_sp(n)%name = sp(n)
+
+        d_sp(n)%rho = 2.68_dp
+        d_sp(n)%mw = 56.3700_dp
+
+        d_sp(n)%L = 5.92010440e4_dp * Rgas / d_sp(n)%mw 
+
+        d_sp(n)%inuc = 0       
+
       case('MgO')
 
         d_sp(n)%idx = n
@@ -275,6 +309,13 @@ contains
 
         d_sp(n)%inuc = 1
 
+        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
+        d_sp(n)%Nf = 5.0_dp
+        d_sp(n)%al = 0.2_dp
+
+        V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+        m_seed = V_seed * d_sp(n)%rho
+
       case('Cr')
 
         d_sp(n)%idx = n
@@ -283,7 +324,7 @@ contains
         d_sp(n)%rho = 7.19_dp
         d_sp(n)%mw = 51.99610_dp
 
-        d_sp(n)%L = 4.78455e4_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 4.78455e4_dp * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0
 
@@ -319,7 +360,7 @@ contains
         d_sp(n)%rho = 4.09_dp
         d_sp(n)%mw = 97.4450_dp
 
-        d_sp(n)%L = 15873.0_dp * log10(10.0_dp) * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 4.75507888e4_dp * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0  
         
@@ -335,7 +376,8 @@ contains
 
         d_sp(n)%inuc = 1
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
-        d_sp(n)%Nf = 10.0_dp
+        d_sp(n)%Nf = 5.0_dp
+        d_sp(n)%al = 1.0_dp
 
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
@@ -352,7 +394,8 @@ contains
 
         d_sp(n)%inuc = 1
         d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
-        d_sp(n)%Nf = 10.0_dp
+        d_sp(n)%Nf = 5.0_dp
+        d_sp(n)%al = 1.0_dp
 
         V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
         m_seed = V_seed * d_sp(n)%rho
@@ -524,7 +567,10 @@ contains
       case('C')
         d_sp(n)%p_vap = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
       !case('TiC')
-      !case('SiC')
+      case('SiC')
+        ! Elspeth 5 polynomial JANAF-NIST fit
+        d_sp(n)%p_vap = exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
+          & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
       case('CaTiO3')
         ! Kozasa et al. (1987)
         d_sp(n)%p_vap = exp(-79568.2_dp/T + 42.0204_dp) * atm        
@@ -554,6 +600,10 @@ contains
         ! GGChem 5 polynomial NIST fit
         d_sp(n)%p_vap = exp(-6.30018e4_dp/T + 3.66364e1_dp - 2.42990e-3_dp*T &
           & + 3.18636e-7_dp*T**2)
+      case('MgS')
+        ! Elspeth 5 polynomial JANAF-NIST fit
+        d_sp(n)%p_vap = exp(-5.92010440e4_dp/T +  3.58148138e1_dp - 1.93822353e-3_dp*T &
+          &  + 9.77971406e-7_dp*T**2 - 11.74813601e-10_dp*T**3)
       case('Mg2SiO4')
         ! Kozasa et al. (1989)
         d_sp(n)%p_vap = exp(-62279.0_dp/T + 20.944_dp) * atm          
@@ -578,8 +628,11 @@ contains
         ! Morley et al. (2012)
         d_sp(n)%p_vap =  10.0_dp**(8.550_dp - 13889.0_dp/T) * bar
       case('ZnS')
+        ! Elspeth 5 polynomial Barin data fit
+        d_sp(n)%p_vap = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
+          &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)
         ! Morley et al. (2012)
-        d_sp(n)%p_vap = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar                   
+        !d_sp(n)%p_vap = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar                   
       case('KCl')
         ! GGChem 5 polynomial NIST fit
         d_sp(n)%p_vap = exp(-2.69250e4_dp/T + 3.39574e1_dp - 2.04903e-3_dp*T &
@@ -697,12 +750,20 @@ contains
       case('FeO')
         ! Janz 1988
         d_sp(n)%sig = 585.0_dp
+      case('FeS')
+        d_sp(n)%sig = 380.0_dp
+      case('MgS')
+        ! Gail and Sedlmayr (1986)
+        d_sp(n)%sig = 800.0_dp
+      case('Mg2SiO4')
+        ! Kozasa et al. (1989)
+        d_sp(n)%sig = 436.0_dp           
       case('MgSiO3')
         ! Janz 1988
         d_sp(n)%sig = 197.3_dp + 0.098_dp * T
-      case('Mg2SiO4')
-        ! Kozasa et al. (1989)
-        d_sp(n)%sig = 436.0_dp      
+      case('MgO')
+         ! Nozawa et al. (2003)
+        d_sp(n)%sig = 1100.0_dp 
       case('SiO')
         ! Gail and Sedlmayr (1986)
         d_sp(n)%sig = 500.0_dp
