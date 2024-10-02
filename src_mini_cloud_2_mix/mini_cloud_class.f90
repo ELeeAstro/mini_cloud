@@ -131,7 +131,7 @@ contains
         d_sp(n)%rho = 4.93_dp
         d_sp(n)%mw = 59.8777_dp
 
-        d_sp(n)%L = 0.0_dp * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 3.10648095e5 * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0
 
@@ -566,7 +566,10 @@ contains
       select case(trim(d_sp(n)%name))
       case('C')
         d_sp(n)%p_vap = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
-      !case('TiC')
+      case('TiC')
+        ! Elspeth estimate from TiC -> Ti + C delta G
+        d_sp(n)%p_vap = exp(-3.10648095e5_dp/T + 1.08927969e2_dp - 6.69640962e-3_dp*T &
+          & + 2.24743501e-6_dp*T**2 - 3.20605422e-10_dp*T**3)
       case('SiC')
         ! Elspeth 5 polynomial JANAF-NIST fit
         d_sp(n)%p_vap = exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
