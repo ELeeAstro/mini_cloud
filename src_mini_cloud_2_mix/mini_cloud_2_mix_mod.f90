@@ -136,7 +136,7 @@ module mini_cloud_2_mix_mod
     mf = 22
 
     ! Calcuate array sizes
-    maxord = 1
+    maxord = 1 ! maxord = 1 to 5 for stiff problems
     lwm = n_eq**2 + 2
 
     rworkdim = 20 + n_eq*(maxord + 1) + 3*n_eq + lwm
@@ -208,6 +208,7 @@ module mini_cloud_2_mix_mod
         print*, 'non valid dlsode istate: ', istate, 'STOP'
         stop
       end select
+      
     end do
 
     !! Limit y values
@@ -247,12 +248,10 @@ module mini_cloud_2_mix_mod
     real(dp) :: f_coal, f_coag, f_turb
     real(dp) :: m_c, r_c, Kn, beta, vf
 
-    integer :: i
     real(dp) :: n_d, rho_t, rho_d
-    real(dp), dimension(n_dust) :: m_c_s
     real(dp), dimension(n_dust) :: J_hom, J_het, J_evap
     real(dp), dimension(n_dust) :: rho_s, rho_v, p_v, sat, n_v, dmdt
-    real(dp), dimension(n_dust) :: V_frac, V_c_s
+    real(dp), dimension(n_dust) :: V_frac
 
     !! In this routine, you calculate the instanenous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -389,7 +388,6 @@ module mini_cloud_2_mix_mod
     real(dp), dimension(n_dust), intent(out) :: J_hom
 
     integer :: n
-    real(dp), parameter :: alpha = 1.0_dp
     real(dp) :: ln_ss, theta_inf, N_inf, N_star, N_star_1, dg_rt, Zel, tau_gr
     real(dp) :: f0, kbT
 

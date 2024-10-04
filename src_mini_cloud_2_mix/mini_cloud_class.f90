@@ -116,7 +116,6 @@ contains
         d_sp(n)%L = 41523.0_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 1
-        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 5.0_dp
         d_sp(n)%al = 0.39_dp
 
@@ -134,7 +133,6 @@ contains
         d_sp(n)%L = 33600_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 1
-        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 5.0_dp
         d_sp(n)%al = 0.29_dp
 
@@ -187,8 +185,7 @@ contains
 
         d_sp(n)%L = 7.70443e4_dp * Rgas / d_sp(n)%mw 
 
-        d_sp(n)%inuc = 1
-        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
+        d_sp(n)%inuc = 1 
         d_sp(n)%Nf = 0.0_dp
         d_sp(n)%al = 0.2_dp
 
@@ -315,7 +312,6 @@ contains
 
         d_sp(n)%inuc = 1
 
-        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 5.0_dp
         d_sp(n)%al = 0.2_dp
 
@@ -381,7 +377,6 @@ contains
         d_sp(n)%L = 2.69250e4_dp * Rgas / d_sp(n)%mw
 
         d_sp(n)%inuc = 1
-        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 5.0_dp
         d_sp(n)%al = 1.0_dp
 
@@ -399,7 +394,6 @@ contains
         d_sp(n)%L = 2.79146e4_dp * Rgas / d_sp(n)%mw
 
         d_sp(n)%inuc = 1
-        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
         d_sp(n)%Nf = 5.0_dp
         d_sp(n)%al = 1.0_dp
 
@@ -543,12 +537,15 @@ contains
         stop
       end select
 
-
       !! Variables common to all material
       d_sp(n)%m0 = d_sp(n)%mw * amu
       d_sp(n)%V0 = d_sp(n)%m0 / d_sp(n)%rho
       d_sp(n)%r0 = ((3.0_dp*d_sp(n)%V0)/(4.0_dp*pi))**(third)
       d_sp(n)%d0 = 2.0_dp * d_sp(n)%r0 
+
+      if (d_sp(n)%inuc == 1) then
+        d_sp(n)%Nl = (4.0_dp/3.0_dp * pi * r_seed**3) / d_sp(n)%V0
+      end if
 
     end do
 

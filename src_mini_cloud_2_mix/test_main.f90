@@ -96,7 +96,7 @@ program test_mini_cloud_2_mix
       ! rho_s(:) = (/4.23_dp,3.19_dp,7.87_dp/)
       ! mw(:) = (/79.866_dp,100.389_dp,55.845_dp/) 
 
-      !! Change vapur VMR to mass density ratio for first iteration
+      !! Change vapour VMR to mass density ratio for first iteration
       if (tt == 1) then
         q_v(:) = q_v(:) * mw(:)/mu_in
       end if

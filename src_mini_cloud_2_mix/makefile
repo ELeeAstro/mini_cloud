@@ -1,11 +1,12 @@
 # Compiler settings
 #===================
 
-F90 = gfortran
+CC = gcc-14
+F90 = gfortran-14
 F90LINKER = $(F90)
 
 # Default build type is release
-FFLAGS = -O3 # Default release flags
+FFLAGS = -O3 -pipe # Default release flags
 
 # Debugging flags
 DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
@@ -43,7 +44,7 @@ release: clean all
 
 # Linking the executable
 $(EXECS): $(OBJECTS)
-	$(F90LINKER) $(FFLAGS) $(OBJECTS) -o $(EXECS)
+	$(F90LINKER) $(FFLAGS) $(OBJECTS) -o $(EXECS) 
 
 # Pattern rule for compiling Fortran 90 files
 %.o: %.f90
