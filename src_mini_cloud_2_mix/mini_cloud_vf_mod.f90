@@ -49,7 +49,7 @@ module mini_cloud_vf_mod
 
     integer :: n_gas, n, n_dust
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, rho_d, rho_t
-    real(dp), allocatable, dimension(:) :: VMR_g, V_frac
+    real(dp), allocatable, dimension(:) :: VMR_g, V_frac, m_c_s, V_c_s
     real(dp) :: top, bot, eta_g, m_c, r_c, Kn, beta
 
     n_dust = size(q_1s)
@@ -98,12 +98,20 @@ module mini_cloud_vf_mod
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
     !! Calculate vf from final results of interation
-    rho_t = sum(q_1s(:))
-    allocate(V_frac(n_dust))
-    V_frac(:) = q_1s(:)/rho_t
+
+    allocate(V_frac(n_dust),m_c_s(n_dust),V_c_s(n_dust))
+
+    !! Mean mass of particle per species
+    m_c_s(:) = (q_1s(:)*rho)/(q_0*nd_atm)
+    !! Mean volumes of particle per species
+    V_c_s(:) = m_c_s(:)/rho_s(:)
+    !! Volume fraction of species in grain
+    V_frac(:) = max(V_c_s(:)/sum(V_c_s(:)),1e-99_dp)
+    !! Volume weighted bulk density
     rho_d = sum(V_frac(:)*rho_s(:))
 
     !! Mean mass of particle
+    rho_t = sum(q_1s(:))
     m_c = (rho_t*rho)/(q_0*nd_atm)
 
     !! Mass weighted mean radius of particle
@@ -120,7 +128,7 @@ module mini_cloud_vf_mod
       & * (1.0_dp + & 
       & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
-    deallocate(d_g, LJ_g, molg_g, V_frac)
+    deallocate(d_g, LJ_g, molg_g, V_frac, m_c_s, V_c_s)
 
   end subroutine mini_cloud_vf
 

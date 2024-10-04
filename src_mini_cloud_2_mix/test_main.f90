@@ -25,6 +25,7 @@ program test_mini_cloud_2_mix
   !! Dust details
   character(len=20), dimension(n_dust) :: sp
   real(dp), dimension(n_dust) :: rho_s, mw, q_1s, q_v, V_frac
+  real(dp), dimension(n_dust) :: m_c_s, V_c_s
   real(dp) :: rho_t, rho_d
 
   integer :: n_wl
@@ -123,16 +124,22 @@ program test_mini_cloud_2_mix
       print*, tt, time, P_in * 1e-5_dp, 'bar ', T_in, 'K ', mu_in, 'g mol-1 ', sp(:)
 
       !! Find weighted bulk density of mixed grain composition using volume fraction
-      rho_t = sum(q_1s(:))
-      V_frac(:) = max(q_1s(:)/rho_t,1e-30_dp)
+
+      !! Mean mass of particle per species
+      m_c_s(:) = (q_1s(:)*rho)/(q_0*nd_atm)
+      !! Mean volumes of particle per species
+      V_c_s(:) = m_c_s(:)/rho_s(:)
+      !! Volume fraction of species in grain
+      V_frac(:) = max(V_c_s(:)/sum(V_c_s(:)),1e-99_dp)
+      !! Volume weighted bulk density
       rho_d = sum(V_frac(:)*rho_s(:))
 
       !! Mean mass of particle
+      rho_t = sum(q_1s(:))
       m_c = (rho_t*rho)/(q_0*nd_atm)
 
       !! Mass weighted mean radius of particle
       r_c = ((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp) * 1e4_dp
-
 
       print*, 'q', tt, q_v, q_0, q_1s, v_f
       print*, 'r', tt, m_c, r_c, rho_d
