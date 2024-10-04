@@ -251,7 +251,7 @@ module mini_cloud_2_mix_mod
     real(dp) :: n_d, rho_t, rho_d
     real(dp), dimension(n_dust) :: J_hom, J_het, J_evap
     real(dp), dimension(n_dust) :: rho_s, rho_v, p_v, sat, n_v, dmdt
-    real(dp), dimension(n_dust) :: V_frac
+    real(dp), dimension(n_dust) :: V_frac, m_c_s, V_c_s
 
     !! In this routine, you calculate the instanenous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -269,24 +269,17 @@ module mini_cloud_2_mix_mod
     p_v(:) = rho_v(:) * Rd * T     !! Pressure of vapour
     n_v(:) = p_v(:)/(kb*T)        !! Number density of vapour
 
-    !! Mean mass of particle
-    rho_t = sum(rho_s(:))
-    m_c = max(rho_t/n_d, m_seed)
-    !! Find weighted bulk density of mixed grain composition using volume fraction
-    V_frac(:) = max(rho_s(:)/rho_t,1e-99_dp)
+    !! Mean mass of particle per species
+    m_c_s(:) = rho_s(:)/n_d
+    !! Mean volumes of particle per species
+    V_c_s(:) = m_c_s(:)/d_sp(:)%rho
+    !! Volume fraction of species in grain
+    V_frac(:) = max(V_c_s(:)/sum(V_c_s(:)),1e-99_dp)
+    !! Volume weighted bulk density
     rho_d = sum(V_frac(:)*d_sp(:)%rho)
-
-    ! !! Mean mass of particle per species
-    ! m_c_s(:) = rho_s(:)/n_d
-    ! !! Mean volumes of particle per species
-    ! V_c_s(:) = m_c_s(:)/d_sp(:)%rho
-    ! !! Volume fraction of species in grain
-    ! V_frac(:) = V_c_s(:)/sum(V_c_s(:))
-    ! !! Volume weighted bulk density
-    ! rho_d = sum(V_frac(:)*d_sp(:)%rho)
-    ! !! Mean particle mass [g]
-    ! rho_t = sum(rho_s(:))
-    ! m_c = max(rho_t/n_d,m_seed)
+    !! Mean particle mass [g]
+    rho_t = sum(rho_s(:))
+    m_c = max(rho_t/n_d,m_seed)
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
