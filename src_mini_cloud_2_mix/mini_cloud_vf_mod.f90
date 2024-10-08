@@ -30,7 +30,7 @@ module mini_cloud_vf_mod
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
   !! Constuct required arrays for calculating gas mixtures
-  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g
+  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
   public :: mini_cloud_vf
   private :: eta_construct
@@ -47,10 +47,10 @@ module mini_cloud_vf_mod
 
     real(dp), intent(out) :: v_f
 
-    integer :: n_gas, n, n_dust
+    integer :: n_gas, n_dust
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, rho_d, rho_t
     real(dp), allocatable, dimension(:) :: VMR_g, V_frac, m_c_s, V_c_s
-    real(dp) :: top, bot, eta_g, m_c, r_c, Kn, beta
+    real(dp) :: m_c, r_c, Kn, beta
 
     n_dust = size(q_1s)
 
@@ -80,19 +80,8 @@ module mini_cloud_vf_mod
     !! Mass density of layer
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
 
-    !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
-    call eta_construct(sp_bg)
-    top = 0.0_dp
-    bot = 0.0_dp
-    do n = 1, n_gas
-      eta_g = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(n)*amu)*kb*T)/(pi*d_g(n)**2)) &
-        & * ((((kb*T)/LJ_g(n))**(0.16_dp))/1.22_dp)
-      top = top + sqrt(molg_g(n))*VMR_g(n)*eta_g
-      bot = bot + sqrt(molg_g(n))*VMR_g(n)
-    end do
-
-    !! Mixture dynamical viscosity
-    eta = top/bot
+    !! Calculate dynamical viscosity for this layer
+    call eta_construct(n_gas, sp_bg, VMR_g, T, eta)
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
@@ -128,21 +117,25 @@ module mini_cloud_vf_mod
       & * (1.0_dp + & 
       & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
-    deallocate(d_g, LJ_g, molg_g, V_frac, m_c_s, V_c_s)
+    deallocate(d_g, LJ_g, molg_g, eta_g, V_frac, m_c_s, V_c_s)
 
   end subroutine mini_cloud_vf
 
-    !! eta for background gas
-  subroutine eta_construct(sp_bg)
+  !! eta for background gas
+  subroutine eta_construct(n_bg, sp_bg, VMR_bg, T, eta_out)
     implicit none
 
+    integer, intent(in) :: n_bg
     character(len=20), dimension(:), intent(in) :: sp_bg
+    real(dp), dimension(n_bg), intent(in) :: VMR_bg
+    real(dp), intent(in) :: T
+
+    real(dp), intent(out) :: eta_out
     
-    integer :: n_bg, i
+    integer :: i, j, n
+    real(dp) :: eta_sum, phi_ij_top, phi_ij_bot, phi_ij
 
-    n_bg = size(sp_bg)
-
-    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg))
+    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
 
     do i = 1, n_bg
       select case(sp_bg(i))
@@ -205,7 +198,27 @@ module mini_cloud_vf_mod
       end select
 
     end do
-    
+
+    !! do Wilke (1950) classical mixing rule
+    !! First calculate each species eta
+    do n = 1, n_bg
+      eta_g(n) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(n)*amu)*kb*T)/(pi*d_g(n)**2)) &
+        & * ((((kb*T)/LJ_g(n))**(0.16_dp))/1.22_dp)
+    end do
+
+    !! Find weighting factor for each species
+    eta_out = 0.0_dp
+    do i = 1, n_bg
+      eta_sum = 0.0_dp
+      do j = 1, n_bg
+        phi_ij_top = (1.0_dp + sqrt(eta_g(i)/eta_g(j)) * (molg_g(j)/molg_g(i))**(0.25_dp))**2
+        phi_ij_bot = sqrt(8.0_dp*(1.0_dp + (molg_g(i)/molg_g(j))))
+        phi_ij = phi_ij_top  / phi_ij_bot
+        eta_sum = eta_sum + VMR_bg(j) * phi_ij
+      end do
+      eta_out = eta_out + (VMR_bg(i) * eta_g(i)) / eta_sum
+    end do
+
   end subroutine eta_construct
 
 end module mini_cloud_vf_mod

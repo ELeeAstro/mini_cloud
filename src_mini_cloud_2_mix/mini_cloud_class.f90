@@ -54,7 +54,7 @@ module mini_cloud_class_mod
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
   !! Constuct required arrays for calculating gas mixtures
-  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g
+  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
   type dust
 
@@ -823,16 +823,21 @@ contains
   end subroutine surface_tension
 
   !! eta for background gas
-  subroutine eta_construct(n_bg, sp_bg)
+  subroutine eta_construct(n_bg, sp_bg, VMR_bg, T, eta_out)
     implicit none
 
     integer, intent(in) :: n_bg
     character(len=20), dimension(:), intent(in) :: sp_bg
+    real(dp), dimension(n_bg), intent(in) :: VMR_bg
+    real(dp), intent(in) :: T
+
+    real(dp), intent(out) :: eta_out
     
-    integer :: i
+    integer :: i, j, n
+    real(dp) :: eta_sum, phi_ij_top, phi_ij_bot, phi_ij
 
     !! Construct the background gas arrays for eta (dynamical viscosity) calculation
-    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg))
+    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
 
     do i = 1, n_bg
       select case(sp_bg(i))
@@ -895,15 +900,47 @@ contains
       end select
 
     end do
+
+    !! do Wilke (1950) classical mixing rule
+    !! First calculate each species eta
+    do n = 1, n_bg
+      eta_g(n) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(n)*amu)*kb*T)/(pi*d_g(n)**2)) &
+        & * ((((kb*T)/LJ_g(n))**(0.16_dp))/1.22_dp)
+    end do
+
+    !! Find weighting factor for each species
+    eta_out = 0.0_dp
+    do i = 1, n_bg
+      eta_sum = 0.0_dp
+      do j = 1, n_bg
+        phi_ij_top = (1.0_dp + sqrt(eta_g(i)/eta_g(j)) * (molg_g(j)/molg_g(i))**(0.25_dp))**2
+        phi_ij_bot = sqrt(8.0_dp*(1.0_dp + (molg_g(i)/molg_g(j))))
+        phi_ij = phi_ij_top  / phi_ij_bot
+        eta_sum = eta_sum + VMR_bg(j) * phi_ij
+      end do
+      eta_out = eta_out + (VMR_bg(i) * eta_g(i)) / eta_sum
+    end do
     
   end subroutine eta_construct
 
-  function atm_conduct(T) result(kap)
+  !! Thermal conductivity of background gass
+  subroutine kappa_a_construct(n_bg, sp_bg, VMR_bg, T, kappa_out)
     implicit none
 
+    integer, intent(in) :: n_bg
+    character(len=20), dimension(:), intent(in) :: sp_bg
+    real(dp), dimension(n_bg), intent(in) :: VMR_bg
     real(dp), intent(in) :: T
-    real(dp) :: kap
 
+    real(dp), intent(out) :: kappa_out
+
+    integer :: i, j, n
+    real(dp), dimension(n_bg) :: kappa_g
+    real(dp) :: top, bot, TTc
+
+    real(dp) :: eta_sum, phi_ij_top, phi_ij_bot, phi_ij
+
+    !! H2 parameters
     real(dp), dimension(7), parameter :: A1 = &
       & (/-3.40976e-1_dp, 4.58820e0_dp, -1.45080e0_dp, &
       &    3.26394e-1_dp, 3.16939e-3_dp, 1.90592e-4_dp, -1.13900e-6_dp/)
@@ -911,27 +948,65 @@ contains
       & (/1.38497e2_dp, -2.21878e1_dp, 4.57151e0_dp, 1.0e0_dp/)
     real(dp), parameter :: Tc = 33.145_dp
 
-    integer :: i
-    real(dp) :: TTc, top, bot
+    !! He parameters
+    real(dp), parameter :: A = 2.7870034e-3_dp, B = 7.034007057e-1_dp
+    real(dp), dimension(4), parameter :: C = (/3.739232544_dp, &
+      &  -2.620316969e1_dp, 5.982252246e1_dp, -4.26397634e1_dp/)
 
-    !! Pure Normal Hydrogen (H2) dilute limit fitting function from Assael et al. (2011):
-    !! Correlation of the Thermal Conductivity of Normal and Parahydrogen from the Triple Point to 1000 K and up to 100 MPa
+    do n = 1, n_bg
 
-    TTc = T/Tc
+      select case(sp_bg(n))
 
-    top = 0.0_dp
-    do i = 1, 7
-      top = top + A1(i)*TTc**(i-1)
+      case('H2')
+        !! Pure Normal Hydrogen (H2) dilute limit fitting function from Assael et al. (2011):
+        !! Correlation of the Thermal Conductivity of Normal and Parahydrogen from the Triple Point to 1000 K and up to 100 MPa
+
+        TTc = T/Tc
+
+        top = 0.0_dp
+        do i = 1, 7
+          top = top + A1(i)*TTc**(i-1)
+        end do
+
+        bot = 0.0_dp
+        do i = 1, 4
+          bot = bot + A2(i)*TTc**(i-1)
+        end do
+
+        !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
+        kappa_g(n) = top/bot * 1e5_dp 
+
+      case('He')
+
+        !! A correlation of thermal conductivity data for helium (Hands & Arp 1981)
+        kappa_g(n) = 0.0_dp
+        do i = 1, 4
+          kappa_g(n) = kappa_g(n) + C(i)/T**i
+        end do
+
+        !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
+        kappa_g(n) = A * T**B * exp(kappa_g(n)) * 1e5_dp
+
+      case default
+        !! No conductivity data avilable for background species, assume zero
+        kappa_g(n) = 0.0_dp
+      end select
+
     end do
 
-    bot = 0.0_dp
-    do i = 1, 4
-      bot = bot + A2(i)*TTc**(i-1)
+    !! Find weighting factor for each species - following Wilke (1950) mixing rule
+    kappa_out = 0.0_dp
+    do i = 1, n_bg
+      eta_sum = 0.0_dp
+      do j = 1, n_bg
+        phi_ij_top = (1.0_dp + sqrt(eta_g(i)/eta_g(j)) * (molg_g(j)/molg_g(i))**(0.25_dp))**2
+        phi_ij_bot = sqrt(8.0_dp*(1.0_dp + (molg_g(i)/molg_g(j))))
+        phi_ij = phi_ij_top  / phi_ij_bot
+        eta_sum = eta_sum + VMR_bg(j) * phi_ij
+      end do
+      kappa_out = kappa_out + (VMR_bg(i) * kappa_g(i)) / eta_sum
     end do
 
-    !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
-    kap = top/bot * 1e5_dp 
-
-  end function atm_conduct
+  end subroutine kappa_a_construct
 
 end module mini_cloud_class_mod

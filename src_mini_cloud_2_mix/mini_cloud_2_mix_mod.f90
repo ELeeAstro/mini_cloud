@@ -48,7 +48,7 @@ module mini_cloud_2_mix_mod
     integer :: n_bg
     real(dp), allocatable, dimension(:) :: q_1s_old, q_v_old
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: eta_g, bot, top, diff, new_frac
+    real(dp) :: diff, new_frac
 
     n_dust = size(sp)
 
@@ -81,19 +81,12 @@ module mini_cloud_2_mix_mod
     allocate(VMR_bg(n_bg))
     VMR_bg(:) = VMR_bg_in(:)
 
-    !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
-    call eta_construct(n_bg, sp_bg)
-    top = 0.0_dp
-    bot = 0.0_dp
-    do n = 1, n_bg
-      eta_g = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(n)*amu)*kb*T)/(pi*d_g(n)**2)) &
-        & * ((((kb*T)/LJ_g(n))**(0.16_dp))/1.22_dp)
-      top = top + sqrt(molg_g(n))*VMR_bg(n)*eta_g
-      bot = bot + sqrt(molg_g(n))*VMR_bg(n)
-    end do
+    !! Calculate dynamical viscosity for this layer
+    call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
 
-    !! Mixture dynamical viscosity
-    eta = top/bot
+    !! Calculate atmospheric conductivity for thie layer
+    !! NOTE: must be called after eta_construct for mixture weighting 
+    call kappa_a_construct(n_bg, sp_bg, VMR_bg, T, kappa_a)
 
     !! Mixture kinematic viscosity
     nu = eta/rho
@@ -103,9 +96,6 @@ module mini_cloud_2_mix_mod
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*Rgas*T))
-
-    !! Calculate atmospheric conductivity of this layer
-    kappa_a = atm_conduct(T)
 
     !! Find saturation vapour pressure for each species
     call p_vap_sp(n_dust, T)
@@ -232,7 +222,9 @@ module mini_cloud_2_mix_mod
       end if 
     end do
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, q_1s_old, q_v_old)
+
+    deallocate(d_g, LJ_g, molg_g, eta_g)
+    deallocate(y, rwork, iwork, q_1s_old, q_v_old)
 
   end subroutine mini_cloud_2_mix
 
