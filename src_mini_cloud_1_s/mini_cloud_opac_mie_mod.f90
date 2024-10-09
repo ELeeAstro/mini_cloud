@@ -127,8 +127,8 @@ contains
 
     q_sca = 8.0_dp/3.0_dp * x**4 * abs(alp)**2
     q_ext = 4.0_dp * x * &
-     & aimag(alp * (1.0_dp + x**2/15.0_dp*alp * ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp)))) + &
-     & 8.0_dp/3.0_dp * x**4 * real(alp**2,dp)
+      & aimag(alp * (1.0_dp + x**2/15.0_dp*alp * ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp)))) + &
+      & 8.0_dp/3.0_dp * x**4 * real(alp**2,dp)
 
     q_abs = q_ext - q_sca
 
@@ -180,7 +180,7 @@ contains
 
     !! Estimate g
     if (k < 1.0e-20_dp) then
-      Cm = (6.0_dp + 5.0_dp*n**2 + n**4)/(45.0_dp*30.0_dp*n**2)
+      Cm = (6.0_dp + 5.0_dp*n**2 + n**4)/(45.0_dp + 30.0_dp*n**2)
     else
       Cm = (-2.0_dp*k**6+k**4*(13.0_dp-2.0_dp*n**2)+k**2*(2.0_dp*n**4+2.0_dp*n**2-27.0_dp) & 
         & + 2.0_dp*n**6 + 13.0_dp*n**4 + 27.0_dp*n**2 + 18.0_dp) & 
