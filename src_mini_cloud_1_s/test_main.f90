@@ -108,7 +108,7 @@ program test_mini_cloud_1_simple
       call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_in, rho_c, sp_bg, rm, sigma, v_f)
 
       !! Calculate the opacity at the weavelength grid
-      call  opac_mie(1, sp, T_in, mu_in, P_in, q_c, rm, rho_c, sigma, n_wl, wl, k_ext, ssa, g)
+      call opac_mie(1, sp, T_in, mu_in, P_in, q_c, rm, rho_c, sigma, n_wl, wl, k_ext, ssa, g)
 
       !! increment time
       time = time + t_step

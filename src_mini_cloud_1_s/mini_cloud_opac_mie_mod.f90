@@ -204,8 +204,7 @@ contains
 
     do n = 1, n_dust
 
-      allocate(nk(n)%n(n_wl))
-      allocate(nk(n)%k(n_wl))
+      allocate(nk(n)%n(n_wl), nk(n)%k(n_wl))
 
       select case(trim(sp(n)))
       case('CaTiO3')
@@ -238,9 +237,12 @@ contains
       case('H2O') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'H2O[s].dat'
-       case('NH3') 
+      case('NH3') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'NH3[s].dat'
+      case default
+        print*,  'No availible n,k data for species: ', trim(sp(n)), 'STOP'
+        stop
       end select
 
       call read_and_interp_nk_table(n, n_wl, wl)
