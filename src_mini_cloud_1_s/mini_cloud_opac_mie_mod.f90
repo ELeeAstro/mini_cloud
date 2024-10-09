@@ -126,7 +126,8 @@ contains
     alp = (ri**2 - 1.0_dp)/(ri**2 + 2.0_dp)
 
     q_sca = 8.0_dp/3.0_dp * x**4 * abs(alp)**2
-    q_ext = 4.0_dp * x * aimag(alp * (1.0_dp + x**2/15.0_dp*alp * ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp)))) + &
+    q_ext = 4.0_dp * x * &
+     & aimag(alp * (1.0_dp + x**2/15.0_dp*alp * ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp)))) + &
      & 8.0_dp/3.0_dp * x**4 * real(alp**2,dp)
 
     q_abs = q_ext - q_sca
@@ -212,7 +213,7 @@ contains
         nk(n)%fname = 'CaTiO3[s].dat'
       case('TiO2')
         nk(n)%name = sp(n)
-        nk(n)%fname = 'TiO2_anatase[s].dat'
+        nk(n)%fname = 'TiO2[s].dat'
       case('Al2O3')
         nk(n)%name = sp(n)
         nk(n)%fname = 'Al2O3[s].dat'
@@ -228,9 +229,21 @@ contains
       case('MgSiO3') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'MgSiO3_amorph[s].dat'
+      case('MnS') 
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'MnS[s].dat'     
+      case('Na2S') 
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'Na2S[s].dat'
+      case('ZnS') 
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'ZnS[s].dat'
       case('KCl') 
         nk(n)%name = sp(n)
-        nk(n)%fname = 'KCl[s].dat'        
+        nk(n)%fname = 'KCl[s].dat'   
+      case('NaCl') 
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'NaCl[s].dat'              
       case('C') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'C[s].dat'
