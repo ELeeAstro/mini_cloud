@@ -10,9 +10,9 @@ program test_mini_cloud_1_simple
 
   integer :: example, tt, n_it
   character(len=20) :: sp, sp_bg(3)
-  logical :: deep_flag
-  real(dp) :: T_in, P_in, VMR_in(3), mu_in, grav_in
-  real(dp) :: q_c, q_v, v_f
+  logical :: deep_flag, latent_flag
+  real(dp) :: T_in, P_in, VMR_in(3), mu_in, grav_in, cp_in
+  real(dp) :: q_c, q_v, v_f, dT
   real(dp) :: t_step, time
 
   integer :: n_wl
@@ -69,6 +69,9 @@ program test_mini_cloud_1_simple
       !! Assume constant gravity [m s-2]
       grav_in = 10.0_dp
 
+      !! Assume constant heat capacity [J kg-1 K-1]
+      cp_in = 1.3e4_dp
+
       !! Assumed condensate species
       sp = 'KCl'
 
@@ -98,11 +101,15 @@ program test_mini_cloud_1_simple
       !! Are we in the deep layer?
       deep_flag = .False.
 
+      !! Do you want Latent heat effects?
+      latent_flag = .True.
+
       !! mini-cloud test output
       call output(tt, time)
 
       !! Call mini-cloud and perform integrations for a single layer
-      call mini_cloud_1_s(deep_flag, T_in, P_in, grav_in, mu_in, t_step, sp, q_v, q_c)
+      call mini_cloud_1_s(deep_flag, latent_flag, T_in, P_in, grav_in, mu_in, cp_in, &
+        &  t_step, sp, q_v, q_c, dT)
 
       !! Calculate settling velocity 
       call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_in, rho_c, sp_bg, rm, sigma, v_f)
@@ -116,7 +123,7 @@ program test_mini_cloud_1_simple
       !! Print to screen current progress
       print*, tt, time, P_in * 1e-5_dp, 'bar ', T_in, 'K ', mu_in, 'g mol-1 ',  trim(sp)
 
-      print*, 'q', tt, q_v, q_c, v_f
+      print*, 'q', tt, q_v, q_c, v_f, dT
       print*, 'r', tt, rm * 1e4_dp, sigma
       print*, 'o', tt, k_ext(1), ssa(1), g(1), k_ext(n_wl), ssa(n_wl), g(n_wl)
 
@@ -149,7 +156,7 @@ contains
       first_call = .False.
     end if
 
-    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_c, v_f
+    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_c, v_f, dT
     write(u2,*) t, time, k_ext(:), ssa(:), g(:)
 
   end subroutine output

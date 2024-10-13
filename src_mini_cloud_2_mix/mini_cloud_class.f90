@@ -82,6 +82,8 @@ module mini_cloud_class_mod
     integer :: idx
     character(len=20) :: name
 
+    real(dp) :: mw, chi
+
   end type gas
 
   type(dust), allocatable, dimension(:) :: d_sp, g_sp
@@ -130,7 +132,7 @@ contains
         d_sp(n)%rho = 4.93_dp
         d_sp(n)%mw = 59.8777_dp
 
-        d_sp(n)%L = 33600_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
+        d_sp(n)%L = 33600.0_dp * log(10.0_dp) * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 1
         d_sp(n)%Nf = 5.0_dp
@@ -617,6 +619,10 @@ contains
       case('MgSiO3','MgSiO3_amorph')
         ! Ackerman & Marley (2001)
         d_sp(n)%p_vap = exp(-58663.0_dp/T + 25.37_dp) * bar
+      case('MgO')
+        ! GGChem 5 polynomial NIST fit
+        d_sp(n)%p_vap = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
+          & - 8.47194e-8_dp*T**2 + 4.49221e-12_dp*T**3)
       case('SiO2','SiO2_amorph')
         ! GGChem 5 polynomial NIST fit
         d_sp(n)%p_vap = exp(-7.28086e4_dp/T + 3.65312e1_dp - 2.56109e-4_dp*T &
@@ -953,6 +959,15 @@ contains
     real(dp), dimension(4), parameter :: C = (/3.739232544_dp, &
       &  -2.620316969e1_dp, 5.982252246e1_dp, -4.26397634e1_dp/)
 
+    !! H2O parameters
+    real(dp), dimension(5), parameter :: L = (/2.443221e-3_dp, 1.323095e-2_dp, &
+      & 6.770357e-3_dp, -3.454586e-3_dp, 4.096266e-4_dp /)
+    real(dp), parameter :: Ts = 647.096_dp
+    real(dp) :: Tbar
+
+    !! CO parameters 
+    real(dp), dimension(3), parameter :: AA = (/3.29558e-4_dp, 3.05976e-6_dp, -3.13222e-9_dp/)
+
     do n = 1, n_bg
 
       select case(sp_bg(n))
@@ -986,6 +1001,32 @@ contains
 
         !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
         kappa_g(n) = A * T**B * exp(kappa_g(n)) * 1e5_dp
+
+      case('H2O')
+
+        !! New International Formulation for the Thermal Conductivity of H2O (Huber et al. 2012)
+        Tbar = T/Ts
+
+        kappa_g(n) = 0.0_dp
+        do i = 1, 5
+          kappa_g(n) = kappa_g(n) + L(i)/Tbar**(i-1)
+        end do
+
+        !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
+        kappa_g(n) = sqrt(Tbar)/kappa_g(n) * 1e5_dp
+
+      case('CO')
+
+        !! Models for Viscosity, Thermal Conductivity, and Surface Tension of Selected Pure Fluids as Implemented in REFPROP v10.0
+        !! Huber (2018) - NIST
+
+        kappa_g(n) = 0.0_dp
+        do i = 1, 3
+          kappa_g(n) = kappa_g(n) + AA(i)*T**(i-1)
+        end do
+
+        !! Fitting function is in W m-1 K-1, convert to erg s-1 cm-1 K-1
+        kappa_g(n) = kappa_g(n) * 1e5_dp
 
       case default
         !! No conductivity data avilable for background species, assume zero
