@@ -85,9 +85,9 @@ program test_mini_cloud_2_mix
       grav_in = 10.0_dp
 
       !! Assumed condensate species
-      sp(:) = (/'TiO2  ','MgSiO3', 'Fe    ', 'Al2O3 ' /)
-      rho_s(:) = (/4.23_dp,3.19_dp ,7.87_dp ,3.986_dp/)
-      mw(:) = (/79.866_dp,100.389_dp,55.845_dp,101.961_dp/)
+      sp(:) = (/'TiO2   ','Mg2SiO4', 'FeO    ', 'Al2O3  ' /)
+      rho_s(:) = (/4.23_dp,3.21_dp ,5.99_dp ,3.986_dp/)
+      mw(:) = (/79.866_dp,140.6931_dp,71.8444_dp,101.961_dp/)
 
       ! sp(:) = (/'KCl'/)
       ! rho_s(:) = (/1.99_dp/)

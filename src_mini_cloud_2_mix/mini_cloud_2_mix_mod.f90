@@ -297,7 +297,7 @@ module mini_cloud_2_mix_mod
     call calc_hom_nuc(n_dust, sat, n_v, J_hom)
 
     !! Calculate hetrogenous nucleation rate
-    call calc_het_nuc(n_dust, n_d, sat, r_c, J_het)
+    !call calc_het_nuc(n_dust, n_d, sat, r_c, J_het)
     J_het(:) = 0.0_dp
 
     !! Calculate seed particle evaporation rate
@@ -324,7 +324,7 @@ module mini_cloud_2_mix_mod
     !! Calculate final net flux rate for each moment and vapour
     f(1) = sum(J_hom(:) + J_het(:) + J_evap(:)) + f_coag + f_coal + f_turb
     f(2:2+n_dust-1) = m_seed*(J_hom(:) + J_het(:) + J_evap(:)) + dmdt(:)*n_d
-    f(2+n_dust:2+n_dust+n_dust-1) = -f(2:2+n_dust-1)
+    f(2+n_dust:2+n_dust+n_dust-1) = -m_seed*(J_hom(:) + J_het(:) + J_evap(:)) - dmdt(:)*n_d
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm

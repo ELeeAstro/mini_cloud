@@ -63,6 +63,7 @@ module mini_cloud_class_mod
 
     real(dp) :: rho
     real(dp) :: mw
+    real(dp) :: chi_v
 
     real(dp) :: m0, r0, V0, d0
 
@@ -86,8 +87,8 @@ module mini_cloud_class_mod
 
   end type gas
 
-  type(dust), allocatable, dimension(:) :: d_sp, g_sp
-  !$omp threadprivate (d_sp, g_sp)
+  type(dust), allocatable, dimension(:) :: d_sp
+  !$omp threadprivate (d_sp)
 
 contains
 
@@ -98,7 +99,7 @@ contains
 
     integer :: n
 
-    allocate(d_sp(n_dust), g_sp(n_dust))
+    allocate(d_sp(n_dust))
 
     !! Large loop to hardcoded values
     do n = 1, n_dust
@@ -173,6 +174,8 @@ contains
         d_sp(n)%rho = 3.97_dp
         d_sp(n)%mw = 101.961_dp
 
+        d_sp(n)%chi_v = 2.0_dp
+
         d_sp(n)%L = 73503.0_dp * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0
@@ -184,6 +187,8 @@ contains
 
         d_sp(n)%rho = 4.23_dp
         d_sp(n)%mw = 79.866_dp
+
+        d_sp(n)%chi_v = 1.0_dp
 
         d_sp(n)%L = 7.70443e4_dp * Rgas / d_sp(n)%mw 
 
@@ -214,6 +219,9 @@ contains
         d_sp(n)%rho = 7.87_dp
         d_sp(n)%mw = 55.845_dp
 
+        d_sp(n)%chi_v = 1.0_dp
+
+
         d_sp(n)%L = 37120.0_dp * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0
@@ -238,6 +246,8 @@ contains
         d_sp(n)%rho = 5.99_dp
         d_sp(n)%mw = 71.8444_dp
 
+        d_sp(n)%chi_v = 1.0_dp
+
         d_sp(n)%L = 6.30018e4_dp * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0
@@ -249,6 +259,9 @@ contains
 
         d_sp(n)%rho = 3.21_dp
         d_sp(n)%mw = 140.6931_dp
+
+        d_sp(n)%chi_v = 2.0_dp
+
 
         d_sp(n)%L = 62279.0_dp * Rgas / d_sp(n)%mw 
 
@@ -262,6 +275,8 @@ contains
         d_sp(n)%rho = 3.19_dp
         d_sp(n)%mw = 100.389_dp
 
+        d_sp(n)%chi_v = 1.0_dp
+        
         d_sp(n)%L = 58663.0_dp * Rgas / d_sp(n)%mw 
 
         d_sp(n)%inuc = 0

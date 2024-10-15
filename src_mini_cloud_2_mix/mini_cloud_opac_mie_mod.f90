@@ -213,8 +213,7 @@ contains
 
     do n = 1, n_dust
 
-      allocate(nk(n)%n(n_wl))
-      allocate(nk(n)%k(n_wl))
+      allocate(nk(n)%n(n_wl),nk(n)%k(n_wl))
 
       select case(trim(sp(n)))
       case('CaTiO3')
@@ -222,7 +221,7 @@ contains
         nk(n)%fname = 'CaTiO3[s].dat'
       case('TiO2')
         nk(n)%name = sp(n)
-        nk(n)%fname = 'TiO2_anatase[s].dat'
+        nk(n)%fname = 'TiO2[s].dat'
       case('Al2O3')
         nk(n)%name = sp(n)
         nk(n)%fname = 'Al2O3[s].dat'
