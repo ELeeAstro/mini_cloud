@@ -1,8 +1,8 @@
 # Compiler settings
 #===================
 
-CC = gcc-14
-F90 = gfortran-14
+CC = gcc
+F90 = gfortran
 F90LINKER = $(F90)
 
 # Default build type is release

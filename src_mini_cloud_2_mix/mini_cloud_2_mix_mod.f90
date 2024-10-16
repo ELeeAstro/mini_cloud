@@ -209,7 +209,7 @@ module mini_cloud_2_mix_mod
     q_1s(:) = y(2:2+n_dust-1)
     q_v(:) = y(2+n_dust:2+n_dust+n_dust-1)
 
-    ! Check total mass was (mostly) conserved for each species
+    ! ! Check total mass was (mostly) conserved for each species
     do n = 1, n_dust
       diff = (q_1s(n) + q_v(n))/(q_1s_old(n) + q_v_old(n))
       if (abs(diff) > 1.0001_dp) then
@@ -324,7 +324,7 @@ module mini_cloud_2_mix_mod
     !! Calculate final net flux rate for each moment and vapour
     f(1) = sum(J_hom(:) + J_het(:) + J_evap(:)) + f_coag + f_coal + f_turb
     f(2:2+n_dust-1) = m_seed*(J_hom(:) + J_het(:) + J_evap(:)) + dmdt(:)*n_d
-    f(2+n_dust:2+n_dust+n_dust-1) = -m_seed*(J_hom(:) + J_het(:) + J_evap(:)) - dmdt(:)*n_d
+    f(2+n_dust:2+n_dust+n_dust-1) = -f(2:2+n_dust-1)
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm

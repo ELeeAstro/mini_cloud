@@ -237,6 +237,9 @@ contains
       case('MgSiO3') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'MgSiO3_amorph[s].dat'
+      case('SiO2') 
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'SiO2_amorph[s].dat'
       case('KCl') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'KCl[s].dat'        

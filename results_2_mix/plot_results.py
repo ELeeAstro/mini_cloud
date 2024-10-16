@@ -3,7 +3,7 @@ import matplotlib.pylab as plt
 import seaborn as sns
 
 
-n_dust = 4
+n_dust = 5
 
 
 kb = 1.380649e-16

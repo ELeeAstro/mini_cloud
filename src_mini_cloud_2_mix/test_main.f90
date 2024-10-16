@@ -11,7 +11,7 @@ program test_mini_cloud_2_mix
   real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
 
-  integer, parameter ::  n_bg = 3, n_dust = 4
+  integer, parameter ::  n_bg = 3, n_dust = 5
   integer :: example, tt, n_it
 
   real(dp) :: T_in, P_in, mu_in, grav_in, nd_atm, rho
@@ -44,7 +44,7 @@ program test_mini_cloud_2_mix
   example = 1
 
   !! Initial conditions
-  q_v(:) = (/1.041e-7_dp,  3.588e-5_dp, 2.231e-5_dp,  2.771e-6_dp/)  !Ti, Mg, Fe and Al abundances at start
+  q_v(:) = (/9.33e-8_dp,  2.69e-6_dp, 2.88e-5_dp, 3.55e-5_dp, 1.465e-5_dp/)  !Ti, Al, Fe, Mg, Si abundances at start
   !q_v(:) = (/1.17e-7_dp/)
   !q_v(:) = (/1.041e-7_dp, 3.588e-5_dp, 2.231e-5_dp/)
 
@@ -85,9 +85,9 @@ program test_mini_cloud_2_mix
       grav_in = 10.0_dp
 
       !! Assumed condensate species
-      sp(:) = (/'TiO2   ','Mg2SiO4', 'FeO    ', 'Al2O3  ' /)
-      rho_s(:) = (/4.23_dp,3.21_dp ,5.99_dp ,3.986_dp/)
-      mw(:) = (/79.866_dp,140.6931_dp,71.8444_dp,101.961_dp/)
+      sp(:) = (/'TiO2   ','Al2O3  ', 'Fe     ', 'Mg2SiO4','SiO2   ' /)
+      rho_s(:) = (/4.23_dp,3.97_dp ,7.87_dp ,3.21_dp,2.648_dp/)
+      mw(:) = (/79.866_dp,101.961_dp,55.8450_dp,140.6931_dp,60.08430_dp/)
 
       ! sp(:) = (/'KCl'/)
       ! rho_s(:) = (/1.99_dp/)
