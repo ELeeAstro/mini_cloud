@@ -107,8 +107,9 @@ module mini_cloud_vf_mod
 
     real(dp), intent(out) :: eta_out
     
-    integer :: i, j, n
-    real(dp) :: eta_sum, phi_ij_top, phi_ij_bot, phi_ij
+    integer :: i, j
+    real(dp) :: bot, Eij, part
+    real(dp), dimension(n_bg) :: y
 
     allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
 
@@ -174,25 +175,33 @@ module mini_cloud_vf_mod
 
     end do
 
-    !! do Wilke (1950) classical mixing rule
+    !! Davidson (1993) mixing rule
+    
     !! First calculate each species eta
-    do n = 1, n_bg
-      eta_g(n) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(n)*amu)*kb*T)/(pi*d_g(n)**2)) &
-        & * ((((kb*T)/LJ_g(n))**(0.16_dp))/1.22_dp)
+    do i = 1, n_bg
+      eta_g(i) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(i)*amu)*kb*T)/(pi*d_g(i)**2)) &
+        & * ((((kb*T)/LJ_g(i))**(0.16_dp))/1.22_dp)
     end do
 
-    !! Find weighting factor for each species
+    !! Calculate y values
+    bot = 0.0_dp
+    do i = 1, n_bg
+      bot = bot + VMR_bg(i) * sqrt(molg_g(i))
+    end do
+    y(:) = (VMR_bg(:) * sqrt(molg_g(:)))/bot
+
+    !! Calculate fluidity following Davidson equation
     eta_out = 0.0_dp
     do i = 1, n_bg
-      eta_sum = 0.0_dp
       do j = 1, n_bg
-        phi_ij_top = (1.0_dp + sqrt(eta_g(i)/eta_g(j)) * (molg_g(j)/molg_g(i))**(0.25_dp))**2
-        phi_ij_bot = sqrt(8.0_dp*(1.0_dp + (molg_g(i)/molg_g(j))))
-        phi_ij = phi_ij_top  / phi_ij_bot
-        eta_sum = eta_sum + VMR_bg(j) * phi_ij
+        Eij = ((2.0_dp*sqrt(molg_g(i)*molg_g(j)))/(molg_g(i) + molg_g(j)))**0.375
+        part = (y(i)*y(j))/(sqrt(eta_g(i)*eta_g(j))) * Eij
+        eta_out = eta_out + part
       end do
-      eta_out = eta_out + (VMR_bg(i) * eta_g(i)) / eta_sum
     end do
+
+    !! Viscosity is inverse fluidity
+    eta_out = 1.0_dp/eta_out
 
   end subroutine eta_construct
 
