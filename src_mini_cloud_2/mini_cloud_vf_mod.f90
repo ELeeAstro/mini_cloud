@@ -30,7 +30,7 @@ module mini_cloud_vf_mod
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
   !! Constuct required arrays for calculating gas mixtures
-  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g
+  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
   public :: mini_cloud_vf
   private :: eta_construct
@@ -47,10 +47,10 @@ module mini_cloud_vf_mod
 
     real(dp), intent(out) :: v_f
 
-    integer :: n_gas, n
+    integer :: n_bg
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta
-    real(dp), allocatable, dimension(:) :: VMR_g
-    real(dp) :: top, bot, eta_g, m_c, r_c, Kn, beta
+    real(dp), allocatable, dimension(:) :: VMR_bg
+    real(dp) :: m_c, r_c, Kn, beta
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -65,9 +65,9 @@ module mini_cloud_vf_mod
       return
     end if
 
-    n_gas = size(bg_VMR_in)
-    allocate(VMR_g(n_gas))
-    VMR_g(:) = bg_VMR_in(:)
+    n_bg = size(bg_VMR_in)
+    allocate(VMR_bg(n_bg))
+    VMR_bg(:) = bg_VMR_in(:)
 
     !! Change mu_in to mu
     mu = mu_in ! Convert mean molecular weight to mu [g mol-1]
@@ -79,18 +79,7 @@ module mini_cloud_vf_mod
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
 
     !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
-    call eta_construct(sp_bg)
-    top = 0.0_dp
-    bot = 0.0_dp
-    do n = 1, n_gas
-      eta_g = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(n)*amu)*kb*T)/(pi*d_g(n)**2)) &
-        & * ((((kb*T)/LJ_g(n))**(0.16_dp))/1.22_dp)
-      top = top + sqrt(molg_g(n))*VMR_g(n)*eta_g
-      bot = bot + sqrt(molg_g(n))*VMR_g(n)
-    end do
-
-    !! Mixture dynamical viscosity
-    eta = top/bot
+    call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
@@ -113,21 +102,26 @@ module mini_cloud_vf_mod
       & * (1.0_dp + & 
       & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
-    deallocate(d_g, LJ_g, molg_g)
+    deallocate(d_g, LJ_g, molg_g, eta_g)
 
   end subroutine mini_cloud_vf
 
     !! eta for background gas
-  subroutine eta_construct(sp_bg)
+  subroutine eta_construct(n_bg, sp_bg, VMR_bg, T, eta_out)
     implicit none
 
+    integer, intent(in) :: n_bg
     character(len=20), dimension(:), intent(in) :: sp_bg
+    real(dp), dimension(n_bg), intent(in) :: VMR_bg
+    real(dp), intent(in) :: T
+
+    real(dp), intent(out) :: eta_out
     
-    integer :: n_bg, i
+    integer :: i, j
+    real(dp) :: bot, Eij, part
+    real(dp), dimension(n_bg) :: y
 
-    n_bg = size(sp_bg)
-
-    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg))
+    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
 
     do i = 1, n_bg
       select case(sp_bg(i))
@@ -191,6 +185,34 @@ module mini_cloud_vf_mod
 
     end do
     
+    !! Davidson (1993) mixing rule
+    
+    !! First calculate each species eta
+    do i = 1, n_bg
+      eta_g(i) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(i)*amu)*kb*T)/(pi*d_g(i)**2)) &
+        & * ((((kb*T)/LJ_g(i))**(0.16_dp))/1.22_dp)
+    end do
+
+    !! Calculate y values
+    bot = 0.0_dp
+    do i = 1, n_bg
+      bot = bot + VMR_bg(i) * sqrt(molg_g(i))
+    end do
+    y(:) = (VMR_bg(:) * sqrt(molg_g(:)))/bot
+
+    !! Calculate fluidity following Davidson equation
+    eta_out = 0.0_dp
+    do i = 1, n_bg
+      do j = 1, n_bg
+        Eij = ((2.0_dp*sqrt(molg_g(i)*molg_g(j)))/(molg_g(i) + molg_g(j)))**0.375
+        part = (y(i)*y(j))/(sqrt(eta_g(i)*eta_g(j))) * Eij
+        eta_out = eta_out + part
+      end do
+    end do
+
+    !! Viscosity is inverse fluidity
+    eta_out = 1.0_dp/eta_out
+
   end subroutine eta_construct
 
 end module mini_cloud_vf_mod

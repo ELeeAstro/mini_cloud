@@ -33,10 +33,7 @@ module mini_cloud_2_mod
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp) :: V_seed, m_seed
 
-  real(dp) :: mfp, eta, nu, eps_d
-
-  !! Kolmogorov scale
-  real(dp), parameter :: l_k = 1.0_dp
+  real(dp) :: mfp, eta, nu
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -54,11 +51,11 @@ module mini_cloud_2_mod
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
   !! Constuct required arrays for calculating gas mixtures
-  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g
+  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
   public :: mini_cloud_2, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
-    & p_vap_sp, surface_tension, eta_construct, calc_turb_acc, calc_turb_shear, calc_turb_couple
+    & p_vap_sp, surface_tension, eta_construct
 
   contains
 
@@ -74,7 +71,7 @@ module mini_cloud_2_mod
     ! Input/Output tracer values
     real(dp), intent(inout) :: q_v, q_0, q_1
 
-    integer :: ncall, n
+    integer :: ncall
 
     ! Time controls
     real(dp) :: t_now
@@ -89,9 +86,8 @@ module mini_cloud_2_mod
     real(dp) :: rtol, atol
 
     !! Work variables
-    integer :: n_gas
-    real(dp), allocatable, dimension(:) :: VMR_g
-    real(dp) :: eta_g, bot, top
+    integer :: n_bg
+    real(dp), allocatable, dimension(:) :: VMR_bg
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
@@ -102,9 +98,9 @@ module mini_cloud_2_mod
     p = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
 
     !! Allocate bg gas VMR
-    n_gas = size(bg_VMR_in)
-    allocate(VMR_g(n_gas))
-    VMR_g(:) = bg_VMR_in(:)
+    n_bg = size(bg_VMR_in)
+    allocate(VMR_bg(n_bg))
+    VMR_bg(:) = bg_VMR_in(:)
 
     !! Change mu_in to mu
     mu = mu_in ! Convert mean molecular weight to mu [g mol-1]
@@ -121,25 +117,11 @@ module mini_cloud_2_mod
     !! Specific gas constant of layer [erg g-1 K-1]
     Rd = R_gas/mu
 
-    !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
-    call eta_construct(sp_bg)
-    top = 0.0_dp
-    bot = 0.0_dp
-    do n = 1, n_gas
-      eta_g = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(n)*amu)*kb*T)/(pi*d_g(n)**2)) &
-        & * ((((kb*T)/LJ_g(n))**(0.16_dp))/1.22_dp)
-      top = top + sqrt(molg_g(n))*VMR_g(n)*eta_g
-      bot = bot + sqrt(molg_g(n))*VMR_g(n)
-    end do
-
-    !! Mixture dynamical viscosity
-    eta = top/bot
+    !! Calculate dynamical viscosity for this layer
+    call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
 
     !! Mixture kinematic viscosity
     nu = eta/rho
-
-    !! dissipation of turbulent kinetic energy
-    eps_d = nu**3/l_k**4
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
@@ -243,7 +225,7 @@ module mini_cloud_2_mod
     q_1 = y(2)
     q_v = y(3)
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g)
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g)
 
   end subroutine mini_cloud_2
 
@@ -255,9 +237,8 @@ module mini_cloud_2_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
-    real(dp) :: w_sh2, w_acc2, w_co2
     real(dp) :: f_nuc_hom, f_cond, f_seed_evap
-    real(dp) :: f_coal, f_coag, f_turb
+    real(dp) :: f_coal, f_coag
     real(dp) :: m_c, r_c, Kn, beta, sat, vf
     real(dp) :: p_v, n_v
 
@@ -312,20 +293,8 @@ module mini_cloud_2_mod
     !! Calculate the coalesence rate
     call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
 
-    !! Calculate the turbulent shear collision velocity
-    call calc_turb_shear(n_eq, y, r_c, w_sh2)
-
-    !! Calculate the turbulent acceleration collision velocity
-    call calc_turb_acc(n_eq, y, vf, w_acc2)
-
-    !! Calculate the turbulent fluid coupling collision velocity
-    call calc_turb_couple(n_eq, y, r_c, vf, w_co2)
-
-    !! Combine turbulent velocities into collision rate using total kernel
-    f_turb = -pi * (2.0_dp*r_c)**2 * sqrt(2.0_dp/pi) * sqrt(w_sh2 + w_acc2 + w_co2) * y(1)**2
-
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom + f_seed_evap) + f_coag + f_coal + f_turb
+    f(1) = (f_nuc_hom + f_seed_evap) + f_coag + f_coal
     f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond*y(1)
     f(3) = -f(2)
 
@@ -512,72 +481,6 @@ module mini_cloud_2_mod
     f_coal = -2.0_dp*pi*r_c**2*y(1)**2*d_vf*E
 
   end subroutine calc_coal
-
-  !! Particle-particle turbulent shear collisions
-  subroutine calc_turb_shear(n_eq, y, r_c, w_sh2)
-    implicit none
-
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c
-
-    real(dp), intent(out) :: w_sh2
-
-    !! Shear relative velocity (Wang et al. 1998)
-    w_sh2 = 1.0_dp/15.0_dp * (2.0_dp*r_c)**2 * eps_d/nu
-
-  end subroutine calc_turb_shear
-
-  !! Particle-particle turbulent acceleration collisions
-  subroutine calc_turb_acc(n_eq, y, vf, w_acc2)
-    implicit none
-
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: vf
-
-    real(dp), intent(out) :: w_acc2
-
-    real(dp), parameter :: gam = 10.0_dp
-    real(dp) :: u2, tau_i, b, T_l, th_i, c1, c2
-
-    !! Follows Wang et al. (2001) 
-    !! - see also Park et el. (2002) and Kruis & Kusters (1997)
-
-    u2 = (gam * sqrt(eps_d*nu))/0.183_dp
-    b = (3.0_dp*rho)/(2.0_dp*rho_d + rho)
-    T_L = (0.4_dp*u2)/eps_d
-
-    tau_i = vf/grav
-    th_i = tau_i/T_L
-
-    c1 = sqrt((1.0_dp + th_i + th_i)/((1.0_dp + th_i)*(1.0_dp + th_i)))
-    c2 = (1.0_dp/(((1.0_dp + th_i)*(1.0_dp + th_i))) - 1.0_dp/(((1.0_dp + gam*th_i)*(1.0_dp + gam*th_i))))
-
-    w_acc2 = 3.0_dp*(1.0_dp-b)**2*u2*(gam/(gam-1.0_dp)) & 
-      & * (((th_i + th_i)**2 - 4.0_dp*th_i*th_i*c1)/(th_i + th_i)) * c2
-
-  end subroutine calc_turb_acc
-
-  !! Particle-particle turbulent fluid coupling collisions
-  subroutine calc_turb_couple(n_eq, y, r_c, vf, w_co2)
-    implicit none
-
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, vf
-
-    real(dp), intent(out) :: w_co2
-
-    real(dp), parameter :: lam_d = 10.0_dp
-    real(dp) :: dudt2, tau
-
-    !! Fluid coupling turbulent term (Wang et al. 1998)
-    tau = vf/grav
-    dudt2 = 1.16_dp * eps_d**(1.5_dp)/sqrt(nu)
-    w_co2 = 2.0_dp*(1.0_dp - rho/rho_d)**2 * tau**2 * dudt2 * ((2.0_dp*r_c)**2/lam_d**2)
-
-  end subroutine calc_turb_couple
 
   !! Dummy jacobian subroutine required for dlsode
   subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)
@@ -841,17 +744,22 @@ module mini_cloud_2_mod
   end function surface_tension
 
   !! eta for background gas
-  subroutine eta_construct(sp_bg)
+  subroutine eta_construct(n_bg, sp_bg, VMR_bg, T, eta_out)
     implicit none
 
+    integer, intent(in) :: n_bg
     character(len=20), dimension(:), intent(in) :: sp_bg
-    
-    integer :: n_bg, i
+    real(dp), dimension(n_bg), intent(in) :: VMR_bg
+    real(dp), intent(in) :: T
 
-    n_bg = size(sp_bg)
+    real(dp), intent(out) :: eta_out
+    
+    integer :: i, j
+    real(dp) :: bot, Eij, part
+    real(dp), dimension(n_bg) :: y
 
     !! Construct the background gas arrays for eta (dynamical viscosity) calculation
-    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg))
+    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
 
     do i = 1, n_bg
       select case(sp_bg(i))
@@ -914,7 +822,35 @@ module mini_cloud_2_mod
       end select
 
     end do
+
+    !! Davidson (1993) mixing rule
     
+    !! First calculate each species eta
+    do i = 1, n_bg
+      eta_g(i) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(i)*amu)*kb*T)/(pi*d_g(i)**2)) &
+        & * ((((kb*T)/LJ_g(i))**(0.16_dp))/1.22_dp)
+    end do
+
+    !! Calculate y values
+    bot = 0.0_dp
+    do i = 1, n_bg
+      bot = bot + VMR_bg(i) * sqrt(molg_g(i))
+    end do
+    y(:) = (VMR_bg(:) * sqrt(molg_g(:)))/bot
+
+    !! Calculate fluidity following Davidson equation
+    eta_out = 0.0_dp
+    do i = 1, n_bg
+      do j = 1, n_bg
+        Eij = ((2.0_dp*sqrt(molg_g(i)*molg_g(j)))/(molg_g(i) + molg_g(j)))**0.375
+        part = (y(i)*y(j))/(sqrt(eta_g(i)*eta_g(j))) * Eij
+        eta_out = eta_out + part
+      end do
+    end do
+
+    !! Viscosity is inverse fluidity
+    eta_out = 1.0_dp/eta_out
+
   end subroutine eta_construct
 
 end module mini_cloud_2_mod
