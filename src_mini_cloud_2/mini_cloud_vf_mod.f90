@@ -97,10 +97,12 @@ module mini_cloud_vf_mod
     !! Cunningham slip factor
     beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
 
-    !! Settling velocity
+    ! !! Settling velocity
     v_f = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
       & * (1.0_dp + & 
       & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+
+    !v_f = 0.5_dp * (rho_d*grav*r_c)/rho * sqrt((pi*mu)/(2.0_dp*R_gas*T))
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 

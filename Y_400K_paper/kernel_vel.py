@@ -34,19 +34,7 @@ eta = (5.0/16.0) * (np.sqrt(np.pi*(molg_H2*amu)*kb*T)/(np.pi*d_H2**2)) \
 
 mfp = (2.0*eta/rho) * np.sqrt((np.pi * mu)/(8.0*R_gas*T))
 
-eps_d = 0.1
 nu = eta/rho
-l_k = (nu**3/eps_d)**0.25
-
-print(eps_d,nu,l_k)
-
-quit()
-
-l_k = 1.0
-nu = eta/rho
-eps_d = nu**3/l_k**4
-
-print(nu,rho,eps_d)
 
 #Begin r dependent calculations
 Kn = mfp/r
@@ -98,45 +86,52 @@ for i in range(nr):
 # Coalesence flux (Zeroth moment) [cm3 s-1]
 f_coal = 2.0*np.pi*r**2*d_vf*E
 
-# Shear kernel
-w_shear2 = 1.0/15.0 *  (2.0*r)**2 * eps_d/nu
-f_shear = np.sqrt(2.0)*(2.0*r)**2*np.sqrt(w_shear2)
+
+l_k = [0.01, 0.1, 1.0]
+l_k = np.array(l_k)
+eps_d = nu**3/l_k**4
+
 
 # Gravity kernel
 v_f = (2.0 * beta * grav * r**2 * rho_d)/(9.0 * eta) \
-   * (1.0 + \
-   ((0.45*grav*r**3*rho*rho_d)/(54.0*eta**2))**(0.4))**(-1.25)
+  * (1.0 + \
+  ((0.45*grav*r**3*rho*rho_d)/(54.0*eta**2))**(0.4))**(-1.25)
 tau = v_f / grav
 
-#tau = (2.0*beta * (rho_d - rho)*r**2)/(9.0*eta)
-dtau = 0.5 * tau
-w_grav2 = np.pi/8.0 * (eps*dtau)**2 * (1.0 - rho/rho_d)**2 * grav**2
-f_grav = np.sqrt(2.0)*(2.0*r)**2*np.sqrt(w_grav2)
+w_shear = np.zeros((3,nr))
+w_acc = np.zeros((3,nr))
+
+for i in range(3):
+
+  # Shear kernel
+  w_shear[i,:] = 1.0/15.0 *  (2.0*r)**2 * eps_d[i]/nu
+
+  w_shear[i,:] = np.sqrt(w_shear[i,:])
 
 
-# Coupling
-lam_d = l_k * 10.0
-dudt2 = 1.16 * eps_d**(3.0/2.0)*nu**(-0.5)
-w_coup2 = 2.0*(1.0 - rho/rho_d)**2*tau**2*dudt2*(2.0*r)**2/lam_d**2
-f_coup = np.sqrt(2.0)*(2.0*r)**2*np.sqrt(w_coup2)
 
-# Turbulent inertial collision rate 2 [cm3 s-1]
-cont = np.sqrt(2.0) * (2.0*r)**2
-gam = 100.0
-vf2 = (gam * np.sqrt(eps_d*nu))/0.183
-tau_i = v_f / grav
-b = (3.0*rho)/(2.0*rho_d + rho)
-T_L = (0.4*vf2)/eps_d
+  # # Coupling
+  # lam_d = 10.0
+  # dudt2 = 1.16 * eps_d**(3.0/2.0)*nu**(-0.5)
+  # w_co = 2.0*(1.0 - rho/rho_d)**2*tau**2*dudt2*(2.0*r)**2/lam_d**2
 
-th_i = tau_i/T_L
+  # w_co = np.sqrt(w_co)
 
-c1 = np.sqrt((1.0 + th_i + th_i)/((1.0 + th_i)*(1.0 + th_i)))
-c2 = (1.0/(((1.0 + th_i)*(1.0 + th_i))) - 1.0/(((1.0 + gam*th_i)*(1.0 + gam*th_i))))
-w_acc = 3.0*(1.0-b)**2*vf2*(gam/(gam-1.0)) * (((th_i + th_i)**2 - 4.0*th_i*th_i*c1)/(th_i + th_i)) * c2
+  # Turbulent inertial collision rate 2 [cm3 s-1]
+  cont = np.sqrt(2.0) * (2.0*r)**2
+  gam = 100.0
+  vf2 = (gam * np.sqrt(eps_d[i]*nu))/0.183
+  tau_i = v_f / grav
+  b = (3.0*rho)/(2.0*rho_d + rho)
+  T_L = (0.4*vf2)/eps_d[i]
 
-f_acc = cont * np.sqrt(w_acc)
+  th_i = tau_i/T_L
 
-f_tot = np.sqrt(2.0)*(2.0*r)**2*np.sqrt(w_shear2 + w_acc + w_coup2) + f_coag + f_coal
+  c1 = np.sqrt((1.0 + th_i + th_i)/((1.0 + th_i)*(1.0 + th_i)))
+  c2 = (1.0/(((1.0 + th_i)*(1.0 + th_i))) - 1.0/(((1.0 + gam*th_i)*(1.0 + gam*th_i))))
+  w_acc[i,:] = 3.0*(1.0-b)**2*vf2*(gam/(gam-1.0)) * (((th_i + th_i)**2 - 4.0*th_i*th_i*c1)/(th_i + th_i)) * c2
+
+  w_acc[i,:] = np.sqrt(w_acc[i,:])
 
 fig = plt.figure()
 
@@ -144,13 +139,12 @@ c = sns.color_palette('colorblind')
 
 r = r * 1e4
 
-plt.plot(r,f_tot,c='black',label=r'Total',ls='dotted',zorder=4)
-plt.plot(r,f_coag,c=c[0],label=r'Brownian coagulation',ls='dashed')
-plt.plot(r,f_coal,c=c[1],label=r'Gravitational coalescence',ls='dashed')
-plt.plot(r,f_shear,c=c[2],label=r'Turbulent shear')
-plt.plot(r,f_acc,c=c[3],label=r'Turbulent acceleration')
-#plt.plot(r,f_grav,c=c[4],label=r'Turbulent gravity')
-plt.plot(r,f_coup,c=c[4],label=r'Turbulent coupling')
+for i in range(3):
+  #plt.plot(r,f_coag,c=c[0],label=r'Brownian coagulation',ls='dashed')
+  #plt.plot(r,f_coal,c=c[1],label=r'Gravitational coalescence',ls='dashed')
+  plt.plot(r,w_shear[i,:],c=c[i],label=r'Turbulent shear '+str(l_k[i]))
+  plt.plot(r,w_acc[i,:],c=c[i],label=r'Turbulent acceleration '+str(l_k[i]),ls='dashed')
+  #plt.plot(r,w_co,c=c[4],label=r'Turbulent coupling')
 
 
 plt.xscale('log')
@@ -158,15 +152,15 @@ plt.yscale('log')
 
 
 plt.xlim(1e-3,1e2)
-plt.ylim(1e-13,1e-4)
+#plt.ylim(1e-13,1e-4)
 
-plt.ylabel(r'$K$ [cm$^{3}$ s$^{-1}$]', fontsize=16)
+plt.ylabel(r'$w$ [cm s$^{-1}$]', fontsize=16)
 plt.xlabel(r'$r_{\rm c}$ [$\mu$m]', fontsize=16)
 plt.tick_params(axis='both',which='major',labelsize=14)
 plt.legend(title=r'p = 1 mbar, T = 750 K')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
-plt.savefig('K_rate_2.pdf',dpi=144,bbox_inches='tight')
+#plt.savefig('w_kern.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

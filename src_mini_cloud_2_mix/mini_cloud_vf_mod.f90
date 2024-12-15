@@ -47,7 +47,7 @@ module mini_cloud_vf_mod
 
     real(dp), intent(out) :: v_f
 
-    integer :: n_gas, n_dust
+    integer :: n_bg, n_dust
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, rho_d, rho_t
     real(dp), allocatable, dimension(:) :: VMR_g, V_frac, m_c_s, V_c_s
     real(dp) :: m_c, r_c, Kn, beta
@@ -67,8 +67,8 @@ module mini_cloud_vf_mod
       return
     end if
 
-    n_gas = size(bg_VMR_in)
-    allocate(VMR_g(n_gas))
+    n_bg = size(bg_VMR_in)
+    allocate(VMR_g(n_bg))
     VMR_g(:) = bg_VMR_in(:)
 
     !! Change mu_in to mu
@@ -81,7 +81,7 @@ module mini_cloud_vf_mod
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
 
     !! Calculate dynamical viscosity for this layer
-    call eta_construct(n_gas, sp_bg, VMR_g, T, eta)
+    call eta_construct(n_bg, sp_bg, VMR_g, T, eta)
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
@@ -138,7 +138,7 @@ module mini_cloud_vf_mod
     allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
 
     do i = 1, n_bg
-      select case(sp_bg(i))
+      select case(trim(sp_bg(i)))
 
       case('OH')
         d_g(i) = d_OH

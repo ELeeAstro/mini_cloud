@@ -177,7 +177,7 @@ module mini_cloud_2_mod
     rwork(6) = 0.0_dp       ! Maximum timestep
 
     iwork(5) = 0               ! Max order required
-    iwork(6) = 100000               ! Max number of internal steps
+    iwork(6) = 1000000               ! Max number of internal steps
     iwork(7) = 1                ! Number of error messages
 
 
@@ -272,8 +272,8 @@ module mini_cloud_2_mod
 
     !! Settling velocity
     vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
-      & * (1.0_dp &
-      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+     & * (1.0_dp &
+     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
     !! Find supersaturation ratio
     sat = p_v/p_vap
@@ -291,7 +291,8 @@ module mini_cloud_2_mod
     call calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
 
     !! Calculate the coalesence rate
-    call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
+    !call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
+    f_coal = 0.0_dp
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + f_coag + f_coal
@@ -346,37 +347,51 @@ module mini_cloud_2_mod
     real(dp), parameter :: alpha = 1.0_dp
     real(dp), parameter :: Nf = 10.0_dp
 
+    real(dp) :: ac, F, phi, gm, Vm
+
     if (sat > 1.0_dp) then
 
       ! Efficency Variables
-      ln_ss = log(sat) ! Natural log of saturation ratio
-      f0 = 4.0_dp * pi * r0**2 ! Monomer Area
-      kbT = kb * T         ! kb * T
+      ! ln_ss = log(sat) ! Natural log of saturation ratio
+      ! f0 = 4.0_dp * pi * r0**2 ! Monomer Area
+      ! kbT = kb * T         ! kb * T
 
-      !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
-      theta_inf = (f0 * sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
-      N_inf = (((twothird) * theta_inf) / ln_ss)**3
+      ! !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
+      ! theta_inf = (f0 * sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
+      ! N_inf = (((twothird) * theta_inf) / ln_ss)**3
 
-      !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
-      N_star = 1.0_dp + (N_inf / 8.0_dp) &
-        & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
-        & - 2.0_dp*(Nf/N_inf)**third)**3
-      N_star = max(1.00001_dp, N_star) ! Ensure no div 0
-      N_star_1 = N_star - 1.0_dp
+      ! !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
+      ! N_star = 1.0_dp + (N_inf / 8.0_dp) &
+      !   & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
+      !   & - 2.0_dp*(Nf/N_inf)**third)**3
+      ! N_star = max(1.00001_dp, N_star) ! Ensure no div 0
+      ! N_star_1 = N_star - 1.0_dp
 
-      !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
-      dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
+      ! !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
+      ! dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
 
-      !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
-      Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
-        & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
+      ! !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
+      ! Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
+      !   & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
 
-      !! Calculate !!inverse!! of tau_gr
-      tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
-        & / (2.0_dp * pi * mol_w_sp * amu)) * n_v
+      ! !! Calculate !!inverse!! of tau_gr
+      ! tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
+      !   & / (2.0_dp * pi * mol_w_sp * amu)) * n_v
 
-      !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
-      J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+      ! !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
+      ! J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+
+      ac = (2.0_dp*mol_w_sp*sig)/(rho_d*R_gas*T*log(sat))
+
+      Vm = 4.0_dp/3.0_dp * pi * ac**3
+
+      gm = Vm/V0
+
+      F = (4.0_dp/3.0_dp)*pi*sig*ac**2
+      phi = p/(sqrt(2.0_dp*pi*mol_w_sp*kb*T))
+      Zel = sqrt(F/(3.0_dp*pi*kb*T*gm**2))
+
+      J_hom = 4.0_dp * pi * ac**2 * phi * Zel * n_v * exp(-F/(kb*T))
     else 
       !! Unsaturated, zero nucleation
       J_hom = 0.0_dp
@@ -566,8 +581,10 @@ module mini_cloud_2_mod
       p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
     case('KCl')
       ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
-        & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
+      !p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
+      !  & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
+      ! Morley et al. (2012)
+      p_vap_sp =  10.0_dp**(7.611_dp - 11382.0_dp/T) * bar
     case('NaCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e3_dp*T & 
@@ -704,7 +721,8 @@ module mini_cloud_2_mod
       sig = 1033.0_dp
     case('KCl')
       ! Janz 1988
-      sig = 175.57_dp - 0.07321_dp * T
+      !sig = 175.57_dp - 0.07321_dp * T
+      sig = 160.4_dp - 0.07_dp*T
     case('NaCl')
       ! Janz 1988
       sig = 191.16_dp - 0.07188_dp * T
@@ -734,7 +752,7 @@ module mini_cloud_2_mod
       stop
     end select
 
-    surface_tension = max(10.0_dp, sig)
+    surface_tension = max(1.0_dp, sig)
 
       ! Pradhan et al. (2009):
       !Si : 732 - 0.086*(T - 1685.0)

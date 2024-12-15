@@ -253,6 +253,9 @@ contains
       case('NH3') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'NH3[s].dat'
+      case('Soot_Lavvas')
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'Soot_Lavvas[s].dat'
       case default
         print*,  'No availible n,k data for species: ', trim(sp(n)), 'STOP'
         stop

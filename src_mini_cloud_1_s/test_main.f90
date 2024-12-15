@@ -73,19 +73,19 @@ program test_mini_cloud_1_simple
       cp_in = 1.3e4_dp
 
       !! Assumed condensate species
-      sp = 'KCl'
+      sp = 'MgSiO3'
 
       !! Variables to be sent to mini-cloud module via global variables !!
       !! Inside the loop to demonstrate they can be changed with time if required !!
       !! In this specific code everything is in cgs
       !! --------------------------- !! 
-      rho_c = 1.99_dp
+      rho_c = 3.2_dp
       tau_chem = 10.0_dp
 
-      rm = 1.0_dp * 1e-4_dp
+      rm = 0.6_dp * 1e-4_dp
       sigma = 2.0_dp
 
-      mol_w_sp = 74.551_dp
+      mol_w_sp = 101.0_dp
 
       Kzz_deep = 1e8_dp
       q_v_deep = 1.17e-7_dp * mol_w_sp/mu_in !! MMR for deep mixing ratio
@@ -113,6 +113,10 @@ program test_mini_cloud_1_simple
 
       !! Calculate settling velocity 
       call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_in, rho_c, sp_bg, rm, sigma, v_f)
+
+      q_c = 1e-2_dp
+      rm = 30e-7_dp
+      sp = 'Soot_Lavvas'
 
       !! Calculate the opacity at the weavelength grid
       call opac_mie(1, sp, T_in, mu_in, P_in, q_c, rm, rho_c, sigma, n_wl, wl, k_ext, ssa, g)
