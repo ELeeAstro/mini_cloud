@@ -36,10 +36,10 @@ program test_mini_cloud_2
 
 
   !! time step
-  t_step = 100.0_dp
+  t_step = 200.0_dp
 
   !! Number of iterations
-  n_it = 100000
+  n_it = 50000
 
   !! Start time
   time = 6840.0_dp
@@ -213,7 +213,7 @@ program test_mini_cloud_2
       close(u)
 
       !! Assume constant Kzz [cm2 s-1]
-      Kzz(:) = 1e8_dp
+      Kzz(:) = 1e6_dp
 
       !! Print T-p-Kzz profile
       print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
@@ -228,14 +228,15 @@ program test_mini_cloud_2
       grav = (10.0_dp**(5.25_dp))/100.0_dp
 
       !! Assume constant H2, He and H background VMR @ approx solar
-      allocate(VMR(nlay,1),sp_bg(1))
-      sp_bg = (/'H2'/)
-      VMR(:,1) = 1.0_dp
+      allocate(VMR(nlay,2),sp_bg(2))
+      sp_bg = (/'H2','He'/)
+      VMR(:,1) = 0.85_dp
+      VMR(:,2) = 0.15_dp
 
       !! Assumed condensate species
       sp = 'KCl'
       rho_d = 1.99_dp
-      mol_w_sp = 74.5_dp
+      mol_w_sp = 74.5513_dp
 
       allocate(q_v(nlay), q_0(nlay), q_1(nlay), q0(3), q(nlay,3))
       allocate(r_c(nlay), m_c(nlay), vf(nlay))
@@ -244,16 +245,13 @@ program test_mini_cloud_2
       q_0(:) = 1e-30_dp
       q_1(:) = 1e-30_dp
 
-      q0(1) = 6e-6_dp!0.22e-6_dp *  39.09830_dp/mu(nlay)
+      q0(1) = 1.17e-7_dp * mol_w_sp/mu(nlay)
       q0(2) = 1e-30_dp
       q0(3) = 1e-30_dp
 
       time = 0.0_dp
       n = 0
-
-      !! mini-cloud test output
-      call output(n, time, nlay)      
-
+   
       do n = 1, n_it
 
         do i = 1, nlay

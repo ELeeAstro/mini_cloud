@@ -4,7 +4,7 @@ module vert_adv_mod
 
   integer, parameter :: dp = REAL64
 
-  real(dp), parameter :: CFL = 0.8_dp
+  real(dp), parameter :: CFL = 0.95_dp
   real(dp), parameter :: kb = 1.380649e-16_dp
   real(dp), parameter :: amu = 1.66053906660e-24_dp
 

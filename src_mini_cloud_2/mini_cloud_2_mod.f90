@@ -53,7 +53,7 @@ module mini_cloud_2_mod
   !! Constuct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
-  public :: mini_cloud_2, RHS_mom, jac_dum
+  public :: mini_cloud_2, RHS_mom, jac_dum, jac_test
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct
 
@@ -291,8 +291,7 @@ module mini_cloud_2_mod
     call calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
 
     !! Calculate the coalesence rate
-    !call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
-    f_coal = 0.0_dp
+    call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + f_coag + f_coal
@@ -352,46 +351,42 @@ module mini_cloud_2_mod
     if (sat > 1.0_dp) then
 
       ! Efficency Variables
-      ! ln_ss = log(sat) ! Natural log of saturation ratio
-      ! f0 = 4.0_dp * pi * r0**2 ! Monomer Area
-      ! kbT = kb * T         ! kb * T
+      ln_ss = log(sat) ! Natural log of saturation ratio
+      f0 = 4.0_dp * pi * r0**2 ! Monomer Area
+      kbT = kb * T         ! kb * T
 
-      ! !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
-      ! theta_inf = (f0 * sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
-      ! N_inf = (((twothird) * theta_inf) / ln_ss)**3
+      !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
+      theta_inf = (f0 * sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
+      N_inf = (((twothird) * theta_inf) / ln_ss)**3
 
-      ! !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
-      ! N_star = 1.0_dp + (N_inf / 8.0_dp) &
-      !   & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
-      !   & - 2.0_dp*(Nf/N_inf)**third)**3
-      ! N_star = max(1.00001_dp, N_star) ! Ensure no div 0
-      ! N_star_1 = N_star - 1.0_dp
+      !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
+      N_star = 1.0_dp + (N_inf / 8.0_dp) &
+        & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
+        & - 2.0_dp*(Nf/N_inf)**third)**3
+      N_star = max(1.00001_dp, N_star) ! Ensure no div 0
+      N_star_1 = N_star - 1.0_dp
 
-      ! !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
-      ! dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
+      !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
+      dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
 
-      ! !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
-      ! Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
-      !   & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
+      !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
+      Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
+        & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
 
-      ! !! Calculate !!inverse!! of tau_gr
-      ! tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
-      !   & / (2.0_dp * pi * mol_w_sp * amu)) * n_v
+      !! Calculate !!inverse!! of tau_gr
+      tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
+        & / (2.0_dp * pi * mol_w_sp * amu)) * n_v
 
-      ! !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
-      ! J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+      !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
+      J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
 
-      ac = (2.0_dp*mol_w_sp*sig)/(rho_d*R_gas*T*log(sat))
-
-      Vm = 4.0_dp/3.0_dp * pi * ac**3
-
-      gm = Vm/V0
-
-      F = (4.0_dp/3.0_dp)*pi*sig*ac**2
-      phi = p/(sqrt(2.0_dp*pi*mol_w_sp*kb*T))
-      Zel = sqrt(F/(3.0_dp*pi*kb*T*gm**2))
-
-      J_hom = 4.0_dp * pi * ac**2 * phi * Zel * n_v * exp(-F/(kb*T))
+      ! ac = (2.0_dp*mol_w_sp*sig)/(rho_d*R_gas*T*log(sat))
+      ! Vm = 4.0_dp/3.0_dp * pi * ac**3
+      ! gm = Vm/V0
+      ! F = (4.0_dp/3.0_dp)*pi*sig*ac**2
+      ! phi = p/(sqrt(2.0_dp*pi*mol_w_sp*kb*T))
+      ! Zel = sqrt(F/(3.0_dp*pi*kb*T*gm**2))
+      ! J_hom = 4.0_dp * pi * ac**2 * phi * Zel * n_v * exp(-F/(kb*T))
     else 
       !! Unsaturated, zero nucleation
       J_hom = 0.0_dp
@@ -497,14 +492,6 @@ module mini_cloud_2_mod
 
   end subroutine calc_coal
 
-  !! Dummy jacobian subroutine required for dlsode
-  subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)
-    integer, intent(in) :: NEQ, ML, MU, NROWPD
-    real(dp), intent(in) :: X
-    real(dp), dimension(NEQ), intent(in) :: Y
-    real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
-  end subroutine jac_dum
-
   !! Vapour pressure for each species
   real(dp) function p_vap_sp(sp, T)
     implicit none
@@ -581,10 +568,10 @@ module mini_cloud_2_mod
       p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
     case('KCl')
       ! GGChem 5 polynomial NIST fit
-      !p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
-      !  & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
+      p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
+        & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
       ! Morley et al. (2012)
-      p_vap_sp =  10.0_dp**(7.611_dp - 11382.0_dp/T) * bar
+      !p_vap_sp =  10.0_dp**(7.611_dp - 11382.0_dp/T) * bar
     case('NaCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e3_dp*T & 
@@ -870,5 +857,90 @@ module mini_cloud_2_mod
     eta_out = 1.0_dp/eta_out
 
   end subroutine eta_construct
+
+  !! Dummy jacobian subroutine required for dlsode
+  subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)
+    integer, intent(in) :: NEQ, ML, MU, NROWPD
+    real(dp), intent(in) :: X
+    real(dp), dimension(NEQ), intent(in) :: Y
+    real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
+  end subroutine jac_dum
+
+  !! Test jacobian function
+  subroutine jac_test (n_eq, t, y, ML, MU, PD, NROWPD)
+    integer, intent(in) :: n_eq, ML, MU, NROWPD
+    real(dp), intent(in) :: t
+    real(dp), dimension(n_eq), intent(inout) :: y
+    real(dp), dimension(NROWPD, n_eq), intent(inout) :: PD
+
+    real(dp) :: f_nuc_hom, f_cond, f_seed_evap
+    real(dp) :: f_coal, f_coag
+    real(dp) :: m_c, r_c, Kn, beta, sat, vf
+    real(dp) :: p_v, n_v
+
+    !! Limit y values
+    y(:) = max(y(:),1e-30_dp)
+
+    !! Convert y to real physical numbers to calculate f
+    y(1) = y(1)*nd_atm ! Convert to real number density
+    y(2) = y(2)*rho   ! Convert to real mass density
+    y(3) = y(3)*rho   ! Convert to real mass density
+
+    !! Find the true vapour VMR
+    p_v = y(3) * Rd * T     !! Pressure of vapour
+    n_v = p_v/(kb*T)        !! Number density of vapour
+
+    !! Mean mass of particle
+    m_c = max(y(2)/y(1), m_seed)
+
+    !! Mass weighted mean radius of particle
+    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
+
+    !! Knudsen number
+    Kn = mfp/r_c
+
+    !! Cunningham slip factor
+    beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
+
+    !! Settling velocity
+    vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
+     & * (1.0_dp &
+     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+
+    !! Find supersaturation ratio
+    sat = p_v/p_vap
+
+    !! Calculate condensation rate
+    call calc_cond(n_eq, y, r_c, Kn, n_v, sat, f_cond)
+
+    !! Calculate homogenous nucleation rate
+    call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
+
+    !! Calculate seed particle evaporation rate
+    call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
+
+    !! Calculate the coagulation rate
+    call calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
+
+    !! Calculate the coalesence rate
+    !call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
+    f_coal = 0.0_dp
+
+    PD(1,1) = f_seed_evap/y(1) + 2.0_dp*f_coag/y(1) + 2.0_dp*f_coal/y(1)
+    !df(1,2) = 0
+    !df(1,3) = 0
+    PD(2,1) = f_seed_evap*m_seed/y(1) + f_cond
+    !df(2,2) = 0
+    !df(2,3) = 0
+    PD(3,1) = -f_seed_evap*m_seed/y(1) - f_cond
+    !df(3,2) = 0
+    !df(3,3) = 0
+
+    !! Convert y back to ratios
+    y(1) = y(1)/nd_atm
+    y(2) = y(2)/rho 
+    y(3) = y(3)/rho
+
+  end subroutine jac_test
 
 end module mini_cloud_2_mod

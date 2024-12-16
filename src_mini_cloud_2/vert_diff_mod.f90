@@ -5,7 +5,7 @@ module vert_diff_mod
 
   integer, parameter :: dp = REAL64 ! Precision variable
 
-  real(dp), parameter :: CFL = 0.40_dp
+  real(dp), parameter :: CFL = 0.50_dp
   real(dp), parameter :: kb = 1.380649e-16_dp
   real(dp), parameter :: amu = 1.66053906660e-24_dp
 
@@ -113,15 +113,22 @@ contains
       end do
 
       !! Find flux between layers
+      phi_jp(:) = 0.0_dp
+      phi_jm(:) = -Kzz_e(2) * nde(2) * (q(1,:) - q(2,:))/delz_mid(1)
+      flx(1,:) = -(phi_jp(1) - phi_jm(1))/delz(1)
       do k = 2, nlay-1
         phi_jp(:) = -Kzz_e(k) * nde(k) * (q(k-1,:) - q(k,:))/delz_mid(k-1)
         phi_jm(:) = -Kzz_e(k+1) * nde(k+1) * (q(k,:) - q(k+1,:))/delz_mid(k)
         flx(k,:) = -(phi_jp(:) - phi_jm(:))/delz(k)
         !print*, k,   phi_jp(:),  phi_jm(:), flx(k,:), dh(k)
       end do
+      phi_jp(:) = -Kzz_e(nlay) * nde(nlay) * (q(nlay-1,:) - q(nlay,:))/delz_mid(nlay-1)
+      phi_jm(:) = 0.0_dp
+      flx(nlay,:) = -(phi_jp(nlay) - phi_jm(nlay))/delz(nlay)
+
 
       !! Perform tracer timestepping
-      do k = 2, nlay-1
+      do k = 1, nlay
         q(k,:) = q(k,:) + flx(k,:)/nd(k)*dt
       end do
 
