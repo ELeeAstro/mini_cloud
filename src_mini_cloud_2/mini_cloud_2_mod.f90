@@ -344,7 +344,7 @@ module mini_cloud_2_mod
     real(dp) :: f0, kbT
 
     real(dp), parameter :: alpha = 1.0_dp
-    real(dp), parameter :: Nf = 10.0_dp
+    real(dp), parameter :: Nf = 5.0_dp
 
     real(dp) :: ac, F, phi, gm, Vm
 

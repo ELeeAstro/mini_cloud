@@ -3,6 +3,7 @@ program test_mini_cloud_1_simple
   use mini_cloud_1_s_mod, only : mini_cloud_1_s, rho_c, tau_chem, rm, sigma, mol_w_sp, Kzz_deep, q_v_deep
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
+  use mini_cloud_opac_ln_mod, only : ln_dist_opac
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -15,6 +16,7 @@ program test_mini_cloud_1_simple
   real(dp) :: q_c, q_v, v_f, dT
   real(dp) :: t_step, time
 
+  character(len=100) :: ln_file
   integer :: n_wl
   real(dp), allocatable, dimension(:) :: wl_e, wl, k_ext, ssa, g
 
@@ -89,6 +91,8 @@ program test_mini_cloud_1_simple
 
       Kzz_deep = 1e8_dp
       q_v_deep = 1.17e-7_dp * mol_w_sp/mu_in !! MMR for deep mixing ratio
+
+      ln_file = 'data/MgSiO3_amorph_lognorm.txt'
       
       !! --------------------------- !! 
 
@@ -114,12 +118,10 @@ program test_mini_cloud_1_simple
       !! Calculate settling velocity 
       call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_in, rho_c, sp_bg, rm, sigma, v_f)
 
-      q_c = 1e-2_dp
-      rm = 30e-7_dp
-      sp = 'Soot_Lavvas'
-
       !! Calculate the opacity at the weavelength grid
-      call opac_mie(1, sp, T_in, mu_in, P_in, q_c, rm, rho_c, sigma, n_wl, wl, k_ext, ssa, g)
+      !call opac_mie(1, sp, T_in, mu_in, P_in, q_c, rm, rho_c, sigma, n_wl, wl, k_ext, ssa, g)
+      call ln_dist_opac(1, ln_file, T_in, mu_in, P_in, q_c, & 
+         & rm, rho_c, sigma, n_wl, k_ext, ssa, g)
 
       !! increment time
       time = time + t_step

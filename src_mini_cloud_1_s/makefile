@@ -14,6 +14,7 @@ DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=inva
 SRCS_F90 = \
     lxmie_mod.f90 \
     mini_cloud_opac_mie_mod.f90 \
+    mini_cloud_opac_ln_mod.f90 \
     mini_cloud_vf_mod.f90 \
     mini_cloud_1_s_mod.f90 \
     test_main.f90
