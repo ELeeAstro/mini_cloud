@@ -66,7 +66,7 @@ module vert_adv_mod
     !! Find minimum timestep that allows the CFL condition
     dt = t_end
     do k = 1, nlay
-      dt = min(dt,CFL*(delz_mid(k))/abs(vf_e(k+1)))
+      dt = min(dt,CFL*(delz_mid(k)/abs(vf_e(k+1))))
     enddo
 
     t_now = 0.0_dp
