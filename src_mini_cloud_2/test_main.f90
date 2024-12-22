@@ -36,10 +36,10 @@ program test_mini_cloud_2
 
 
   !! time step
-  t_step = 200.0_dp
+  t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 50000
+  n_it = 10000
 
   !! Start time
   time = 6840.0_dp
@@ -213,7 +213,7 @@ program test_mini_cloud_2
       close(u)
 
       !! Assume constant Kzz [cm2 s-1]
-      Kzz(:) = 1e6_dp
+      Kzz(:) = 1e8_dp
 
       !! Print T-p-Kzz profile
       print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
@@ -251,6 +251,7 @@ program test_mini_cloud_2
 
       time = 0.0_dp
       n = 0
+
    
       do n = 1, n_it
 
