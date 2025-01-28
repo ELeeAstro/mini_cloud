@@ -461,7 +461,10 @@ module mini_cloud_2_mod
 
     real(dp), intent(out) :: f_coag
 
-    real(dp) :: phi, del_r, D_r, V_r, lam_r
+    real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
+
+    real(dp), parameter :: A1 = 9.55e5_dp
+    real(dp), parameter :: B1 = 0.345_dp*A1, C1 = 0.145_dp*A1, D1 = 1.11_dp*A1
 
     !! Particle diffusion rate
     D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
@@ -469,18 +472,26 @@ module mini_cloud_2_mod
     !! Thermal velocity limit rate
     V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
-    !! Ratio fraction
-    lam_r = (8.0_dp*D_r)/(pi*V_r)
+    !! Polovnikov, Azarov and Veshchunov (2016) approach
+    !! Gamma value - mono-disperse assumption
+    gam = (6.0_dp*2.0_dp*D_r)/(2.0_dp*r_c*2.0_dp*V_r)
 
-    !! Interpolation function
-    del_r = ((2.0_dp*r_c + lam_r)**3 - (4.0_dp*r_c**2 + lam_r**2)**(1.5_dp))/(6.0_dp*r_c*lam_r) &
-      & - 2.0_dp*r_c 
+    ! Interpolation expression - kernel is free molecular regime * phi
+    phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 
 
-    !! Correction factor
-    phi = 2.0_dp*r_c/(2.0_dp*r_c + sqrt(2.0_dp)*del_r) + (4.0_dp*D_r)/(r_c*sqrt(2.0_dp)*V_r) 
+    ! Coagulation flux (Zeroth moment) [cm3 s-1]
+    f_coag = -8.0_dp * pi * r_c**2 * sqrt((kb*T)/(pi*m_c)) * phi
 
-    !! Coagulation flux (Zeroth moment) [cm3 s-1]
-    f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)
+    !! Fuchs approach (Fuchs 1964)
+    !!! Ratio fraction
+    ! lam_r = (8.0_dp*D_r)/(pi*V_r)
+    ! !! Interpolation function
+    ! del_r = ((2.0_dp*r_c + lam_r)**3 - (4.0_dp*r_c**2 + lam_r**2)**(1.5_dp))/(6.0_dp*r_c*lam_r) &
+    !   & - 2.0_dp*r_c 
+    ! !! Correction factor
+    ! phi = 2.0_dp*r_c/(2.0_dp*r_c + sqrt(2.0_dp)*del_r) + (4.0_dp*D_r)/(r_c*sqrt(2.0_dp)*V_r) 
+    ! !! Coagulation flux (Zeroth moment) [cm3 s-1]
+    ! f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)
 
   end subroutine calc_coag
 
