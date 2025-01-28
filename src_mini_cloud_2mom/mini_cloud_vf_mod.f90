@@ -60,7 +60,7 @@ module mini_cloud_vf_mod
     nd_atm = p/(kb*T)  
 
     !! Zero velocity if little amount of clouds
-    if (q_0*nd_atm < 1e-10_dp) then
+    if (q_0 < 1e-20_dp) then
       v_f = 0.0_dp
       return
     end if

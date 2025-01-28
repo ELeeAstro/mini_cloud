@@ -279,7 +279,7 @@ module mini_cloud_2_mod
     beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
 
     !! Settling velocity (Stokes regime)
-    vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
+    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
      & * (1.0_dp &
      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
