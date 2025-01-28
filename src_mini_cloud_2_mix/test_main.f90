@@ -1,8 +1,10 @@
-program test_mini_cloud_2_mix
+program test_mini_cloud_2
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_2_mix_mod, only : mini_cloud_2_mix
+  use mini_cloud_2_mix_mod, only : mini_cloud_2_mix, rho_d, mol_w_sp
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
+  use vert_diff_mod, only : vert_diff
+  use vert_adv_mod, only : vert_adv
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -10,29 +12,31 @@ program test_mini_cloud_2_mix
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
   real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
+  real(dp), parameter :: r_seed = 1e-7_dp
 
-  integer, parameter ::  n_bg = 3, n_dust = 5
-  integer :: example, tt, n_it
-
-  real(dp) :: T_in, P_in, mu_in, grav_in, nd_atm, rho
-  real(dp) :: q_0, v_f, r_c, m_c
+  integer :: example, n_it
   real(dp) :: t_step, time
 
-  !! Background
-  character(len=20), dimension(n_bg) :: sp_bg
-  real(dp), dimension(n_bg) :: VMR_bg
-
-  !! Dust details
-  character(len=20), dimension(n_dust) :: sp
-  real(dp), dimension(n_dust) :: rho_s, mw, q_1s, q_v, V_frac
-  real(dp), dimension(n_dust) :: m_c_s, V_c_s
-  real(dp) :: rho_t, rho_d
+  integer :: nlay, nlev, i, n, u
+  character(len=20) :: sp
+  character(len=20), allocatable, dimension(:) :: sp_bg
+  real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho
+  real(dp), allocatable, dimension(:) :: q_0, q_1, q_v, vf, r_c, m_c, q0
+  real(dp), allocatable, dimension(:,:) :: VMR, q
+  real(dp) :: grav
 
   integer :: n_wl
-  real(dp), allocatable, dimension(:) :: wl_e, wl, k_ext, ssa, g
+  real(dp), allocatable, dimension(:) :: wl_e, wl
+  real(dp), allocatable, dimension(:,:) :: k_ext, ssa, g
+
+  integer :: nlines, io, idx, idx1
+  real(dp) :: p_bot, p_top
+  real(dp), allocatable, dimension(:) :: T_f, p_f, Kzz_f
+  real(dp) :: V_seed, m_seed
+
 
   !! time step
-  t_step = 100.0_dp
+  t_step = 1000.0_dp
 
   !! Number of iterations
   n_it = 10000
@@ -41,145 +45,337 @@ program test_mini_cloud_2_mix
   time = 6840.0_dp
 
   !! example select
-  example = 1
+  example = 2
 
-  !! Initial conditions
-  q_v(:) = (/9.33e-8_dp,  2.69e-6_dp, 2.88e-5_dp, 3.55e-5_dp, 1.465e-5_dp/)  !Ti, Al, Fe, Mg, Si abundances at start
-  !q_v(:) = (/1.17e-7_dp/)
-  !q_v(:) = (/1.041e-7_dp, 3.588e-5_dp, 2.231e-5_dp/)
-
-  q_0 = 1.0e-30_dp    ! ~Zero clouds at start 
-  q_1s(:) = 1.0e-30_dp
-
-
-  n_wl = 11
-  allocate(wl_e(n_wl+1), wl(n_wl), k_ext(n_wl), ssa(n_wl), g(n_wl))
-
-  !! Wavelengths to calculate opacity
-  wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
-  wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
-
- ! Start time iteration
-  do tt = 1, n_it
-
-    select case (example)
+  select case (example)
 
     case(1)
 
       !! In this example, we timestep a call to mini-cloud while slowly increasing the temperature
+      nlay = 1
 
-      !! Start sinusoid temperature variation [K]
-      T_in = 2000.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.01_dp *  time)
+      n_wl = 11
+      allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
 
-      !! Assume constant pressure [pa]
-      P_in = 1e5_dp
+      !! Wavelengths to calculate opacity
+      wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
+      wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
-       !! Assume constant H2, He and H background VMR @ approx solar
-      sp_bg(:) = (/'H2','He','H '/)
-      VMR_bg(:) = (/0.85_dp,0.15_dp,1e-6_dp/)
-  
+      !! Allocate all variables, set constant values
+      allocate(Tl(nlay), pl(nlay), mu(nlay), nd_atm(nlay), rho(nlay))
+
+      !! Pressure in pa
+      pl(1) = 1e5_dp
+
+      !! Assume constant H2, He and H background VMR @ approx solar
+      allocate(VMR(nlay,3),sp_bg(3))
+      sp_bg = (/'H2','He','H '/)
+      VMR(1,1) = 0.85_dp
+      VMR(1,2) = 0.15_dp
+      VMR(1,3) = 1e-6_dp
+
       !! Assume constant background gas mean molecular weight [g mol-1] @ approx solar
-      mu_in = 2.33_dp
+      mu(1) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav_in = 10.0_dp
+      grav = 10.0_dp
 
       !! Assumed condensate species
-      sp(:) = (/'TiO2   ','Al2O3  ', 'Fe     ', 'Mg2SiO4','SiO2   ' /)
-      rho_s(:) = (/4.23_dp,3.97_dp ,7.87_dp ,3.21_dp,2.648_dp/)
-      mw(:) = (/79.866_dp,101.961_dp,55.8450_dp,140.6931_dp,60.08430_dp/)
+      sp = 'KCl'
+      rho_d = 1.99_dp
+      mol_w_sp = 74.551_dp
 
-      ! sp(:) = (/'KCl'/)
-      ! rho_s(:) = (/1.99_dp/)
-      ! mw(:) = (/74.551_dp/)
+      allocate(q_v(nlay),q_0(nlay),q_1(nlay))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay))
 
-      ! sp(:) = (/'TiO2   ', 'MgSiO3 ','Fe     '/)
-      ! rho_s(:) = (/4.23_dp,3.19_dp,7.87_dp/)
-      ! mw(:) = (/79.866_dp,100.389_dp,55.845_dp/) 
+      !! Initial conditions
+      q_v(1) = 1.17e-7_dp  ! ~K abundance ratio at Solar (VMR)
+      q_0(1) = 1.0e-30_dp    ! ~Zero clouds at start 
+      q_1(1) = 1.0e-30_dp
 
-      !! Change vapour VMR to mass density ratio for first iteration
-      if (tt == 1) then
-        q_v(:) = q_v(:) * mw(:)/mu_in
-      end if
 
-      !! Number density [cm-3] of layer
-      nd_atm = (P_in*10.0_dp)/(kb*T_in)  
+      !! Change vapur VMR to mass density ratio
+      q_v(1) = q_v(1) * mol_w_sp/mu(1)
 
-      !! Mass density of layer
-      rho = (P_in*10.0_dp*mu_in*amu)/(kb * T_in) ! Mass density [g cm-3]
+      V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+      m_seed = V_seed * rho_d
 
-      !! Call mini-cloud and perform integrations for a single layer
-      call mini_cloud_2_mix(T_in, P_in, grav_in, mu_in, VMR_bg, t_step, sp, sp_bg, q_v, q_0, q_1s)
+      do n = 1, n_it
 
-      !! Calculate settling velocity for this layer
-      call mini_cloud_vf(T_in, P_in, grav_in, mu_in, VMR_bg, rho_s, sp_bg, q_0, q_1s, v_f)
+        !! Start sinusoid temperature variation [K]
+        Tl(1) = 1600.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.01_dp *  time)
 
-      !! Calculate the opacity at the weavelength grid
-      call opac_mie(n_dust, sp, T_in, mu_in, P_in, q_0, q_1s, rho_s, n_wl, wl, k_ext, ssa, g)
+        !! Number density [cm-3] of layer
+        nd_atm(1) = (pl(1)*10.0_dp)/(kb*Tl(1))  
 
-      !! increment time
-      time = time + t_step
+        !! Mass density of layer
+        rho(1) = (pl(1)*10.0_dp*mu(1)*amu)/(kb * Tl(1)) ! Mass density [g cm-3]
 
-      !! Print to screen current progress
-      print*, tt, time, P_in * 1e-5_dp, 'bar ', T_in, 'K ', mu_in, 'g mol-1 ', sp(:)
+        !! Call mini-cloud and perform integrations for a single layer
+        call mini_cloud_2_mix(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1))
 
-      !! Find weighted bulk density of mixed grain composition using volume fraction
+        !! Calculate settling velocity for this layer
+        call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), vf(1))
 
-      !! Mean mass of particle per species
-      m_c_s(:) = (q_1s(:)*rho)/(q_0*nd_atm)
-      !! Mean volumes of particle per species
-      V_c_s(:) = m_c_s(:)/rho_s(:)
-      !! Volume fraction of species in grain
-      V_frac(:) = max(V_c_s(:)/sum(V_c_s(:)),1e-99_dp)
-      !! Volume weighted bulk density
-      rho_d = sum(V_frac(:)*rho_s(:))
+        !! Calculate the opacity at the weavelength grid
+        call opac_mie(1, sp, Tl(1), mu(1), pl(1), q_0(1), q_1(1), rho_d, n_wl, wl(:), k_ext(1,:), ssa(1,:), g(1,:))
 
-      !! Mean mass of particle
-      rho_t = sum(q_1s(:))
-      m_c = (rho_t*rho)/(q_0*nd_atm)
+        !! increment time
+        time = time + t_step
 
-      !! Mass weighted mean radius of particle
-      r_c = ((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp) * 1e4_dp
+        !! Print to screen current progress
+        print*, n, time, pl(1) * 1e-5_dp, 'bar ', Tl(1), 'K ', mu(1), 'g mol-1 ',  trim(sp)
 
-      print*, 'q', tt, q_v, q_0, q_1s, v_f
-      print*, 'r', tt, m_c, r_c, rho_d
-      print*, 'o', tt, k_ext(1), ssa(1), g(1), k_ext(n_wl), ssa(n_wl), g(n_wl)
+        !! Mean mass of particle [g]
+        m_c(1) = (q_1(1)*rho(1))/(q_0(1)*nd_atm(1))
 
-      !! mini-cloud test output
-      call output(tt, time)
+        !! Mass weighted mean radius of particle [um]
+        r_c(1) = ((3.0_dp*m_c(1))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp) * 1e4_dp
+
+        print*, 'q', n, q_v(1), q_0(1), q_1(1), vf(1)
+        print*, 'r', n, m_c(1), r_c(1), rho_d
+        print*, 'o', n, k_ext(1,1), ssa(1,1), g(1,1), k_ext(1,n_wl), ssa(1,n_wl), g(1,n_wl)
+
+        !! mini-cloud test output
+        call output(n, time, nlay)
+
+      end do
 
     case(2)
-      !! In this example, we timestep a call to mini-cloud
-      !! and use a sawtooth pressure wave in log space for 4 oscilations between
-      !! PG_min and PG_max - this can be quite 'shocking' and numerically difficult
+
+      !! In this example we perform a 1D test of mini_cloud with diffusion and settling included
+
+      nlay = 100
+      nlev = nlay + 1
+
+      n_wl = 11
+      allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
+
+      !! Wavelengths to calculate opacity
+      wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
+      wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
+
+      !! Allocate all variables, set constant values
+      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay))
+
+      !! Find pressure level grid - logspaced between p_top and p_bot
+      p_top = 3e-3_dp * 1e5_dp
+      p_bot = 300.0_dp * 1e5_dp
+
+      p_top = log10(p_top)
+      p_bot = log10(p_bot)
+      do i = 1, nlev
+        pe(i) = 10.0_dp**((p_bot-p_top) * real(i-1,dp) / real(nlev-1,dp) + p_top) 
+      end do
+      do i = 1, nlay
+      pl(i) = (pe(i+1) - pe(i)) / log(pe(i+1)/pe(i))
+      end do
+      p_top = 10.0_dp**p_top
+      p_bot = 10.0_dp**p_bot
+
+      !! Read T-p file and interpolate T
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
+      ! Read header
+      read(u,*) ; read(u,*)
+    ! Find number of lines in file
+      nlines = 0
+      do
+        read(u,*,iostat=io)
+        if (io /= 0) then 
+            exit
+        end if
+        nlines = nlines + 1
+      end do
+      ! Allocate values for T-p profile
+      allocate(T_f(nlines),p_f(nlines))
+      ! Rewind file
+      rewind(u)
+      ! Read header again
+      read(u,*); read(u,*)
+      do i = 1, nlines
+        read(u,*) T_f(i), p_f(i)
+      end do
+      p_f(:) = p_f(:)*1e5_dp ! Convert to pa
+      close(u)
+      ! Interpolate to pressure grid
+      do i = 1, nlay
+        call locate(p_f(:), nlines, pl(i), idx)
+        if (idx < 1) then
+          Tl(i) = T_f(1)
+        else if (idx >= nlines) then
+          Tl(i) = T_f(nlines)
+        else
+          idx1 = idx + 1
+          call linear_interp(pl(i), p_f(idx), p_f(idx1), T_f(idx), T_f(idx1), Tl(i))
+        end if
+      end do
+
+      close(u)
+
+      !! Assume constant Kzz [cm2 s-1]
+      Kzz(:) = 1e11_dp
+
+      !! Print T-p-Kzz profile
+      print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
+      do i = 1, nlay
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i)
+      end do
+
+      !! Assume constant background gas mean molecular weight [g mol-1] @ approx solar
+      mu(:) = 2.33_dp
+
+      !! Assume constant gravity [m s-2]
+      grav = (10.0_dp**(3.25_dp))/100.0_dp
+
+      !! Assume constant H2, He and H background VMR @ approx solar
+      allocate(VMR(nlay,2),sp_bg(2))
+      sp_bg = (/'H2','He'/)
+      VMR(:,1) = 0.85_dp
+      VMR(:,2) = 0.15_dp
+
+      !! Assumed condensate species
+      sp = 'KCl'
+      rho_d = 1.99_dp
+      mol_w_sp = 74.5513_dp
+
+      allocate(q_v(nlay), q_0(nlay), q_1(nlay), q0(3), q(nlay,3))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay))
+
+      q_v(:) = 1e-30_dp
+      q_0(:) = 1e-30_dp
+      q_1(:) = 1e-30_dp
+
+      q0(1) = 1.17e-7_dp * mol_w_sp/mu(nlay)
+      q0(2) = 1e-30_dp
+      q0(3) = 1e-30_dp
+
+      time = 0.0_dp
+      n = 0
+
+   
+      do n = 1, n_it
+
+        do i = 1, nlay
+
+          !! Call mini-cloud and perform integrations for a single layer
+          call mini_cloud_2_mix(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
+
+          !! Calculate settling velocity for this layer
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i))
+
+          !! Calculate the opacity at the weavelength grid
+         !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+        end do
+
+        q(:,1) = q_v(:)
+        q(:,2) = q_0(:)
+        q(:,3) = q_1(:)
+
+        call vert_adv(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2, q(:,2:3), q0(2:3))
+        call vert_diff(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 1, q(:,1), q0(1))
+
+
+        q_v(:) = q(:,1)
+        q_0(:) = q(:,2)
+        q_1(:) = q(:,3)
+
+        !! Number density [cm-3] of layer
+        nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
+
+        !! Mass density of layer
+        rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
+
+        !! Mean mass of particle [g]
+        m_c(:) = max((q_1(:)*rho)/(q_0(:)*nd_atm),m_seed)
+
+        !! Mass weighted mean radius of particle [um]
+        r_c(:) = max(((3.0_dp*m_c(:))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
+
+        !! increment time
+        time = time + t_step
+
+        print*, n, time
+
+      end do
+
+      do i = 1, nlay
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_0(i), q_1(i), r_c(i), vf(i), q_0(i)*nd_atm(i)
+      end do
+
+      !! mini-cloud test output
+      call output(n, time, nlay)
 
     case default 
-      print*, 'Invalud test case example: ', example
+      print*, 'Invalid test case example: ', example
       stop
     end select
 
-  end do
-
 contains
 
-  subroutine output(t, time)
+  subroutine output(t, time, nlay)
     implicit none
-
-    integer, intent(in) :: t
+    integer, intent(in) :: t, nlay
     double precision, intent(in) :: time
     integer, save :: u1, u2
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_2_mix/tracers.txt',action='readwrite')
-      open(newunit=u2,file='results_2_mix/opac.txt',action='readwrite')
+      open(newunit=u1,file='results_2/tracers.txt',action='readwrite')
+      open(newunit=u2,file='results_2/opac.txt',action='readwrite')
       write(u2,*) wl(:)
       first_call = .False.
     end if
 
-    write(u1,*) t, time, T_in, P_in, grav_in, mu_in, rho_d, VMR_bg(:), q_v(:), q_0, q_1s(:), v_f
-    write(u2,*) t, time, k_ext(:), ssa(:), g(:)
+    do i = 1, nlay
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_0(i), q_1(i), vf(i)
+      write(u2,*) t, time, k_ext(i,:), ssa(i,:), g(i,:)
+    end do
 
   end subroutine output
 
-end program test_mini_cloud_2_mix
+  subroutine locate(arr, n, var, idx)
+    implicit none
+
+    integer, intent(in) :: n
+    integer, intent(out) :: idx
+    real(dp), dimension(n), intent(in) :: arr
+    real(dp),intent(in) ::  var
+    integer :: jl, jm, ju
+
+    ! Search an array using bi-section (numerical methods)
+    ! Then return array index that is lower than var in arr
+
+    jl = 0
+    ju = n+1
+    do while (ju-jl > 1)
+      jm = (ju+jl)/2
+      if ((arr(n) > arr(1)).eqv.(var > arr(jm))) then
+        jl=jm
+      else
+        ju=jm
+      end if
+    end do
+
+    idx = jl
+
+  end subroutine locate
+
+  subroutine linear_interp(xval, x1, x2, y1, y2, yval)
+    implicit none
+
+    real(kind=dp), intent(in) :: xval, y1, y2, x1, x2
+    real(kind=dp), intent(out) :: yval
+    real(kind=dp) :: norm
+
+    if (x1 >= x2) then
+      print*, 'Error in linear_interp: x1 >= x2 - STOPPING', x1, x2
+      stop
+    end if
+
+    norm = 1.0_dp / (x2 - x1)
+
+    yval = (y1 * (x2 - xval) + y2 * (xval - x1)) * norm
+
+  end subroutine linear_interp
+
+end program test_mini_cloud_2

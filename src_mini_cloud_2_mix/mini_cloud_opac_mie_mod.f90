@@ -11,7 +11,7 @@ module mini_cloud_opac_mie_mod
 
   type nk_table
 
-    character(len=20) :: name
+    character(len=11) :: name
     character(len=50) :: fname
 
     real(dp), allocatable, dimension(:) :: n, k
@@ -32,20 +32,19 @@ module mini_cloud_opac_mie_mod
 
 contains
 
-  subroutine opac_mie(n_dust, sp, T_in, mu_in, P_in, q_0, q_1s, rho_s, n_wl, wl, k_ext, alb, gg)
+  subroutine opac_mie(n_dust, sp, T_in, mu_in, P_in, q_0, q_1, rho_d, n_wl, wl, k_ext, alb, gg)
     implicit none
 
     integer, intent(in) :: n_dust, n_wl
-    character(len=20), dimension(n_dust), intent(in) :: sp
+    character(len=11), dimension(n_dust), intent(in) :: sp
     real(dp), intent(in) :: T_in, mu_in, P_in
-    real(dp), intent(in) :: q_0
+    real(dp), intent(in) :: q_0, q_1, rho_d
     real(dp), dimension(n_wl), intent(in) :: wl
-    real(dp), dimension(n_dust), intent(in) :: q_1s, rho_s
 
     real(dp), dimension(n_wl), intent(out) :: k_ext, alb, gg
 
     integer :: l, n
-    real(dp) :: rho, nd_atm, amean, n_d, m_c, rho_d, rho_t
+    real(dp) :: rho, nd_atm, amean, n_d, m_c
     real(dp) :: x, xsec, q_ext, q_sca, q_abs, g
     real(dp), dimension(n_dust) :: b_mix
     complex(dp) :: e_eff, e_eff0
@@ -68,20 +67,17 @@ contains
       return
     end if
 
-    !! Find weighted bulk density of mixed grain composition using volume fraction
-    rho_t = sum(q_1s(:))
-    b_mix(:) = q_1s(:)/rho_t
-    rho_d = sum(b_mix(:)*rho_s(:))
-
     rho = (P_in * 10.0_dp * mu_in * amu)/(kb * T_in)
 
-    m_c = (rho_t*rho)/(q_0*nd_atm)
+    m_c = (q_1*rho)/(q_0*nd_atm)
 
     amean = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp), 1e-7_dp)
 
     n_d = q_0 * nd_atm
 
     xsec = pi * amean**2
+    
+    b_mix(:) = 1.0_dp
 
     do l = 1, n_wl
 
@@ -205,7 +201,7 @@ contains
 
     integer, intent(in) :: n_dust, n_wl
     real(dp), dimension(n_wl), intent(in) :: wl
-    character(len=20), dimension(n_dust), intent(in) :: sp
+    character(len=11), dimension(n_dust), intent(in) :: sp
 
     integer :: n
 
@@ -213,7 +209,8 @@ contains
 
     do n = 1, n_dust
 
-      allocate(nk(n)%n(n_wl),nk(n)%k(n_wl))
+      allocate(nk(n)%n(n_wl))
+      allocate(nk(n)%k(n_wl))
 
       select case(trim(sp(n)))
       case('CaTiO3')
@@ -221,7 +218,7 @@ contains
         nk(n)%fname = 'CaTiO3[s].dat'
       case('TiO2')
         nk(n)%name = sp(n)
-        nk(n)%fname = 'TiO2[s].dat'
+        nk(n)%fname = 'TiO2_anatase[s].dat'
       case('Al2O3')
         nk(n)%name = sp(n)
         nk(n)%fname = 'Al2O3[s].dat'
@@ -237,9 +234,6 @@ contains
       case('MgSiO3') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'MgSiO3_amorph[s].dat'
-      case('SiO2') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'SiO2_amorph[s].dat'
       case('KCl') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'KCl[s].dat'        
