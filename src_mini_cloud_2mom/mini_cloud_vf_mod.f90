@@ -29,7 +29,7 @@ module mini_cloud_vf_mod
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
-  !! Constuct required arrays for calculating gas mixtures
+  !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
   public :: mini_cloud_vf
@@ -48,9 +48,9 @@ module mini_cloud_vf_mod
     real(dp), intent(out) :: v_f
 
     integer :: n_bg
-    real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta
+    real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: m_c, r_c, Kn, beta
+    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -78,13 +78,16 @@ module mini_cloud_vf_mod
     !! Mass density of layer
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
 
+    !! Thermal velocity
+    cT = sqrt((2.0_dp * kb * T) / (mu * amu))
+
     !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
     call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
-    !! Calculate vf from final results of interation
+    !! Calculate vf from final results of interaction
     !! Mean mass of particle
     m_c = (q_1*rho)/(q_0*nd_atm)
 
@@ -94,15 +97,22 @@ module mini_cloud_vf_mod
     !! Knudsen number
     Kn = mfp/r_c
 
-    !! Cunningham slip factor
-    beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
+    !! Cunningham slip factor (Kim et al. 2005)
+    beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
 
-    ! !! Settling velocity
-    v_f = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
-      & * (1.0_dp + & 
-      & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    !! Settling velocity (Stokes regime)
+    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
+     & * (1.0_dp &
+     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
-    !v_f = 0.5_dp * (rho_d*grav*r_c)/rho * sqrt((pi*mu)/(2.0_dp*R_gas*T))
+    !! Settling velocity (Epstein regime)
+    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
+
+    !! Interpolation for settling velocity
+    v_f = fx*vf_s + (1.0_dp - fx)*vf_e
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 

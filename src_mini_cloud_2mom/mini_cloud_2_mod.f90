@@ -2,7 +2,7 @@ module mini_cloud_2_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
-  ! Fortran 2008 intrinsic precisions - reccomended if possible
+  ! Fortran 2008 intrinsic precisions - recommended if possible
   !integer, parameter :: sp = REAL32
   integer, parameter :: dp = REAL64
   !integer, parameter :: qp = REAL128
@@ -32,8 +32,10 @@ module mini_cloud_2_mod
   real(dp) :: r0, V0, m0, d0 ! Unit mass and volume
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp) :: V_seed, m_seed
+  real(dp) :: Kn_crit
+  real(dp) :: alp = 1.0_dp
 
-  real(dp) :: mfp, eta, nu
+  real(dp) :: mfp, eta, nu, cT
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -50,10 +52,10 @@ module mini_cloud_2_mod
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
-  !! Constuct required arrays for calculating gas mixtures
+  !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
-  public :: mini_cloud_2, RHS_mom, jac_dum, jac_test
+  public :: mini_cloud_2, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct
 
@@ -114,6 +116,9 @@ module mini_cloud_2_mod
     !! Mass density of layer
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
 
+    !! Thermal velocity
+    cT = sqrt((2.0_dp * kb * T) / (mu * amu))
+
     !! Specific gas constant of layer [erg g-1 K-1]
     Rd = R_gas/mu
 
@@ -149,6 +154,9 @@ module mini_cloud_2_mod
     !! Surface tension of material
     sig = surface_tension(sp, T)
 
+    !! Critical Knudsen number
+    Kn_crit = (mfp * alp * vth)/D
+
     ! -----------------------------------------
     ! ***  parameters for the DLSODE solver  ***
     ! -----------------------------------------
@@ -173,7 +181,7 @@ module mini_cloud_2_mod
     iwork(:) = 0
 
     rwork(1) = 0.0_dp               ! Critical T value (don't integrate past time here)
-    rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DVODE)
+    rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DLSODE)
     rwork(6) = 0.0_dp       ! Maximum timestep
 
     iwork(5) = 0               ! Max order required
@@ -239,10 +247,10 @@ module mini_cloud_2_mod
 
     real(dp) :: f_nuc_hom, f_cond, f_seed_evap
     real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, Kn, beta, sat, vf
-    real(dp) :: p_v, n_v
+    real(dp) :: m_c, r_c, Kn, beta, sat, vf_s, vf_e, vf
+    real(dp) :: p_v, n_v, fx
 
-    !! In this routine, you calculate the instanenous new fluxes (f) for each moment
+    !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
     !! Basically, you solve for the RHS of the ODE for each moment
 
@@ -267,13 +275,22 @@ module mini_cloud_2_mod
     !! Knudsen number
     Kn = mfp/r_c
 
-    !! Cunningham slip factor
-    beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
+    !! Cunningham slip factor (Kim et al. 2005)
+    beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
 
-    !! Settling velocity
+    !! Settling velocity (Stokes regime)
     vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
      & * (1.0_dp &
      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+
+    !! Settling velocity (Epstein regime)
+    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
+
+    !! Interpolation for settling velocity
+    vf = fx*vf_s + (1.0_dp - fx)*vf_e
 
     !! Find supersaturation ratio
     sat = p_v/p_vap
@@ -288,13 +305,13 @@ module mini_cloud_2_mod
     call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
 
     !! Calculate the coagulation rate
-    call calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
+    call calc_coag(m_c, r_c, beta, f_coag)
 
-    !! Calculate the coalesence rate
-    call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
+    !! Calculate the coalescence rate
+    call calc_coal(r_c, Kn, vf, f_coal)
 
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom + f_seed_evap) + f_coag + f_coal
+    f(1) = (f_nuc_hom + f_seed_evap) + (f_coag + f_coal)*y(1)**2
     f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond*y(1)
     f(3) = -f(2)
 
@@ -320,13 +337,21 @@ module mini_cloud_2_mod
 
     real(dp), intent(out) :: dmdt
 
-    if (Kn >= 1.0_dp) then
-      !! Kinetic regime [g s-1]
-      dmdt = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * (1.0_dp - 1.0_dp/sat)
-    else
-      !! Diffusive limited regime [g s-1]
-      dmdt = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat)
-    end if
+    real(dp) :: dmdt_low, dmdt_high, Knd, fx
+
+    !! Free molecular flow regime (Kn >> 1) [g s-1]
+    dmdt_high = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * alp * (1.0_dp - 1.0_dp/sat)
+
+    !! Diffusive limited regime (Kn << 1) [g s-1]
+    dmdt_low = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat)
+
+    !! Kn' (Woitke & Helling 2003)
+    Knd = Kn/Kn_crit
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
+
+    dmdt = dmdt_low * fx + dmdt_high * (1.0_dp - fx)
 
   end subroutine calc_cond
 
@@ -429,11 +454,9 @@ module mini_cloud_2_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
+  subroutine calc_coag(m_c, r_c, beta, f_coag)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
     real(dp), intent(in) :: m_c, r_c, beta
 
     real(dp), intent(out) :: f_coag
@@ -456,17 +479,15 @@ module mini_cloud_2_mod
     !! Correction factor
     phi = 2.0_dp*r_c/(2.0_dp*r_c + sqrt(2.0_dp)*del_r) + (4.0_dp*D_r)/(r_c*sqrt(2.0_dp)*V_r) 
 
-    !! Coagulation flux (Zeroth moment) [cm-3 s-1]
-    f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)  * y(1)**2
+    !! Coagulation flux (Zeroth moment) [cm3 s-1]
+    f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)
 
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
+  subroutine calc_coal(r_c, Kn, vf, f_coal)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
     real(dp), intent(in) :: r_c, Kn, vf
 
     real(dp), intent(out) :: f_coal
@@ -487,8 +508,8 @@ module mini_cloud_2_mod
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
-    !! Coalesence flux (Zeroth moment) [cm-3 s-1]
-    f_coal = -2.0_dp*pi*r_c**2*y(1)**2*d_vf*E
+    !! Coalesence flux (Zeroth moment) [cm3 s-1]
+    f_coal = -2.0_dp*pi*r_c**2*d_vf*E
 
   end subroutine calc_coal
 
@@ -865,82 +886,5 @@ module mini_cloud_2_mod
     real(dp), dimension(NEQ), intent(in) :: Y
     real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
   end subroutine jac_dum
-
-  !! Test jacobian function
-  subroutine jac_test (n_eq, t, y, ML, MU, PD, NROWPD)
-    integer, intent(in) :: n_eq, ML, MU, NROWPD
-    real(dp), intent(in) :: t
-    real(dp), dimension(n_eq), intent(inout) :: y
-    real(dp), dimension(NROWPD, n_eq), intent(inout) :: PD
-
-    real(dp) :: f_nuc_hom, f_cond, f_seed_evap
-    real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, Kn, beta, sat, vf
-    real(dp) :: p_v, n_v
-
-    !! Limit y values
-    y(:) = max(y(:),1e-30_dp)
-
-    !! Convert y to real physical numbers to calculate f
-    y(1) = y(1)*nd_atm ! Convert to real number density
-    y(2) = y(2)*rho   ! Convert to real mass density
-    y(3) = y(3)*rho   ! Convert to real mass density
-
-    !! Find the true vapour VMR
-    p_v = y(3) * Rd * T     !! Pressure of vapour
-    n_v = p_v/(kb*T)        !! Number density of vapour
-
-    !! Mean mass of particle
-    m_c = max(y(2)/y(1), m_seed)
-
-    !! Mass weighted mean radius of particle
-    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
-
-    !! Knudsen number
-    Kn = mfp/r_c
-
-    !! Cunningham slip factor
-    beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
-
-    !! Settling velocity
-    vf = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
-     & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
-
-    !! Find supersaturation ratio
-    sat = p_v/p_vap
-
-    !! Calculate condensation rate
-    call calc_cond(n_eq, y, r_c, Kn, n_v, sat, f_cond)
-
-    !! Calculate homogenous nucleation rate
-    call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
-
-    !! Calculate seed particle evaporation rate
-    call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
-
-    !! Calculate the coagulation rate
-    call calc_coag(n_eq, y, m_c, r_c, beta, f_coag)
-
-    !! Calculate the coalesence rate
-    !call calc_coal(n_eq, y, r_c, Kn, vf, f_coal)
-    f_coal = 0.0_dp
-
-    PD(1,1) = f_seed_evap/y(1) + 2.0_dp*f_coag/y(1) + 2.0_dp*f_coal/y(1)
-    !df(1,2) = 0
-    !df(1,3) = 0
-    PD(2,1) = f_seed_evap*m_seed/y(1) + f_cond
-    !df(2,2) = 0
-    !df(2,3) = 0
-    PD(3,1) = -f_seed_evap*m_seed/y(1) - f_cond
-    !df(3,2) = 0
-    !df(3,3) = 0
-
-    !! Convert y back to ratios
-    y(1) = y(1)/nd_atm
-    y(2) = y(2)/rho 
-    y(3) = y(3)/rho
-
-  end subroutine jac_test
 
 end module mini_cloud_2_mod
