@@ -431,7 +431,7 @@ module mini_cloud_2_mod
 
     real(dp) :: tau_evap
 
-    if ((f_cond >= 0.0_dp) .or. (y(1)/nd_atm <= 1e-29_dp)) then
+    if ((f_cond >= 0.0_dp)) then
 
       !! If growing or too little number density then evaporation can't take place
       J_evap = 0.0_dp
@@ -474,7 +474,7 @@ module mini_cloud_2_mod
 
     !! Polovnikov, Azarov and Veshchunov (2016) approach
     !! Gamma value - mono-disperse assumption
-    gam = (6.0_dp*2.0_dp*D_r)/(2.0_dp*r_c*2.0_dp*V_r)
+    gam = (3.0_dp*D_r)/(r_c*V_r)
 
     ! Interpolation expression - kernel is free molecular regime * phi
     phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 

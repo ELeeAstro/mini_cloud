@@ -60,10 +60,10 @@ module mini_cloud_vf_mod
     nd_atm = p/(kb*T)  
 
     !! Zero velocity if little amount of clouds
-    if (q_0 < 1e-20_dp) then
-      v_f = 0.0_dp
-      return
-    end if
+    ! if (q_0*nd_atm < 1e-10_dp) then
+    !   v_f = 0.0_dp
+    !   return
+    ! end if
 
     n_bg = size(bg_VMR_in)
     allocate(VMR_bg(n_bg))

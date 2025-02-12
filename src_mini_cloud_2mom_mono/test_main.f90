@@ -39,7 +39,7 @@ program test_mini_cloud_2
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 10000
+  n_it = 100000
 
   !! Start time
   time = 6840.0_dp
@@ -213,7 +213,7 @@ program test_mini_cloud_2
       close(u)
 
       !! Assume constant Kzz [cm2 s-1]
-      Kzz(:) = 1e8_dp
+      Kzz(:) = 1e9_dp
 
       !! Print T-p-Kzz profile
       print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
@@ -263,7 +263,7 @@ program test_mini_cloud_2
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i))
 
-          !! Calculate the opacity at the weavelength grid
+          !! Calculate the opacity at the wavelength grid
          !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
 
