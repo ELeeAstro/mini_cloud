@@ -18,7 +18,7 @@ SRCS_F90 = \
     lxmie_mod.f90 \
     mini_cloud_opac_mie_mod.f90 \
     mini_cloud_vf_mod.f90 \
-    mini_cloud_2_mod.f90 \
+    mini_cloud_2_mono_mod.f90 \
     test_main.f90
 
 SRCS_F = dlsode.f

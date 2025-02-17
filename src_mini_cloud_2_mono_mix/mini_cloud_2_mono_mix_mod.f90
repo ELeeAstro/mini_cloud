@@ -1,4 +1,4 @@
-module mini_cloud_2_mod
+module mini_cloud_2_mono_mix_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -55,13 +55,13 @@ module mini_cloud_2_mod
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
-  public :: mini_cloud_2, RHS_mom, jac_dum
+  public :: mini_cloud_2_mono_mix, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct
 
   contains
 
-  subroutine mini_cloud_2(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1)
+  subroutine mini_cloud_2_mono_mix(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1)
     implicit none
 
     ! Input variables
@@ -235,7 +235,7 @@ module mini_cloud_2_mod
 
     deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g)
 
-  end subroutine mini_cloud_2
+  end subroutine mini_cloud_2_mono_mix
 
   subroutine RHS_mom(n_eq, time, y, f)
     implicit none
@@ -899,4 +899,4 @@ module mini_cloud_2_mod
     real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
   end subroutine jac_dum
 
-end module mini_cloud_2_mod
+end module mini_cloud_2_mono_mix_mod
