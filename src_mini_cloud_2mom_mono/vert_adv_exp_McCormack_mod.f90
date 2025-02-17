@@ -1,4 +1,4 @@
-module vert_adv_mod
+module vert_adv_exp_McCormack_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -7,12 +7,12 @@ module vert_adv_mod
   real(dp), parameter :: CFL = 0.90_dp
   real(dp), parameter :: R = 8.31446261815324e7_dp
 
-  public :: vert_adv
+  public :: vert_adv_exp_McCormack
   private :: minmod, superbee, vanleer, mc, koren
 
   contains
  
-  subroutine vert_adv(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, vf, nq, q, q0)
+  subroutine vert_adv_exp_McCormack(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, vf, nq, q, q0)
     implicit none
 
 
@@ -107,7 +107,7 @@ module vert_adv_mod
 
     end do
     
-  end subroutine vert_adv
+  end subroutine vert_adv_exp_McCormack
 
   subroutine minmod(nlay,q,dz,sig)
     implicit none
@@ -213,4 +213,4 @@ module vert_adv_mod
 
   end subroutine koren
 
-end module vert_adv_mod
+end module vert_adv_exp_McCormack_mod

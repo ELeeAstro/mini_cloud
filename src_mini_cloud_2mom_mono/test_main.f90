@@ -5,7 +5,7 @@ program test_mini_cloud_2
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
   use vert_diff_imp_mod, only : vert_diff_imp
-  use vert_adv_mod, only : vert_adv
+  use vert_adv_exp_McCormack_mod, only : vert_adv_exp_McCormack
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -277,9 +277,12 @@ program test_mini_cloud_2
         q(:,2) = q_0(:)
         q(:,3) = q_1(:)
 
-        call vert_adv(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2, q(:,2:3), q0(2:3))
-        !call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
-        call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2, q(:,2:3), q0(2:3))
+        !call vert_adv_exp_MUSCL(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2, q(:,2:3), q0(2:3))
+
+
+        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+        !call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
 
 
 

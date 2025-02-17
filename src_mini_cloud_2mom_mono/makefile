@@ -14,7 +14,7 @@ DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=inva
 SRCS_F90 = \
     vert_diff_exp_mod.f90 \
     vert_diff_imp_mod.f90 \
-    vert_adv_mod.f90 \
+    vert_adv_exp_McCormack_mod.f90 \
     lxmie_mod.f90 \
     mini_cloud_opac_mie_mod.f90 \
     mini_cloud_vf_mod.f90 \

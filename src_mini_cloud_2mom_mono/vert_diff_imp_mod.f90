@@ -67,64 +67,10 @@ contains
 
     dt = t_end
 
-    do i = 2, nlay-1
-      dx_f = alte(i+1) - alte(i)
-      dx_b = alte(i) - alte(i-1)
-
-      alpha = Kzze(i) / (dx_b * (dx_b + dx_f))
-      beta = Kzze(i+1) / (dx_f * (dx_b + dx_f))
-
-      ld(i-1) = -alpha * dt / 2.0_dp
-      md(i) = 1.0_dp+ (alpha + beta) * dt / 2.0_dp
-      ud(i) = -beta * dt / 2.0_dp
-    end do
-
-    ud(1) = 0.0_dp
-    ld(nlay-1) = 0.0_dp
-    md(1) = 1.0_dp
-    md(nlay) = 1.0_dp
 
     !! Perform inversion for each tracer
     do n = 1, nq
 
-      do i = 2, nlay-1
-        
-        dx_f = alte(i+1) - alte(i)
-        dx_b = alte(i) - alte(i-1)
-
-        alpha = Kzze(i) / (dx_b * (dx_b + dx_f))
-        beta = Kzze(i+1) / (dx_f * (dx_b + dx_f))
-
-        rhs(i) = &
-              &  (1.0_dp - (alpha + beta) * dt / 2.0_dp) * q(i,n) &
-              &  + alpha * dt / 2.0_dp * q(i-1,n) &
-              &  + beta * dt / 2.0_dp * q(i+1,n)
-      end do
-
-      rhs(1) = q(2,n)
-      rhs(nlay) = q0(n)!rhs(nlay-1) - (Kzze(1) / (alte(nlay-1) - alte(nlay))) * dt
-
-      ! Apply Thompson's correction for improved numerical stability
-      do i = 2, nlay-1
-        md(i) = md(i) + 1e-8_dp  ! Small diagonal regularization to improve conditioning
-      end do
-
-      ! Implement explicit tridiagonal solver (Thompson's method)
-      c_p(1) = ud(1) / md(1)
-      d_p(1) = rhs(1) / md(1)
-
-      do i = 2, nlay
-        denom = md(i) - ld(i-1) * c_p(i-1)
-        c_p(i) = ud(i) / denom
-        d_p(i) = (rhs(i) - ld(i-1) * d_p(i-1)) / denom
-      end do
-        
-      d_p(nlay) = (rhs(nlay) - ld(nlay-1) * d_p(nlay-1)) / (md(nlay) - ld(nlay-1) * c_p(nlay-1))
-        
-      q(nlay,n) = d_p(nlay)
-      do i = nlay-1, 1, -1
-        q(i,n) = d_p(i) - c_p(i) * q(i+1,n)
-      end do
 
     end do
 
