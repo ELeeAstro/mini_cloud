@@ -520,7 +520,8 @@ module mini_cloud_2_mod
     end if
 
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal = -2.0_dp*pi*r_c**2*d_vf*E
+    !f_coal = -2.0_dp*pi*r_c**2*d_vf*E
+    f_coal = 0.0_dp
 
   end subroutine calc_coal
 

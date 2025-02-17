@@ -3,7 +3,8 @@ program test_mini_cloud_2
   use mini_cloud_2_mod, only : mini_cloud_2, rho_d, mol_w_sp
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
-  use vert_diff_mod, only : vert_diff
+  use vert_diff_exp_mod, only : vert_diff_exp
+  use vert_diff_imp_mod, only : vert_diff_imp
   use vert_adv_mod, only : vert_adv
   implicit none
 
@@ -21,7 +22,7 @@ program test_mini_cloud_2
   character(len=20) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho
-  real(dp), allocatable, dimension(:) :: q_0, q_1, q_v, vf, r_c, m_c, q0
+  real(dp), allocatable, dimension(:) :: q_0, q_1, q_v, vf, r_c, m_c, q0, r_c_old, del
   real(dp), allocatable, dimension(:,:) :: VMR, q
   real(dp) :: grav
 
@@ -34,12 +35,13 @@ program test_mini_cloud_2
   real(dp), allocatable, dimension(:) :: T_f, p_f, Kzz_f
   real(dp) :: V_seed, m_seed
 
+  logical :: end
 
   !! time step
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 100000
+  n_it = 1000000
 
   !! Start time
   time = 6840.0_dp
@@ -160,7 +162,7 @@ program test_mini_cloud_2
 
       !! Find pressure level grid - logspaced between p_top and p_bot
       p_top = 3e-3_dp * 1e5_dp
-      p_bot = 10.0_dp * 1e5_dp
+      p_bot = 100.0_dp * 1e5_dp
 
       p_top = log10(p_top)
       p_bot = log10(p_bot)
@@ -213,7 +215,7 @@ program test_mini_cloud_2
       close(u)
 
       !! Assume constant Kzz [cm2 s-1]
-      Kzz(:) = 1e9_dp
+      Kzz(:) = 1e8_dp
 
       !! Print T-p-Kzz profile
       print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
@@ -239,7 +241,7 @@ program test_mini_cloud_2
       mol_w_sp = 74.5513_dp
 
       allocate(q_v(nlay), q_0(nlay), q_1(nlay), q0(3), q(nlay,3))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay), r_c_old(nlay), del(nlay))
 
       q_v(:) = 1e-30_dp
       q_0(:) = 1e-30_dp
@@ -249,8 +251,12 @@ program test_mini_cloud_2
       q0(2) = 1e-30_dp
       q0(3) = 1e-30_dp
 
+      q_v(nlay) = q0(1)
+
       time = 0.0_dp
       n = 0
+
+      r_c_old(:) = r_seed * 1e-4_dp
 
    
       do n = 1, n_it
@@ -272,7 +278,9 @@ program test_mini_cloud_2
         q(:,3) = q_1(:)
 
         call vert_adv(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2, q(:,2:3), q0(2:3))
-        call vert_diff(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+        !call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+
 
 
         q_v(:) = q(:,1)
@@ -296,7 +304,29 @@ program test_mini_cloud_2
 
         print*, n, time
 
+        end = .True.
+
+        do i = 1, nlay
+          del(i) = abs(r_c_old(i) - r_c(i))/r_c_old(i)
+          if ((del(i) > 1e-4_dp) .or.  (del(i)/t_step > 1e-4_dp)) then
+            end = .False.
+            exit
+          end if
+        end do
+        r_c_old(:) = r_c(:)
+
+        if ((end .eqv. .True.) .and. (n > int(1e6))) then
+          print*, 'exit: ', n, n_it, end
+          print*, del(:)
+          print*, del(:)/t_step
+          exit
+        end if
+
+
       end do
+
+      print*, del(:)
+      print*, del(:)/t_step
 
       do i = 1, nlay
         print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_0(i), q_1(i), r_c(i), vf(i), q_0(i)*nd_atm(i)

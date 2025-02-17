@@ -1,4 +1,4 @@
-module vert_diff_mod
+module vert_diff_exp_mod
   use, intrinsic :: iso_fortran_env
   implicit none
 
@@ -8,12 +8,12 @@ module vert_diff_mod
   real(dp), parameter :: CFL = 0.90_dp
   real(dp), parameter :: R = 8.31446261815324e7_dp
 
-  public :: vert_diff
+  public :: vert_diff_exp
   private :: compute_fluxes
 
 contains
 
-  subroutine vert_diff(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, Kzz, nq, q, q0)
+  subroutine vert_diff_exp(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, Kzz, nq, q, q0)
     implicit none
 
     integer, intent(in) :: nlay, nlev, nq
@@ -159,7 +159,7 @@ contains
       q(:,n) = max(q(:,n),1e-30_dp)
     end do
 
-  end subroutine vert_diff
+  end subroutine vert_diff_exp
 
   subroutine compute_fluxes(nlay, delz_mid, delz, Kzze, nq, q_in, flux)
     implicit none
@@ -185,5 +185,5 @@ contains
 
   end subroutine compute_fluxes
 
-end module vert_diff_mod
+end module vert_diff_exp_mod
 

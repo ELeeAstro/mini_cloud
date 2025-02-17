@@ -8,7 +8,7 @@ module vert_adv_mod
   real(dp), parameter :: R = 8.31446261815324e7_dp
 
   public :: vert_adv
-  private :: minmod
+  private :: minmod, superbee, vanleer, mc, koren
 
   contains
  
@@ -84,7 +84,11 @@ module vert_adv_mod
       do n = 1, nq
 
         !! Find the minmod limiter
-        call minmod(nlay,q(:,n),delz_mid,sig)
+        !call minmod(nlay,q(:,n),delz_mid,sig)
+        !call superbee(nlay,q(:,n),delz_mid,sig)
+        !call vanleer(nlay,q(:,n),delz_mid,sig)
+        !call mc(nlay,q(:,n),delz_mid,sig)
+        call koren(nlay,q(:,n),delz_mid,sig)
 
         !! Perform McCormack step
         qc(:,n) = q(:,n)
@@ -131,5 +135,82 @@ module vert_adv_mod
     sig(nlay) = 0.0_dp
 
   end subroutine minmod
+
+  subroutine superbee(nlay,q,dz,sig)
+    implicit none
+
+    integer, intent(in) :: nlay
+    real(dp), dimension(nlay), intent(in) :: q, dz
+
+    real(dp), dimension(nlay), intent(out) :: sig
+
+    integer :: i
+    real(dp) :: r
+
+    sig(1) = 0.0_dp
+    do i = 2, nlay-1
+      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      sig(i) = max(0.0_dp, min(2*r, 1.0_dp), min(r, 2.0_dp))
+    end do
+    sig(nlay) = 0.0_dp
+
+  end subroutine superbee
+
+  subroutine vanleer(nlay,q,dz,sig)
+    implicit none
+
+    integer, intent(in) :: nlay
+    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(out) :: sig
+
+    integer :: i
+    real(dp) :: r
+
+    sig(1) = 0.0_dp
+    do i = 2, nlay-1
+      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      sig(i) = (r + abs(r)) / (1.0_dp + abs(r))
+    end do
+    sig(nlay) = 0.0_dp
+
+  end subroutine vanleer
+
+  subroutine mc(nlay,q,dz,sig)
+    implicit none
+
+    integer, intent(in) :: nlay
+    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(out) :: sig
+
+    integer :: i
+    real(dp) :: r
+
+    sig(1) = 0.0_dp
+    do i = 2, nlay-1
+      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      sig(i) = max(0.0_dp, min((1.0_dp + r) / 2.0_dp, 2.0_dp, r))
+    end do
+    sig(nlay) = 0.0_dp
+
+  end subroutine mc
+
+  subroutine koren(nlay,q,dz,sig)
+    implicit none
+
+    integer, intent(in) :: nlay
+    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(out) :: sig
+
+    integer :: i
+    real(dp) :: r
+
+    sig(1) = 0.0_dp
+    do i = 2, nlay-1
+      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      sig(i) = max(0.0_dp, min(2.0_dp*r, (1.0_dp + 2.0_dp*r) / 3.0_dp, 2.0_dp))
+    end do
+    sig(nlay) = 0.0_dp
+
+  end subroutine koren
 
 end module vert_adv_mod

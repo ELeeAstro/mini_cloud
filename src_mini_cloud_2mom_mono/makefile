@@ -5,14 +5,15 @@ F90 = gfortran
 F90LINKER = $(F90)
 
 # Default build type is release
-FFLAGS = -O3 # Default release flags
+FFLAGS = -O3 -pipe #Default release flags
 
 # Debugging flags
 DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
 
 # Source files (mix of .f and .f90 files)
 SRCS_F90 = \
-    vert_diff_mod.f90 \
+    vert_diff_exp_mod.f90 \
+    vert_diff_imp_mod.f90 \
     vert_adv_mod.f90 \
     lxmie_mod.f90 \
     mini_cloud_opac_mie_mod.f90 \
