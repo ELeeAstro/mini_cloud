@@ -41,7 +41,7 @@ program test_mini_cloud_2
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 100000
 
   !! Start time
   time = 6840.0_dp
@@ -162,7 +162,7 @@ program test_mini_cloud_2
 
       !! Find pressure level grid - logspaced between p_top and p_bot
       p_top = 3e-3_dp * 1e5_dp
-      p_bot = 100.0_dp * 1e5_dp
+      p_bot = 300.0_dp * 1e5_dp
 
       p_top = log10(p_top)
       p_bot = log10(p_bot)
@@ -176,7 +176,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_525.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file
@@ -227,7 +227,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(3.25_dp))/100.0_dp
+      grav = (10.0_dp**(5.25_dp))/100.0_dp
 
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
@@ -318,7 +318,7 @@ program test_mini_cloud_2
         end do
         r_c_old(:) = r_c(:)
 
-        if ((end .eqv. .True.) .and. (n > int(1e6))) then
+        if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
           print*, del(:)
           print*, del(:)/t_step
