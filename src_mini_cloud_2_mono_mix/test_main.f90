@@ -162,7 +162,7 @@ program test_mini_cloud_2
 
       !! Find pressure level grid - logspaced between p_top and p_bot
       p_top = 3e-3_dp * 1e5_dp
-      p_bot = 100.0_dp * 1e5_dp
+      p_bot = 1000.0_dp * 1e5_dp
 
       p_top = log10(p_top)
       p_bot = log10(p_bot)
