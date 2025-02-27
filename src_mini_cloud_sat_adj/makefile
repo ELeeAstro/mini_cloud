@@ -16,7 +16,7 @@ SRCS_F90 = \
     mini_cloud_opac_mie_mod.f90 \
     mini_cloud_opac_ln_mod.f90 \
     mini_cloud_vf_mod.f90 \
-    mini_cloud_1_s_mod.f90 \
+    mini_cloud_1_s_2_mod.f90 \
     test_main.f90
 
 SRCS_F = dopri5.f

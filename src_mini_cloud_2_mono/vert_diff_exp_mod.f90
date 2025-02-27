@@ -189,9 +189,9 @@ contains
     !! Find flux between layers
     flux(1,:) = 0.0_dp
     do k = 2, nlay-1
-      phit(k,:) = Kzze(k+1)*(q_in(k+1,:) - q_in(k,:))/delz_mid(k)
-      phil(k,:) = Kzze(k)*(q_in(k,:) - q_in(k-1,:))/delz_mid(k-1)
-      flux(k,:) = ((phit(k,:) - phil(k,:))/delz(k))
+      phit(k,:) = nde(k+1)*Kzze(k+1)*(q_in(k+1,:) - q_in(k,:))/delz_mid(k)
+      phil(k,:) = nde(k)*Kzze(k)*(q_in(k,:) - q_in(k-1,:))/delz_mid(k-1)
+      flux(k,:) = ((phit(k,:) - phil(k,:))/delz(k))/nd(k)
     end do
     flux(nlay,:) = 0.0_dp
 

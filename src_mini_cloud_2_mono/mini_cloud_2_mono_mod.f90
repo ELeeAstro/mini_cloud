@@ -438,10 +438,10 @@ module mini_cloud_2_mono_mod
 
     else 
 
-      !! Check if average mass is around 0.1% the seed particle mass
+      !! Check if average mass is around 0.01% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <= (1.001_dp * m_seed)) then
-        tau_evap = 1.0_dp !max(m_c/abs(f_cond),1.0_dp)
+      if (m_c <= (1.0001_dp * m_seed)) then
+        tau_evap = 0.1_dp !m_c/abs(f_cond)
         !! Seed particle evaporation rate [cm-3 s-1]
         J_evap = -y(1)/tau_evap
       else
@@ -462,6 +462,7 @@ module mini_cloud_2_mono_mod
     real(dp), intent(out) :: f_coag
 
     real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
+    real(dp) :: Knd
 
     real(dp), parameter :: A1 = 9.55e5_dp
     real(dp), parameter :: B1 = 0.345_dp*A1, C1 = 0.145_dp*A1, D1 = 1.11_dp*A1
@@ -472,15 +473,18 @@ module mini_cloud_2_mono_mod
     !! Thermal velocity limit rate
     V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
+    !! Moran (2022) method using diffusive Knudsen number
+    Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
+    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
+    f_coag = (-4.0_dp*kb*T*beta)/(3.0_dp*eta) * phi
+
     !! Polovnikov, Azarov and Veshchunov (2016) approach
     !! Gamma value - mono-disperse assumption
-    gam = (3.0_dp*D_r)/(r_c*V_r)
-
+    !gam = (3.0_dp*D_r)/(r_c*V_r)
     ! Interpolation expression - kernel is free molecular regime * phi
-    phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 
-
+    !phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 
     ! Coagulation flux (Zeroth moment) [cm3 s-1]
-    f_coag = -8.0_dp * r_c**2 * sqrt((pi*kb*T)/m_c) * phi
+    !f_coag = -8.0_dp * r_c**2 * sqrt((pi*kb*T)/m_c) * phi
 
     !! Fuchs approach (Fuchs 1964)
     !!! Ratio fraction
@@ -521,7 +525,6 @@ module mini_cloud_2_mono_mod
 
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
     f_coal = -2.0_dp*pi*r_c**2*d_vf*E
-    !f_coal = 0.0_dp
 
   end subroutine calc_coal
 

@@ -4,6 +4,7 @@ program test_mini_cloud_2
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
+  use vert_diff_exp_2_mod, only : vert_diff_exp_2
   use vert_diff_imp_mod, only : vert_diff_imp
   use vert_adv_exp_McCormack_mod, only : vert_adv_exp_McCormack
   implicit none
@@ -13,12 +14,13 @@ program test_mini_cloud_2
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
   real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
+  real(dp), parameter :: R = 8.31446261815324e7_dp
   real(dp), parameter :: r_seed = 1e-7_dp
 
   integer :: example, n_it
   real(dp) :: t_step, time
 
-  integer :: nlay, nlev, i, n, u
+  integer :: nlay, nlev, i, n, u, k
   character(len=20) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho
@@ -35,13 +37,17 @@ program test_mini_cloud_2
   real(dp), allocatable, dimension(:) :: T_f, p_f, Kzz_f
   real(dp) :: V_seed, m_seed
 
+  integer :: nm
+  real(dp), allocatable, dimension(:) :: alte, q_a
+  real(dp) :: t0
+
   logical :: end
 
   !! time step
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 10000
+  n_it = 100000
 
   !! Start time
   time = 6840.0_dp
@@ -162,7 +168,7 @@ program test_mini_cloud_2
 
       !! Find pressure level grid - logspaced between p_top and p_bot
       p_top = 3e-3_dp * 1e5_dp
-      p_bot = 300.0_dp * 1e5_dp
+      p_bot = 1000.0_dp * 1e5_dp
 
       p_top = log10(p_top)
       p_bot = log10(p_bot)
@@ -176,7 +182,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_525.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file
@@ -227,7 +233,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(4.25_dp))/100.0_dp
+      grav = (10.0_dp**(5.25_dp))/100.0_dp
 
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
@@ -282,6 +288,7 @@ program test_mini_cloud_2
 
 
         call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+        !call vert_diff_exp_2(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
         !call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
 
 

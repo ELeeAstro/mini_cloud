@@ -38,6 +38,10 @@ m_c[:] = (q_1[:]*rho[:])/(q_0[:]*nd_atm[:])
 r_c = np.zeros(nlay)
 r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d))**(1.0/3.0),r_seed) * 1e4
 
+q_s = np.zeros(nlay)
+q_s[:] = np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3)
+q_s[:] = np.maximum(q_s[:]/1e6/pl[:],1e-30)
+
 fig = plt.figure()
 
 col = sns.color_palette('colorblind')
@@ -78,6 +82,7 @@ col = sns.color_palette('colorblind')
 plt.plot(q_v,pl,c=col[0],label=r'q_{\rm v}')
 plt.plot(q_0,pl,c=col[1],label=r'q_{0}')
 plt.plot(q_1,pl,c=col[2],label=r'q_{1}')
+plt.plot(q_s,pl,c=col[3],label=r'q_{s}',ls='dashed')
 
 plt.yscale('log')
 plt.xscale('log')

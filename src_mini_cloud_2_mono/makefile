@@ -13,6 +13,7 @@ DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=inva
 # Source files (mix of .f and .f90 files)
 SRCS_F90 = \
     vert_diff_exp_mod.f90 \
+    vert_diff_exp_2_mod.f90 \
     vert_diff_imp_mod.f90 \
     vert_adv_exp_McCormack_mod.f90 \
     lxmie_mod.f90 \

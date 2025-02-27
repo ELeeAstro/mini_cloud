@@ -33,7 +33,7 @@ program test_mini_cloud_1_simple
   example = 1
 
   !! Initial conditions
-  q_v = 1.17e-7_dp  ! ~Mg abundance ratio at Solar (VMR)
+  q_v = 10.0_dp**(7.55_dp-12.0_dp) !1.17e-7_dp  ! ~Mg abundance ratio at Solar (VMR)
   q_c = 1e-30_dp    ! ~Zero clouds at start 
 
 
@@ -156,8 +156,8 @@ contains
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_1_s/tracers.txt',action='readwrite')
-      open(newunit=u2,file='results_1_s/opac.txt',action='readwrite')
+      open(newunit=u1,file='results_sat_adj/tracers.txt',action='readwrite')
+      open(newunit=u2,file='results_sat_adj/opac.txt',action='readwrite')
       write(u2,*) wl(:)
       first_call = .False.
     end if
