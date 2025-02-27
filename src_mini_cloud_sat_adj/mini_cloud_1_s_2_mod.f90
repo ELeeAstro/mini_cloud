@@ -102,7 +102,7 @@ contains
 
     !! Start Runge-Kutta timestepping
     dt_max = t_end
-    dt = dt_max/5.0_dp
+    dt = delt
 
     !! Begin timestepping routine
     t_now = 0.0_dp
@@ -116,8 +116,8 @@ contains
       end if
 
       !! Euler method
-      !call dqdt(nq,yc,k1,deep_flag)
-      !y_new(:) = yc(:) +  dt * k1(:)
+      ! call dqdt(nq,yc,k1,deep_flag)
+      ! y_new(:) = yc(:) +  dt * k1(:)
 
       !! Bogacki–Shampine (order 3) Runge-Kutta method
       call dqdt(nq,yc,k1,deep_flag)

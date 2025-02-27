@@ -82,7 +82,7 @@ program test_mini_cloud_1_simple
       !! In this specific code everything is in cgs
       !! --------------------------- !! 
       rho_c = 3.2_dp
-      tau_chem = 10.0_dp
+      tau_chem = 120.0_dp
 
       rm = 0.6_dp * 1e-4_dp
       sigma = 2.0_dp
@@ -106,7 +106,7 @@ program test_mini_cloud_1_simple
       deep_flag = .False.
 
       !! Do you want Latent heat effects?
-      latent_flag = .True.
+      latent_flag = .False.
 
       !! mini-cloud test output
       call output(tt, time)
