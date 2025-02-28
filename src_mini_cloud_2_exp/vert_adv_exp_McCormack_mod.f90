@@ -1,4 +1,4 @@
-module vert_adv_mod
+module vert_adv_exp_McCormack_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -6,13 +6,14 @@ module vert_adv_mod
 
   real(dp), parameter :: CFL = 0.90_dp
   real(dp), parameter :: R = 8.31446261815324e7_dp
+  real(dp), parameter :: kb = 1.380649e-16_dp
 
-  public :: vert_adv
-  private :: minmod
+  public :: vert_adv_exp_McCormack
+  private :: minmod, superbee, vanleer, mc, koren
 
   contains
  
-  subroutine vert_adv(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, vf, nq, q, q0)
+  subroutine vert_adv_exp_McCormack(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, vf, nq, q_in, q0)
     implicit none
 
 
@@ -22,12 +23,14 @@ module vert_adv_mod
     real(dp), dimension(nlev), intent(in) :: pe_in
     real(dp), dimension(nq), intent(in) :: q0
 
-    real(dp), dimension(nlay,nq), intent(inout) :: q
+    real(dp), dimension(nlay,nq), intent(inout) :: q_in
+
+    real(dp), dimension(nlay,nq) :: q
 
     integer :: k
     real(dp) :: h1, h2, grav
     real(dp), dimension(nlev) :: alte, lpe, vf_e, Te, nde, pe
-    real(dp), dimension(nlay) :: delz, delz_mid, pl
+    real(dp), dimension(nlay) :: delz, delz_mid, pl, nd
 
     real(dp), dimension(nlay,nq) :: qc
     real(dp), dimension(nlay) :: sig, c
@@ -54,6 +57,12 @@ module vert_adv_mod
     do k = nlev-1, 1, -1
       alte(k) = alte(k+1) + (R*Tl(k))/(mu(k)*grav) * log(pe(k+1)/pe(k))
       delz(k) = alte(k) - alte(k+1)
+    end do
+
+    nd(:) = pl(:)/(kb*Tl(:))  
+
+    do n = 1, nq
+      q(:,n) = q_in(:,n) * nd(:)
     end do
 
     !! Find differences between layers directly
@@ -84,7 +93,11 @@ module vert_adv_mod
       do n = 1, nq
 
         !! Find the minmod limiter
-        call minmod(nlay,q(:,n),delz_mid,sig)
+        !call minmod(nlay,q(:,n),delz_mid,sig)
+        !call superbee(nlay,q(:,n),delz_mid,sig)
+        !call vanleer(nlay,q(:,n),delz_mid,sig)
+        !call mc(nlay,q(:,n),delz_mid,sig)
+        call koren(nlay,q(:,n),delz_mid,sig)
 
         !! Perform McCormack step
         qc(:,n) = q(:,n)
@@ -102,8 +115,12 @@ module vert_adv_mod
       q(nlay,:) = q0(:)
 
     end do
+
+    do n = 1, nq
+      q_in(:,n) = q(:,n)/nd(:)
+    end do
     
-  end subroutine vert_adv
+  end subroutine vert_adv_exp_McCormack
 
   subroutine minmod(nlay,q,dz,sig)
     implicit none
@@ -132,4 +149,81 @@ module vert_adv_mod
 
   end subroutine minmod
 
-end module vert_adv_mod
+  subroutine superbee(nlay,q,dz,sig)
+    implicit none
+
+    integer, intent(in) :: nlay
+    real(dp), dimension(nlay), intent(in) :: q, dz
+
+    real(dp), dimension(nlay), intent(out) :: sig
+
+    integer :: i
+    real(dp) :: r
+
+    sig(1) = 0.0_dp
+    do i = 2, nlay-1
+      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      sig(i) = max(0.0_dp, min(2*r, 1.0_dp), min(r, 2.0_dp))
+    end do
+    sig(nlay) = 0.0_dp
+
+  end subroutine superbee
+
+  subroutine vanleer(nlay,q,dz,sig)
+    implicit none
+
+    integer, intent(in) :: nlay
+    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(out) :: sig
+
+    integer :: i
+    real(dp) :: r
+
+    sig(1) = 0.0_dp
+    do i = 2, nlay-1
+      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      sig(i) = (r + abs(r)) / (1.0_dp + abs(r))
+    end do
+    sig(nlay) = 0.0_dp
+
+  end subroutine vanleer
+
+  subroutine mc(nlay,q,dz,sig)
+    implicit none
+
+    integer, intent(in) :: nlay
+    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(out) :: sig
+
+    integer :: i
+    real(dp) :: r
+
+    sig(1) = 0.0_dp
+    do i = 2, nlay-1
+      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      sig(i) = max(0.0_dp, min((1.0_dp + r) / 2.0_dp, 2.0_dp, r))
+    end do
+    sig(nlay) = 0.0_dp
+
+  end subroutine mc
+
+  subroutine koren(nlay,q,dz,sig)
+    implicit none
+
+    integer, intent(in) :: nlay
+    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(out) :: sig
+
+    integer :: i
+    real(dp) :: r
+
+    sig(1) = 0.0_dp
+    do i = 2, nlay-1
+      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      sig(i) = max(0.0_dp, min(2.0_dp*r, (1.0_dp + 2.0_dp*r) / 3.0_dp, 2.0_dp))
+    end do
+    sig(nlay) = 0.0_dp
+
+  end subroutine koren
+
+end module vert_adv_exp_McCormack_mod

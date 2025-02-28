@@ -28,7 +28,7 @@ SRCS_F = dlsode.f
 OBJECTS = $(SRCS_F90:.f90=.o) $(SRCS_F:.f=.o)
 
 # Executable
-EXECS = ../mini_cloud_2mom_mono
+EXECS = ../mini_cloud_2_mono
 
 #====================
 # Phony targets

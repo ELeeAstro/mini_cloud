@@ -1,4 +1,4 @@
-module vert_diff_mod
+module vert_diff_exp_mod
   use, intrinsic :: iso_fortran_env
   implicit none
 
@@ -7,13 +7,14 @@ module vert_diff_mod
 
   real(dp), parameter :: CFL = 0.90_dp
   real(dp), parameter :: R = 8.31446261815324e7_dp
+  real(dp), parameter :: kb = 1.380649e-16_dp
 
-  public :: vert_diff
+  public :: vert_diff_exp
   private :: compute_fluxes
 
 contains
 
-  subroutine vert_diff(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, Kzz, nq, q, q0)
+  subroutine vert_diff_exp(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, Kzz, nq, q, q0)
     implicit none
 
     integer, intent(in) :: nlay, nlev, nq
@@ -28,8 +29,8 @@ contains
 
     integer :: k
     real(dp) :: grav
-    real(dp), dimension(nlev) :: alte, pe, Kzze
-    real(dp), dimension(nlay) :: delz, delz_mid, pl
+    real(dp), dimension(nlev) :: alte, pe, Kzze, nde
+    real(dp), dimension(nlay) :: delz, delz_mid, pl, nd
 
     real(dp), dimension(nlay,nq) :: k1, k2, k3
 
@@ -65,8 +66,17 @@ contains
     end do
     Kzze(nlev) = Kzz(nlay)
 
+    nd(:) = pl(:)/(kb*Tl(:))  
+    !! Find nd at levels
+    nde(1) = nd(1)
+    do k = 2, nlay
+      nde(k) = (nd(k) + nd(k-1))/2.0_dp
+    end do
+    nde(nlev) = nd(nlay)
 
-    qc(:,:) = q(:,:)
+    do k = 1, nlay
+      qc(k,:) = q(k,:)
+    end do
 
     !! Prepare timestepping routine
     !! Find minimum timestep that satifies the CFL condition
@@ -94,11 +104,11 @@ contains
         qc(:,n) = max(qc(:,n),1e-30_dp)
       end do
 
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nq, qc(:,:), k1(:,:))
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nde(:), nd(:), nq, qc(:,:), k1(:,:))
       q_in(:,:) = qc(:,:) + 0.5_dp * dt * k1(:,:)
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nq, q_in(:,:), k2(:,:))
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nde(:), nd(:), nq, q_in(:,:), k2(:,:))
       q_in(:,:) = qc(:,:) + 0.75_dp * dt * k2(:,:)
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nq, q_in(:,:), k3(:,:))
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nde(:), nd(:), nq, q_in(:,:), k3(:,:))
 
       ! Update u_new and u_embedded
       q_new(:,:) = qc(:,:) + dt * (2.0_dp / 9.0_dp * k1(:,:) + 3.0_dp / 9.0_dp * k2(:,:) + 4.0_dp / 9.0_dp * k3(:,:))
@@ -149,7 +159,9 @@ contains
 
     end do
 
-    q(:,:) = qc(:,:)
+    do k = 1, nlay
+      q(k,:) = qc(k,:)
+    end do
 
     ! Apply boundary conditions
     q(1,:) = q(2,:)
@@ -159,14 +171,14 @@ contains
       q(:,n) = max(q(:,n),1e-30_dp)
     end do
 
-  end subroutine vert_diff
+  end subroutine vert_diff_exp
 
-  subroutine compute_fluxes(nlay, delz_mid, delz, Kzze, nq, q_in, flux)
+  subroutine compute_fluxes(nlay, delz_mid, delz, Kzze, nde, nd, nq, q_in, flux)
     implicit none
 
     integer, intent(in) :: nlay, nq
-    real(dp), dimension(nlay), intent(in) :: delz_mid, delz
-    real(dp), dimension(nlay+1), intent(in) :: Kzze
+    real(dp), dimension(nlay), intent(in) :: delz_mid, delz, nd
+    real(dp), dimension(nlay+1), intent(in) :: Kzze, nde
     real(dp), dimension(nlay, nq), intent(in) :: q_in
 
     real(dp), dimension(nlay, nq), intent(out) :: flux
@@ -177,13 +189,13 @@ contains
     !! Find flux between layers
     flux(1,:) = 0.0_dp
     do k = 2, nlay-1
-      phit(k,:) = Kzze(k+1)*(q_in(k+1,:) - q_in(k,:))/delz_mid(k)
-      phil(k,:) = Kzze(k)*(q_in(k,:) - q_in(k-1,:))/delz_mid(k-1)
-      flux(k,:) = (phit(k,:) - phil(k,:))/delz(k)
+      phit(k,:) = nde(k+1)*Kzze(k+1)*(q_in(k+1,:) - q_in(k,:))/delz_mid(k)
+      phil(k,:) = nde(k)*Kzze(k)*(q_in(k,:) - q_in(k-1,:))/delz_mid(k-1)
+      flux(k,:) = ((phit(k,:) - phil(k,:))/delz(k))/nd(k)
     end do
     flux(nlay,:) = 0.0_dp
 
   end subroutine compute_fluxes
 
-end module vert_diff_mod
+end module vert_diff_exp_mod
 

@@ -1,4 +1,4 @@
-module mini_cloud_2_mod
+module mini_cloud_2_exp_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -16,10 +16,6 @@ module mini_cloud_2_mod
   real(dp), parameter :: eV = 1.60217663e-12_dp
   real(dp), parameter :: third = 1.0_dp/3.0_dp
   real(dp), parameter :: twothird = 2.0_dp/3.0_dp
-
-  !! Gamma constants
-  real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
-  real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp)
 
   !! Conversions to dyne
   real(dp), parameter :: bar = 1.0e6_dp ! bar to dyne
@@ -56,16 +52,19 @@ module mini_cloud_2_mod
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
+  !! Gamma constants for exponential distribution
+  real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
+
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
-  public :: mini_cloud_2, RHS_mom, jac_dum
+  public :: mini_cloud_2_exp, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct
 
   contains
 
-  subroutine mini_cloud_2(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1)
+  subroutine mini_cloud_2_exp(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1)
     implicit none
 
     ! Input variables
@@ -239,7 +238,7 @@ module mini_cloud_2_mod
 
     deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g)
 
-  end subroutine mini_cloud_2
+  end subroutine mini_cloud_2_exp
 
   subroutine RHS_mom(n_eq, time, y, f)
     implicit none
@@ -435,17 +434,17 @@ module mini_cloud_2_mod
 
     real(dp) :: tau_evap
 
-    if ((f_cond >= 0.0_dp) .or. (y(1)/nd_atm <= 1e-29_dp)) then
+    if ((f_cond >= 0.0_dp)) then
 
       !! If growing or too little number density then evaporation can't take place
       J_evap = 0.0_dp
 
     else 
 
-      !! Check if average mass is around 0.1% the seed particle mass
+      !! Check if average mass is around 0.01% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <= (1.001_dp * m_seed)) then
-        tau_evap = 1.0_dp !max(m_c/abs(f_cond),1.0_dp)
+      if (m_c <= (1.0001_dp * m_seed)) then
+        tau_evap = 0.1_dp !m_c/abs(f_cond)
         !! Seed particle evaporation rate [cm-3 s-1]
         J_evap = -y(1)/tau_evap
       else
@@ -466,6 +465,7 @@ module mini_cloud_2_mod
     real(dp), intent(out) :: f_coag
 
     real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
+    real(dp) :: Knd
 
     real(dp), parameter :: A1 = 9.55e5_dp
     real(dp), parameter :: B1 = 0.345_dp*A1, C1 = 0.145_dp*A1, D1 = 1.11_dp*A1
@@ -476,15 +476,18 @@ module mini_cloud_2_mod
     !! Thermal velocity limit rate
     V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
+    !! Moran (2022) method using diffusive Knudsen number
+    Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
+    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
+    f_coag = (-4.0_dp*kb*T*beta)/(3.0_dp*eta) * phi
+
     !! Polovnikov, Azarov and Veshchunov (2016) approach
     !! Gamma value - mono-disperse assumption
-    gam = (6.0_dp*2.0_dp*D_r)/(2.0_dp*r_c*2.0_dp*V_r)
-
+    !gam = (3.0_dp*D_r)/(r_c*V_r)
     ! Interpolation expression - kernel is free molecular regime * phi
-    phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 
-
+    !phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 
     ! Coagulation flux (Zeroth moment) [cm3 s-1]
-    f_coag = -2.0_dp * r_c**2 * sqrt((pi*kb*T)/m_c) * phi * (g53 + g43**2)
+    !f_coag = -8.0_dp * r_c**2 * sqrt((pi*kb*T)/m_c) * phi
 
     !! Fuchs approach (Fuchs 1964)
     !!! Ratio fraction
@@ -524,7 +527,7 @@ module mini_cloud_2_mod
     end if
 
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal = -pi*r_c**2*d_vf*E * (g53 + g43**2)
+    f_coal = -2.0_dp*pi*r_c**2*d_vf*E
 
   end subroutine calc_coal
 
@@ -902,4 +905,4 @@ module mini_cloud_2_mod
     real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
   end subroutine jac_dum
 
-end module mini_cloud_2_mod
+end module mini_cloud_2_exp_mod

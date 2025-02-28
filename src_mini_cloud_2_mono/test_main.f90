@@ -47,7 +47,7 @@ program test_mini_cloud_2
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 100000
+  n_it = 250000
 
   !! Start time
   time = 6840.0_dp
@@ -153,7 +153,7 @@ program test_mini_cloud_2
 
       !! In this example we perform a 1D test of mini_cloud with diffusion and settling included
 
-      nlay = 100
+      nlay = 200
       nlev = nlay + 1
 
       n_wl = 11
@@ -168,7 +168,7 @@ program test_mini_cloud_2
 
       !! Find pressure level grid - logspaced between p_top and p_bot
       p_top = 3e-3_dp * 1e5_dp
-      p_bot = 1000.0_dp * 1e5_dp
+      p_bot = 3000.0_dp * 1e5_dp
 
       p_top = log10(p_top)
       p_bot = log10(p_bot)
