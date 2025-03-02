@@ -54,6 +54,7 @@ module mini_cloud_2_exp_mod
 
   !! Gamma constants for exponential distribution
   real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
+  real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), m2eB = (2.0_dp*(g53 + g43**2))/8.0_dp
 
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
@@ -478,8 +479,8 @@ module mini_cloud_2_exp_mod
 
     !! Moran (2022) method using diffusive Knudsen number
     Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
-    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
-    f_coag = (-4.0_dp*kb*T*beta)/(3.0_dp*eta) * phi
+    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * ((Knd/m2eB)**2))
+    f_coag = (-2.0_dp*kb*T*beta)/(3.0_dp*eta) * phi * (1.0_dp + g23*g43)
 
     !! Polovnikov, Azarov and Veshchunov (2016) approach
     !! Gamma value - mono-disperse assumption
