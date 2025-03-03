@@ -45,7 +45,7 @@ program test_mini_cloud_2
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 250000
+  n_it = 1000000
 
   !! Start time
   time = 6840.0_dp
@@ -317,7 +317,7 @@ program test_mini_cloud_2
         end do
         r_c_old(:) = r_c(:)
 
-        if ((end .eqv. .True.) .and. (n > int(1e5))) then
+        if ((end .eqv. .True.) .and. (n > int(1e7))) then
           print*, 'exit: ', n, n_it, end
           print*, del(:)
           print*, del(:)/t_step
