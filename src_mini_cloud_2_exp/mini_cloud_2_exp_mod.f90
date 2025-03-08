@@ -54,7 +54,10 @@ module mini_cloud_2_exp_mod
 
   !! Gamma constants for exponential distribution
   real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
-  real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), m2eB = (2.0_dp*(g53 + g43**2))/8.0_dp
+  real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), g12 = gamma(1.0_dp/2.0_dp)
+  real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp)
+  
+  real(dp), parameter :: m2eB = (sqrt(8.0_dp)*(g53*g12 + g43*g56))/8.0_dp
 
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
