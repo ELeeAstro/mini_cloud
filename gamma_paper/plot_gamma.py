@@ -25,11 +25,17 @@ lam = mc/nu
 fx = np.zeros((nr,nnu))
 
 for i in range(nnu):
-  fx[:,i] = Nc/(lam[i]**nu[i]*gamma(nu[i])) * m[:]**(nu[i]- 1) * np.exp(-m[:]/lam[i])
+  fx[:,i] = Nc/(lam[i]**nu[i]*gamma(nu[i])) * m[:]**(nu[i]- 1.0) * np.exp(-m[:]/lam[i])
 
-fx2 = np.zeros((nr))
+fx_ex = np.zeros((nr))
+nu_exp = 1.0
+lam_exp = mc
+fx_ex[:] = Nc/(lam_exp**nu_exp*gamma(nu_exp)) * m[:]**(nu_exp - 1.0) * np.exp(-m[:]/lam_exp)
 
 
+fx_Ray = np.zeros((nr))
+sig_Ray = mc/(np.sqrt(np.pi/2.0))
+fx_Ray[:] = Nc*m[:]/sig_Ray**2 * np.exp(-m[:]**2/(2.0*sig_Ray**2))
 
 # for i in range(nnu):
 #   fx[:,i] = Nc/(lam[i]) * m[:]**(nu[i]- 1) * np.exp(-m[:]/lam[i])
@@ -41,12 +47,16 @@ col = sns.color_palette('colorblind')
 for i in range(nnu):
   plt.plot(r[:]*1e4,fx[:,i]*m,label=str(nu[i]),c=col[i])
 
-plt.vlines(1.0, 1e-9, 2, colors='black',ls='dotted')
+plt.plot(r[:]*1e4,fx_ex[:]*m,label='Exponential',c='black',ls='dashed')
+plt.plot(r[:]*1e4,fx_Ray[:]*m,label='Rayleigh',c='black',ls='dashdot')
+
+
+plt.vlines(1.0, 1e-9, 1, colors='black',ls='dotted',label='Monodisperse')
 
 plt.legend(title=r'$\nu$')
 
-plt.ylim(1e-9,2)
-plt.xlim(1e-3,10)
+plt.ylim(1e-3,2)
+plt.xlim(1e-2,10)
 
 plt.xscale('log')
 plt.yscale('log')
