@@ -493,16 +493,19 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, beta, nu, f_coag0, f_coag2)
+  subroutine calc_coag(m_c, r_c, beta, nu_in, f_coag0, f_coag2)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, beta, nu
+    real(dp), intent(in) :: m_c, r_c, beta, nu_in
 
     real(dp), intent(out) :: f_coag0, f_coag2
 
     real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
     real(dp) :: Knd
-    real(dp) :: nu_fac, nu_fac2, d2f
+    real(dp) :: nu_fac, nu_fac2, d2f, nu
+
+
+    nu = max(0.5001_dp, nu_in)
 
     ! !! Particle diffusion rate
     D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)

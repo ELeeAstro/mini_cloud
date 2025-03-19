@@ -4,7 +4,7 @@ from scipy.special import gammaln  # Use log-gamma instead of gamma
 import seaborn as sns
 
 # Define nu range
-nu = np.logspace(-1, 2, 100)
+nu = np.logspace(-1, 1, 100)
 
 # Compute log-Gamma values
 log_gamma_nu = gammaln(nu)
@@ -19,8 +19,8 @@ v_h = nu**(-2.0/3.0) * np.exp(log_gamma_nu_p2_3 - log_gamma_nu)
 fig = plt.figure()
 col = sns.color_palette('colorblind')
 
-plt.plot(nu, v_l, label=r'${\rm Kn}$ $\ll$ 1', c=col[0])
-plt.plot(nu, v_h, label=r'${\rm Kn}$ $\gg$ 1', c=col[1])
+plt.plot(nu, v_l, label=r'Cond. (${\rm Kn}$ $\ll$ 1)', c=col[0])
+plt.plot(nu, v_h, label=r'Cond. (${\rm Kn}$ $\gg$ 1)', c=col[1])
 
 plt.vlines(1.0, 0.4, 1, colors='black', ls='dotted')
 plt.text(1.1, 0.5, r'Exponential' "\n" r'distribution', c='black')
