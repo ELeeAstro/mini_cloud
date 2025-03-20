@@ -1,4 +1,4 @@
-module mini_cloud_2_exp_mod
+module mini_cloud_3_gamma_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -55,20 +55,20 @@ module mini_cloud_2_exp_mod
   !! Gamma constants for exponential distribution
   real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
   real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), g12 = gamma(1.0_dp/2.0_dp)
-  real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp), g76 = gamma(7.0_dp/6.0_dp)
+  real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp)
   
-  real(dp), parameter :: m2eB = (sqrt(8.0_dp)*(g53*g12 + 2.0_dp*g43*g56 + g76))/8.0_dp
+  real(dp), parameter :: m2eB = (sqrt(8.0_dp)*(g53*g12 + g43*g56))/8.0_dp
 
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
-  public :: mini_cloud_2_exp, RHS_mom, jac_dum
+  public :: mini_cloud_3_gamma, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct
 
   contains
 
-  subroutine mini_cloud_2_exp(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1)
+  subroutine mini_cloud_3_gamma(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1, q_2)
     implicit none
 
     ! Input variables
@@ -78,7 +78,7 @@ module mini_cloud_2_exp_mod
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
     ! Input/Output tracer values
-    real(dp), intent(inout) :: q_v, q_0, q_1
+    real(dp), intent(inout) :: q_v, q_0, q_1, q_2
 
     integer :: ncall
 
@@ -100,7 +100,7 @@ module mini_cloud_2_exp_mod
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
-    n_eq = 3
+    n_eq = 4
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -201,7 +201,8 @@ module mini_cloud_2_exp_mod
     !! Give tracer values to y
     y(1) = q_0
     y(2) = q_1
-    y(3) = q_v 
+    y(3) = q_2
+    y(4) = q_v 
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
@@ -238,11 +239,12 @@ module mini_cloud_2_exp_mod
     !! Give y values to tracers
     q_0 = y(1)
     q_1 = y(2)
-    q_v = y(3)
+    q_2 = y(3)
+    q_v = y(4)
 
     deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g)
 
-  end subroutine mini_cloud_2_exp
+  end subroutine mini_cloud_3_gamma
 
   subroutine RHS_mom(n_eq, time, y, f)
     implicit none
@@ -252,10 +254,13 @@ module mini_cloud_2_exp_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
-    real(dp) :: f_nuc_hom, f_cond, f_seed_evap
-    real(dp) :: f_coal, f_coag
+    real(dp) :: f_cond1, f_cond2
+    real(dp) :: f_nuc_hom, f_seed_evap
+    real(dp) :: f_coal0, f_coag0, f_coal2, f_coag2
     real(dp) :: m_c, r_c, Kn, beta, sat, vf_s, vf_e, vf
     real(dp) :: p_v, n_v, fx
+
+    real(dp) :: sig2, lam, nu
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -267,10 +272,11 @@ module mini_cloud_2_exp_mod
     !! Convert y to real physical numbers to calculate f
     y(1) = y(1)*nd_atm ! Convert to real number density
     y(2) = y(2)*rho   ! Convert to real mass density
-    y(3) = y(3)*rho   ! Convert to real mass density
+    y(3) = y(3)*rho**2   ! Convert to real mass density
+    y(4) = y(4)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
-    p_v = y(3) * Rd * T     !! Pressure of vapour
+    p_v = y(4) * Rd * T     !! Pressure of vapour
     n_v = p_v/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
@@ -302,55 +308,80 @@ module mini_cloud_2_exp_mod
     !! Find supersaturation ratio
     sat = p_v/p_vap
 
+    !! Calculate lambda and nu gamma distribution parameters
+    sig2 = max(y(3)/y(1) - (y(2)/y(1))**2,m_seed**2)
+    lam = sig2/m_c
+    nu = m_c**2/sig2
+    nu = max(m_c**2/sig2,0.1_dp)
+    nu = min(nu,10.0_dp)
+
     !! Calculate condensation rate
-    call calc_cond(n_eq, y, r_c, Kn, n_v, sat, f_cond)
+    call calc_cond(n_eq, y, r_c, Kn, n_v, sat, nu, f_cond1, f_cond2)
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
 
     !! Calculate seed particle evaporation rate
-    call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
+    call calc_seed_evap(n_eq, y, m_c, f_cond1, f_seed_evap)
 
     !! Calculate the coagulation rate
-    call calc_coag(m_c, r_c, beta, f_coag)
+    call calc_coag(m_c, r_c, beta, nu, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, Kn, vf, f_coal)
+    call calc_coal(r_c, Kn, vf, nu, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom + f_seed_evap) + (f_coag + f_coal)*y(1)**2
-    f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond*y(1)
-    f(3) = -f(2)
+    f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*y(1)**2
+    f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond1*y(1)
+    f(3) = m_seed**2*(f_nuc_hom  + f_seed_evap) + 2.0_dp*f_cond2*y(2) + (f_coag2 + f_coal2)*y(2)**2
+    f(4) = -f(2)
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm
     f(2) = f(2)/rho
-    f(3) = f(3)/rho
+    f(3) = f(3)/rho**2
+    f(4) = f(4)/rho
       
     !! Convert y back to ratios
     y(1) = y(1)/nd_atm
-    y(2) = y(2)/rho 
-    y(3) = y(3)/rho
+    y(2) = y(2)/rho
+    y(3) = y(3)/rho**2
+    y(4) = y(4)/rho
 
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(n_eq, y, r_c, Kn, n_v, sat, dmdt)
+  subroutine calc_cond(n_eq, y, r_c, Kn, n_v, sat, nu, dmdt1, dmdt2)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, Kn, n_v, sat
+    real(dp), intent(in) :: r_c, Kn, n_v, sat, nu
 
-    real(dp), intent(out) :: dmdt
+    real(dp), intent(out) :: dmdt1, dmdt2
 
-    real(dp) :: dmdt_low, dmdt_high, Knd, fx
+    real(dp) :: dmdt_low1, dmdt_high1, dmdt_low2, dmdt_high2
+    real(dp) :: c_facl1, c_facg1, gnu, gnu1, nuth, nu2th
+    real(dp) :: Knd, fx
 
-    !! Free molecular flow regime (Kn >> 1) [g s-1]
-    dmdt_high = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * alp * (1.0_dp - 1.0_dp/sat) * g53
+    !gnu = gamma(nu)
+    !gnu1 = gamma(nu+1.0_dp)
+
+    gnu  = log_gamma(nu)
+    gnu1 = log_gamma(nu + 1.0_dp)
+
+    nuth = nu**(-1.0_dp/3.0_dp)
+    nu2th = nu**(-2.0_dp/3.0_dp)
 
     !! Diffusive limited regime (Kn << 1) [g s-1]
-    dmdt_low = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat) * g43
+    c_facl1 = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat)
+    dmdt_low1 = c_facl1 * nuth * exp(log_gamma(nu + 1.0_dp/3.0_dp) - gnu)
+    dmdt_low2 = c_facl1 * nuth * exp(log_gamma(nu + 4.0_dp/3.0_dp) - gnu1)
+
+    !! Free molecular flow regime (Kn >> 1) [g s-1]
+    c_facg1 = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * alp * (1.0_dp - 1.0_dp/sat)
+    dmdt_high1 = c_facg1 * nu2th * exp(log_gamma(nu + 2.0_dp/3.0_dp) - gnu)
+    dmdt_high2 = c_facg1 * nu2th * exp(log_gamma(nu + 5.0_dp/3.0_dp) - gnu1)
 
     !! Kn' (Woitke & Helling 2003)
     Knd = Kn/Kn_crit
@@ -358,7 +389,8 @@ module mini_cloud_2_exp_mod
     !! tanh interpolation function
     fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
 
-    dmdt = dmdt_low * fx + dmdt_high * (1.0_dp - fx)
+    dmdt1 = dmdt_low1 * fx + dmdt_high1 * (1.0_dp - fx)
+    dmdt2 = dmdt_low2 * fx + dmdt_high2 * (1.0_dp - fx)
 
   end subroutine calc_cond
 
@@ -445,9 +477,9 @@ module mini_cloud_2_exp_mod
 
     else 
 
-      !! Check if average mass is around 0.01% the seed particle mass
+      !! Check if average mass is around 0.1% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <= (1.0001_dp * m_seed)) then
+      if (m_c <= (1.001_dp * m_seed)) then
         tau_evap = 0.1_dp !m_c/abs(f_cond)
         !! Seed particle evaporation rate [cm-3 s-1]
         J_evap = -y(1)/tau_evap
@@ -461,60 +493,66 @@ module mini_cloud_2_exp_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, beta, f_coag)
+  subroutine calc_coag(m_c, r_c, beta, nu_in, f_coag0, f_coag2)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, beta
+    real(dp), intent(in) :: m_c, r_c, beta, nu_in
 
-    real(dp), intent(out) :: f_coag
+    real(dp), intent(out) :: f_coag0, f_coag2
 
     real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
     real(dp) :: Knd
+    real(dp) :: nu_fac, nu_fac2, d2f, nu
 
-    real(dp), parameter :: A1 = 9.55e5_dp
-    real(dp), parameter :: B1 = 0.345_dp*A1, C1 = 0.145_dp*A1, D1 = 1.11_dp*A1
 
-    !! Particle diffusion rate
+    nu = max(0.5001_dp, nu_in)
+
+    ! !! Particle diffusion rate
     D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
 
     !! Thermal velocity limit rate
     V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
+    nu_fac = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/3.0_dp) - 2.0_dp * log_gamma(nu))
+
+    nu_fac2 = sqrt(8.0_dp) * nu**(-1.0_dp/6.0_dp)  &
+      & * exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/2.0_dp) - 2.0_dp * log_gamma(nu))  &
+      & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/6.0_dp) - 2.0_dp * log_gamma(nu))
+
+    d2f = nu_fac2 / 8.0_dp
+
     !! Moran (2022) method using diffusive Knudsen number
     Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
-    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * ((Knd/m2eB)**2))
-    f_coag = (-2.0_dp*kb*T*beta)/(3.0_dp*eta) * phi * (1.0_dp + g23*g43)
+    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * ((Knd/d2f)**2))
 
-    !! Polovnikov, Azarov and Veshchunov (2016) approach
-    !! Gamma value - mono-disperse assumption
-    !gam = (3.0_dp*D_r)/(r_c*V_r)
-    ! Interpolation expression - kernel is free molecular regime * phi
-    !phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 
-    ! Coagulation flux (Zeroth moment) [cm3 s-1]
-    !f_coag = -8.0_dp * r_c**2 * sqrt((pi*kb*T)/m_c) * phi
+    f_coag0 = (-2.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac * phi
+    f_coag2 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac * phi
 
-    !! Fuchs approach (Fuchs 1964)
-    !!! Ratio fraction
-    ! lam_r = (8.0_dp*D_r)/(pi*V_r)
-    ! !! Interpolation function
-    ! del_r = ((2.0_dp*r_c + lam_r)**3 - (4.0_dp*r_c**2 + lam_r**2)**(1.5_dp))/(6.0_dp*r_c*lam_r) &
-    !   & - 2.0_dp*r_c 
-    ! !! Correction factor
-    ! phi = 2.0_dp*r_c/(2.0_dp*r_c + sqrt(2.0_dp)*del_r) + (4.0_dp*D_r)/(r_c*sqrt(2.0_dp)*V_r) 
-    ! !! Coagulation flux (Zeroth moment) [cm3 s-1]
-    ! f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)
+
+
+    !f_coag0 = -(2.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac
+    !f_coag2 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac
+
+    !nu_fac = nu**(-1.0_dp/6.0_dp) * & 
+    !  & (gamma(nu + 2.0_dp/3.0_dp)*gamma(nu - 1.0_dp/2.0_dp) + gamma(nu + 1.0_dp/3.0_dp)*gamma(nu - 1.0_dp/6.0_dp))/gamma(nu)**2
+    ! nu_fac = nu**(-1.0_dp/6.0_dp)  &
+    !   & * exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/2.0_dp) - 2.0_dp * log_gamma(nu))  &
+    !   & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/6.0_dp) - 2.0_dp * log_gamma(nu))
+    ! f_coag0 = -sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac
+    ! f_coag2 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac
+
 
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, Kn, vf, f_coal)
+  subroutine calc_coal(r_c, Kn, vf, nu, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_c, Kn, vf
+    real(dp), intent(in) :: r_c, Kn, vf, nu
 
-    real(dp), intent(out) :: f_coal
+    real(dp), intent(out) :: f_coal0, f_coal2
 
-    real(dp) :: d_vf,  Stk, E
+    real(dp) :: d_vf,  Stk, E, nu_fac, gnu
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
@@ -530,8 +568,17 @@ module mini_cloud_2_exp_mod
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
+    !gnu = gamma(nu)
+    !nu_fac = nu**(-2.0_dp/3.0_dp) * (gamma(nu + 2.0_dp/3.0_dp)/gnu + gamma(nu + 1.0_dp/3.0_dp)**2/gnu**2)
+
+    gnu = log_gamma(nu)
+    nu_fac = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - gnu) &
+      & + exp(2.0_dp * log_gamma(nu + 1.0_8/3.0_8) - 2.0_dp * gnu))
+
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal = -pi*r_c**2*d_vf*E*(g53 + g43**2)
+    f_coal0 = -pi*r_c**2*d_vf*E * nu_fac
+    !! Coalesence flux (Second moment) [cm3 s-1]
+    f_coal2 = 2.0_dp*pi*r_c**2*d_vf*E * nu_fac
 
   end subroutine calc_coal
 
@@ -909,4 +956,4 @@ module mini_cloud_2_exp_mod
     real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
   end subroutine jac_dum
 
-end module mini_cloud_2_exp_mod
+end module mini_cloud_3_gamma_mod

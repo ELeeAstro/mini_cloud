@@ -10,7 +10,7 @@ rho_d = 1.99
 dirs = ['../results_2_mono/','../results_2_exp/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -76,15 +76,15 @@ yticks = [100,10,1,0.1,0.01,1e-3,]
 yticks_lab = ['100','10','1','0.1','0.01','10$^{-3}$']
 ax1.set_yticks(yticks,yticks_lab)
 
-ax1.set_xlim(0.5,1.2)
-ax2.set_xlim(0.5,1.2)
-ax1.set_xticks(np.arange(0.5, 1.2, step=0.01),minor=True)
-ax2.set_xticks(np.arange(0.5, 1.2, step=0.01),minor=True)
+# ax1.set_xlim(0.5,1.2)
+# ax2.set_xlim(0.5,1.2)
+# ax1.set_xticks(np.arange(0.5, 1.2, step=0.01),minor=True)
+# ax2.set_xticks(np.arange(0.5, 1.2, step=0.01),minor=True)
 
-#ax1.set_xlim(0.9,1.1)
-#ax2.set_xlim(0.9,1.1)
-#ax1.set_xticks(np.arange(0.9, 1.1, step=0.01),minor=True)
-#ax2.set_xticks(np.arange(0.9, 1.1, step=0.01),minor=True)
+ax1.set_xlim(0.8,1.4)
+ax2.set_xlim(0.8,1.4)
+ax1.set_xticks(np.arange(0.8, 1.4, step=0.01),minor=True)
+ax2.set_xticks(np.arange(0.8, 1.4, step=0.01),minor=True)
 
 plt.ylim(300,3e-3)
 
@@ -99,12 +99,12 @@ ax1.set_ylabel(r'$p_{\rm gas}$ [bar]',fontsize=16)
 ax2.set_zorder(1)
 lns = p_rc + p_nc
 labs = [l.get_label() for l in lns]
-ax2.legend(lns, labs,fontsize=10,loc='upper left')
+ax2.legend(lns, labs,fontsize=10,loc='lower right')
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono_exp_rel.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_exp_rel.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

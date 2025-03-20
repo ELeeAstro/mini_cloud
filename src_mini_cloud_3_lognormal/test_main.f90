@@ -1,6 +1,6 @@
 program test_mini_cloud_2
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_2_exp_mod, only : mini_cloud_2_exp, rho_d, mol_w_sp
+  use mini_cloud_3_gamma_mod, only : mini_cloud_3_gamma, rho_d, mol_w_sp
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
@@ -22,7 +22,7 @@ program test_mini_cloud_2
   character(len=20) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho
-  real(dp), allocatable, dimension(:) :: q_0, q_1, q_v, vf, r_c, m_c, q0, r_c_old, del
+  real(dp), allocatable, dimension(:) :: q_0, q_1, q_2, q_v, vf, r_c, m_c, q0, r_c_old, del
   real(dp), allocatable, dimension(:,:) :: VMR, q
   real(dp) :: grav
 
@@ -45,7 +45,7 @@ program test_mini_cloud_2
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 10000
 
   !! Start time
   time = 6840.0_dp
@@ -91,13 +91,14 @@ program test_mini_cloud_2
       rho_d = 1.99_dp
       mol_w_sp = 74.551_dp
 
-      allocate(q_v(nlay),q_0(nlay),q_1(nlay))
+      allocate(q_v(nlay), q_0(nlay), q_1(nlay), q_2(nlay))
       allocate(r_c(nlay), m_c(nlay), vf(nlay))
 
       !! Initial conditions
       q_v(1) = 1.17e-7_dp  ! ~K abundance ratio at Solar (VMR)
       q_0(1) = 1.0e-30_dp    ! ~Zero clouds at start 
       q_1(1) = 1.0e-30_dp
+      q_2(1) = 1.0e-30_dp
 
 
       !! Change vapur VMR to mass density ratio
@@ -118,7 +119,7 @@ program test_mini_cloud_2
         rho(1) = (pl(1)*10.0_dp*mu(1)*amu)/(kb * Tl(1)) ! Mass density [g cm-3]
 
         !! Call mini-cloud and perform integrations for a single layer
-        call mini_cloud_2_exp(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1))
+        call mini_cloud_3_gamma(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1), q_2(1))
 
         !! Calculate settling velocity for this layer
         call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), vf(1))
@@ -138,7 +139,7 @@ program test_mini_cloud_2
         !! Mass weighted mean radius of particle [um]
         r_c(1) = ((3.0_dp*m_c(1))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp) * 1e4_dp
 
-        print*, 'q', n, q_v(1), q_0(1), q_1(1), vf(1)
+        print*, 'q', n, q_v(1), q_0(1), q_1(1), q_2(1), vf(1)
         print*, 'r', n, m_c(1), r_c(1), rho_d
         print*, 'o', n, k_ext(1,1), ssa(1,1), g(1,1), k_ext(1,n_wl), ssa(1,n_wl), g(1,n_wl)
 
@@ -244,16 +245,24 @@ program test_mini_cloud_2
       rho_d = 1.99_dp
       mol_w_sp = 74.5513_dp
 
-      allocate(q_v(nlay), q_0(nlay), q_1(nlay), q0(3), q(nlay,3))
+      allocate(q_v(nlay), q_0(nlay), q_1(nlay), q_2(nlay), q0(4), q(nlay,4))
       allocate(r_c(nlay), m_c(nlay), vf(nlay), r_c_old(nlay), del(nlay))
 
-      q_v(:) = 1e-30_dp
-      q_0(:) = 1e-30_dp
-      q_1(:) = 1e-30_dp
+      !! Number density [cm-3] of layer
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
+
+      !! Mass density of layer
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
+
+      q_v(:) = 1e-30_dp!rho(:)
+      q_0(:) = 1e-30_dp!/nd_atm(:)
+      q_1(:) = 1e-30_dp!rho(:)
+      q_2(:) = 1e-30_dp!/rho(:)**2
 
       q0(1) = 1.17e-7_dp * mol_w_sp/mu(nlay)
       q0(2) = 1e-30_dp
       q0(3) = 1e-30_dp
+      q0(4) = 1e-30_dp
 
       q_v(nlay) = q0(1)
 
@@ -268,7 +277,7 @@ program test_mini_cloud_2
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_exp(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
+          call mini_cloud_3_gamma(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i), q_2(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i))
@@ -280,20 +289,16 @@ program test_mini_cloud_2
         q(:,1) = q_v(:)
         q(:,2) = q_0(:)
         q(:,3) = q_1(:)
+        q(:,4) = q_2(:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2, q(:,2:3), q0(2:3))
+        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 3, q(:,2:4), q0(2:4))
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 4, q(:,:), q0(:))
 
         q_v(:) = q(:,1)
         q_0(:) = q(:,2)
         q_1(:) = q(:,3)
-
-        !! Number density [cm-3] of layer
-        nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
-
-        !! Mass density of layer
-        rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
+        q_2(:) = q(:,4)
 
         !! Mean mass of particle [g]
         m_c(:) = max((q_1(:)*rho)/(q_0(:)*nd_atm),m_seed)
@@ -331,7 +336,7 @@ program test_mini_cloud_2
       print*, del(:)/t_step
 
       do i = 1, nlay
-        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_0(i), q_1(i), r_c(i), vf(i), q_0(i)*nd_atm(i)
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_0(i), q_1(i), q_2(i), r_c(i), vf(i), q_0(i)*nd_atm(i)
       end do
 
       !! mini-cloud test output
@@ -352,14 +357,14 @@ contains
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_2_exp/tracers.txt',action='readwrite')
-      open(newunit=u2,file='results_2_exp/opac.txt',action='readwrite')
+      open(newunit=u1,file='results_3_gamma/tracers.txt',action='readwrite')
+      open(newunit=u2,file='results_3_gamma/opac.txt',action='readwrite')
       write(u2,*) wl(:)
       first_call = .False.
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_0(i), q_1(i), vf(i)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_0(i), q_1(i), q_2(i), vf(i)
       write(u2,*) t, time, k_ext(i,:), ssa(i,:), g(i,:)
     end do
 
