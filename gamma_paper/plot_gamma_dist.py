@@ -84,8 +84,8 @@ normalize = mcolors.Normalize(vmin=np.log10(pl[0]), vmax=np.log10(pl[-1]))
 cmap = sns.color_palette("crest", as_cmap=True)
 
 
-for i in range(nlay):
-  if nu[i] > 0.01: 
+for i in range(0,nlay,5):
+  if nu[i] > 0.1: 
     print(pl[i],nu[i])
     plt.plot(r[:]*1e4,fx[:,i],c=cmap(normalize(np.log10(pl[i]))))
 
@@ -104,9 +104,9 @@ plt.xscale('log')
 plt.tick_params(axis='both',which='major',labelsize=14)
 
 plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
-plt.ylabel(r'$m f(m)$ [cm$^{-3}$]',fontsize=16)
+plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
-plt.ylim(1e-6,1e4)
+plt.ylim(1e-1,1e4)
 #plt.ylim(1e-3,1e6)
 plt.xlim(1e-3,1e2)
 

@@ -503,10 +503,10 @@ module mini_cloud_3_gamma_mod
     real(dp) :: nu
     real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
     real(dp) :: Knd
-    real(dp) :: nu_fac_l_0, nu_fac_l_2, nu_fac_h_0,, nu_fac_h_2, lgnu, lgnu1, d2f
+    real(dp) :: nu_fac_l_0, nu_fac_l_2, nu_fac_h_0, nu_fac_h_2, lgnu, lgnu1, d2f_0
 
 
-    nu = max(0.3334_dp, nu_in)
+    nu = max(0.5001_dp, nu_in)
 
     ! !! Particle diffusion rate
     D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
@@ -517,14 +517,20 @@ module mini_cloud_3_gamma_mod
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
 
-    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/3.0_dp) - 2.0_dp * lgnu)
-    nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1)
+    !nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/3.0_dp) - 2.0_dp * lgnu)
+    !nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1)
 
 
-    ! nu_fac_h_0 = sqrt(8.0_dp) * nu**(-1.0_dp/6.0_dp)  &
-    !   & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/2.0_dp) - 2.0_dp * lgnu)  &
-    !   & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/6.0_dp) - 2.0_dp * lgnu) & 
-    !   & +  exp(log_gamma(nu + 1.0_dp/6.0_dp) - lgnu))
+    nu_fac_h_0 = nu**(-1.0_dp/6.0_dp)  &
+      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/2.0_dp) - 2.0_dp * lgnu)  &
+      & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/6.0_dp) - 2.0_dp * lgnu) & 
+      & +  exp(log_gamma(nu + 1.0_dp/6.0_dp) - lgnu))
+
+    nu_fac_h_2 = nu**(-1.0_dp/6.0_dp)  &
+      & * (exp(log_gamma(nu + 5.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/2.0_dp) - 2.0_dp * lgnu1)  &
+      & + 2.0*exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 5.0_dp/6.0_dp) - 2.0_dp * lgnu1) & 
+      & +  exp(log_gamma(nu + 7.0_dp/6.0_dp) - lgnu1))
+
 
     d2f_0 = nu_fac_h_0 / 8.0_dp
 
@@ -532,22 +538,11 @@ module mini_cloud_3_gamma_mod
     Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
     phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * ((Knd/d2f_0)**2))
 
-    f_coag0 = (-2.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_0 !* phi
-    f_coag2 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_2 !* phi 
+    !f_coag0 = (-2.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_0 !* phi
+    !f_coag2 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_2 !* phi 
 
-
-
-    !f_coag0 = -(2.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac
-    !f_coag2 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac
-
-    !nu_fac = nu**(-1.0_dp/6.0_dp) * & 
-    !  & (gamma(nu + 2.0_dp/3.0_dp)*gamma(nu - 1.0_dp/2.0_dp) + gamma(nu + 1.0_dp/3.0_dp)*gamma(nu - 1.0_dp/6.0_dp))/gamma(nu)**2
-    ! nu_fac = nu**(-1.0_dp/6.0_dp)  &
-    !   & * exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/2.0_dp) - 2.0_dp * log_gamma(nu))  &
-    !   & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/6.0_dp) - 2.0_dp * log_gamma(nu))
-    ! f_coag0 = -sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac
-    ! f_coag2 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac
-
+    f_coag0 = -sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac_h_0
+    f_coag2 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac_h_2
 
   end subroutine calc_coag
 
@@ -575,16 +570,13 @@ module mini_cloud_3_gamma_mod
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
-    !gnu = gamma(nu)
-    !nu_fac = nu**(-2.0_dp/3.0_dp) * (gamma(nu + 2.0_dp/3.0_dp)/gnu + gamma(nu + 1.0_dp/3.0_dp)**2/gnu**2)
-
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
 
     nu_fac_0 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) &
       & + exp(2.0_dp * log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp * lgnu))
     nu_fac_2 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 5.0_dp/3.0_dp) +  log_gamma(nu + 1.0_dp) - 2.0_dp*lgnu1) &
-      & + exp(2.0_dp * log_gamma(nu + 4.0_dp/3.0_dp) - 2.0_dp * lgn1u))
+      & + exp(2.0_dp * log_gamma(nu + 4.0_dp/3.0_dp) - 2.0_dp * lgnu1))
 
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
     f_coal0 = -pi*r_c**2*d_vf*E * nu_fac_0
