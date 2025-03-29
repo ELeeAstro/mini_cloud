@@ -311,8 +311,7 @@ module mini_cloud_3_gamma_mod
     !! Calculate lambda and nu gamma distribution parameters
     sig2 = max(y(3)/y(1) - (y(2)/y(1))**2,m_seed**2)
     lam = sig2/m_c
-    nu = m_c**2/sig2
-    nu = max(m_c**2/sig2,0.1_dp)
+    nu = max(m_c**2/sig2,0.01_dp)
     nu = min(nu,100.0_dp)
 
     !! Calculate condensation rate
@@ -500,25 +499,25 @@ module mini_cloud_3_gamma_mod
 
     real(dp), intent(out) :: f_coag0, f_coag2
 
-    real(dp) :: nu
-    real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
-    real(dp) :: Knd
-    real(dp) :: nu_fac_l_0, nu_fac_l_2, nu_fac_h_0, nu_fac_h_2, lgnu, lgnu1, d2f_0
+    real(dp) :: nu, lgnu, lgnu1
+
+    real(dp) :: Knd0, phi0, Kl0, Kh0, nu_fac_l_0, nu_fac_h_0
+    real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
 
 
     nu = max(0.5001_dp, nu_in)
 
     ! !! Particle diffusion rate
-    D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
+    !D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
 
     !! Thermal velocity limit rate
-    V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
+    !V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
 
-    !nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/3.0_dp) - 2.0_dp * lgnu)
-    !nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1)
+    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/3.0_dp) - 2.0_dp * lgnu)
+    nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1)
 
 
     nu_fac_h_0 = nu**(-1.0_dp/6.0_dp)  &
@@ -531,18 +530,23 @@ module mini_cloud_3_gamma_mod
       & + 2.0*exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 5.0_dp/6.0_dp) - 2.0_dp * lgnu1) & 
       & +  exp(log_gamma(nu + 7.0_dp/6.0_dp) - lgnu1))
 
+    Kl0 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_0
+    Kl2 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_2
 
-    d2f_0 = nu_fac_h_0 / 8.0_dp
+    Kh0 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac_h_0
+    Kh2 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac_h_2
+
 
     !! Moran (2022) method using diffusive Knudsen number
-    Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
-    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * ((Knd/d2f_0)**2))
+    Knd0 = (2.0_dp*sqrt(2.0_dp)/pi) * Kl0/Kh0
+    phi0 = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd0**2)
 
-    !f_coag0 = (-2.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_0 !* phi
-    !f_coag2 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_2 !* phi 
+    Knd2 = (2.0_dp*sqrt(2.0_dp)/pi) * Kl2/Kh2
+    phi2 = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd2**2)
 
-    f_coag0 = -sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac_h_0
-    f_coag2 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac_h_2
+
+    f_coag0 = (-2.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_0 * phi0
+    f_coag2 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * nu_fac_l_2 * phi2
 
   end subroutine calc_coag
 
