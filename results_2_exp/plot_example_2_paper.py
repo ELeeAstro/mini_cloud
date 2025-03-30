@@ -7,7 +7,7 @@ amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 data = np.loadtxt(fname)
 
@@ -77,7 +77,7 @@ ax2.legend(lns, labs,fontsize=10,loc='upper left')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

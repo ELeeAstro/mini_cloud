@@ -45,7 +45,7 @@ program test_mini_cloud_2
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 10000
+  n_it = 100000
 
   !! Start time
   time = 6840.0_dp

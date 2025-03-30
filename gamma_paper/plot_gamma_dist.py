@@ -106,8 +106,8 @@ plt.tick_params(axis='both',which='major',labelsize=14)
 plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
-plt.ylim(1e-6,1e0)
-#plt.ylim(1e-3,1e6)
+#plt.ylim(1e-6,1e0)
+plt.ylim(1e-3,1e6)
 
 plt.xlim(1e-3,1e2)
 
