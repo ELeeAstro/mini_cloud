@@ -7,7 +7,7 @@ kb = 1.380649e-23
 amu = 1.66053906892e-27
 R_gas = 8.31446261815324
 
-fname = 'tracers.txt'
+fname = 'tracers_425.txt'
 data = np.loadtxt(fname)
 
 #t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0, q_1, v_f
