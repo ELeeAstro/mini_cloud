@@ -9,7 +9,7 @@ rho_d = 1.99
 V_seed = 4.0/3.0 * np.pi * r_seed**3
 m_seed = V_seed * rho_d
 
-fname = 'tracers_425.txt'
+fname = 'tracers.txt'
 
 data = np.loadtxt(fname)
 
