@@ -32,7 +32,6 @@ module mini_cloud_2_exp_mod
   real(dp) :: r0, V0, m0, d0 ! Unit mass and volume
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp) :: V_seed, m_seed
-  real(dp) :: Kn_crit
   real(dp) :: alp = 1.0_dp
 
   real(dp) :: mfp, eta, nu, cT
@@ -159,9 +158,6 @@ module mini_cloud_2_exp_mod
 
     !! Surface tension of material
     sig = surface_tension(sp, T)
-
-    !! Critical Knudsen number
-    Kn_crit = (mfp * alp * vth * g53)/(D * g43)
 
     ! -----------------------------------------
     ! ***  parameters for the DLSODE solver  ***
@@ -346,13 +342,16 @@ module mini_cloud_2_exp_mod
 
     real(dp), intent(out) :: dmdt
 
-    real(dp) :: dmdt_low, dmdt_high, Knd, fx
+    real(dp) :: dmdt_low, dmdt_high, Knd, Kn_crit, fx
 
     !! Free molecular flow regime (Kn >> 1) [g s-1]
     dmdt_high = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * alp * (1.0_dp - 1.0_dp/sat) * g53
 
     !! Diffusive limited regime (Kn << 1) [g s-1]
     dmdt_low = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat) * g43
+
+    !! Critical Knudsen number
+    Kn_crit = (mfp * dmdt_high)/(dmdt_low)
 
     !! Kn' (Woitke & Helling 2003)
     Knd = Kn_m/Kn_crit
