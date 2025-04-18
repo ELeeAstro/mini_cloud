@@ -28,8 +28,8 @@ module vert_adv_exp_McCormack_mod
     real(dp), dimension(nlay,nq) :: q
 
     integer :: k
-    real(dp) :: h1, h2, grav
-    real(dp), dimension(nlev) :: alte, lpe, vf_e, Te, nde, pe
+    real(dp) :: grav
+    real(dp), dimension(nlev) :: alte, vf_e, pe
     real(dp), dimension(nlay) :: delz, delz_mid, pl, nd
 
     real(dp), dimension(nlay,nq) :: qc

@@ -379,7 +379,7 @@ module mini_cloud_2_exp_mod
     real(dp), parameter :: alpha = 1.0_dp
     real(dp), parameter :: Nf = 5.0_dp
 
-    real(dp) :: ac, F, phi, gm, Vm
+    !real(dp) :: ac, F, phi, gm, Vm
 
     if (sat > 1.0_dp) then
 
@@ -487,7 +487,7 @@ module mini_cloud_2_exp_mod
     Knd = (2.0_dp*sqrt(2.0_dp)/pi) * (Kl0/Kh0)
     
     !! Interpolation factor
-    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * (Knd**2))
+    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
 
     !! Coagulation rate
     f_coag = -0.5_dp * Kl0 * phi 

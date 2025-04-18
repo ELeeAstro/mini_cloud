@@ -18,7 +18,7 @@ program test_mini_cloud_2
   integer :: example, n_it
   real(dp) :: t_step, time
 
-  integer :: nlay, nlev, i, n, u, k
+  integer :: nlay, nlev, i, n, u
   character(len=20) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho
@@ -32,12 +32,8 @@ program test_mini_cloud_2
 
   integer :: nlines, io, idx, idx1
   real(dp) :: p_bot, p_top
-  real(dp), allocatable, dimension(:) :: T_f, p_f, Kzz_f
+  real(dp), allocatable, dimension(:) :: T_f, p_f
   real(dp) :: V_seed, m_seed
-
-  integer :: nm
-  real(dp), allocatable, dimension(:) :: alte, q_a
-  real(dp) :: t0
 
   logical :: end
 
@@ -243,6 +239,9 @@ program test_mini_cloud_2
       sp = 'KCl'
       rho_d = 1.99_dp
       mol_w_sp = 74.5513_dp
+
+      V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+      m_seed = V_seed * rho_d
 
       allocate(q_v(nlay), q_0(nlay), q_1(nlay), q0(3), q(nlay,3))
       allocate(r_c(nlay), m_c(nlay), vf(nlay), r_c_old(nlay), del(nlay))
