@@ -56,6 +56,7 @@ module mini_cloud_2_exp_mod
   real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
   real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), g12 = gamma(1.0_dp/2.0_dp)
   real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp), g76 = gamma(7.0_dp/6.0_dp)
+  real(dp), parameter :: g13 = gamma(1.0_dp/3.0_dp)
 
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
@@ -160,7 +161,7 @@ module mini_cloud_2_exp_mod
     sig = surface_tension(sp, T)
 
     !! Critical Knudsen number
-    Kn_crit = (mfp * alp * vth)/D
+    Kn_crit = (mfp * alp * vth * g53)/(D * g43)
 
     ! -----------------------------------------
     ! ***  parameters for the DLSODE solver  ***
@@ -252,7 +253,8 @@ module mini_cloud_2_exp_mod
 
     real(dp) :: f_nuc_hom, f_cond, f_seed_evap
     real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, Kn, beta, sat, vf_s, vf_e, vf
+    real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
+    real(dp) :: Kn, Kn_n, Kn_m
     real(dp) :: p_v, n_v, fx
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
@@ -277,8 +279,10 @@ module mini_cloud_2_exp_mod
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
 
-    !! Knudsen number
+    !! Average particle  and population averaged Knudsen numbers
     Kn = mfp/r_c
+    Kn_n = Kn * g23
+    Kn_m = Kn * g53
 
     !! Cunningham slip factor (Kim et al. 2005)
     beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
@@ -301,7 +305,7 @@ module mini_cloud_2_exp_mod
     sat = p_v/p_vap
 
     !! Calculate condensation rate
-    call calc_cond(n_eq, y, r_c, Kn, n_v, sat, f_cond)
+    call calc_cond(n_eq, y, r_c, Kn_m, n_v, sat, f_cond)
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
@@ -310,7 +314,7 @@ module mini_cloud_2_exp_mod
     call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
 
     !! Calculate the coagulation rate
-    call calc_coag(m_c, r_c, beta, f_coag)
+    call calc_coag(m_c, r_c, Kn, f_coag)
 
     !! Calculate the coalescence rate
     call calc_coal(r_c, Kn, vf, f_coal)
@@ -333,12 +337,12 @@ module mini_cloud_2_exp_mod
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(n_eq, y, r_c, Kn, n_v, sat, dmdt)
+  subroutine calc_cond(n_eq, y, r_c, Kn_m, n_v, sat, dmdt)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, Kn, n_v, sat
+    real(dp), intent(in) :: r_c, Kn_m, n_v, sat
 
     real(dp), intent(out) :: dmdt
 
@@ -351,7 +355,7 @@ module mini_cloud_2_exp_mod
     dmdt_low = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat) * g43
 
     !! Kn' (Woitke & Helling 2003)
-    Knd = Kn/Kn_crit
+    Knd = Kn_m/Kn_crit
 
     !! tanh interpolation function
     fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
@@ -443,9 +447,9 @@ module mini_cloud_2_exp_mod
 
     else 
 
-      !! Check if average mass is around 0.01% the seed particle mass
+      !! Check if average mass is around 0.1% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <= (1.0001_dp * m_seed)) then
+      if (m_c <= (1.001_dp * m_seed)) then
         tau_evap = 0.1_dp !m_c/abs(f_cond)
         !! Seed particle evaporation rate [cm-3 s-1]
         J_evap = -y(1)/tau_evap
@@ -459,18 +463,23 @@ module mini_cloud_2_exp_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, beta, f_coag)
+  subroutine calc_coag(m_c, r_c, Kn_in, f_coag)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, beta
+    real(dp), intent(in) :: m_c, r_c, Kn_in
 
     real(dp), intent(out) :: f_coag
 
-    real(dp) :: Kl0, Kh0
+    real(dp) :: Kl0, Kh0, Kn
     real(dp) :: Knd, phi
+    real(dp), parameter :: A = 1.639_dp
+
+    !! Limit Kn to avoid large overshoot of Kn << 1 regime.
+    Kn = min(Kn_in,100.0_dp)
 
     !! Kn << 1 population averaged kernel
-    Kl0 = (4.0_dp*kb*T*beta)/(3.0_dp*eta) * (1.0_dp + g23*g43)
+    Kl0 = (4.0_dp*kb*T)/(3.0_dp*eta) * (1.0_dp + g43*g23 + &
+      & Kn * A * (g23 + g43*g13))
 
     !! Kn >> 1 population averaged kernel
     Kh0 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * (g53*g12 + 2.0_dp*g43*g56 + g76)
@@ -482,7 +491,7 @@ module mini_cloud_2_exp_mod
     phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * (Knd**2))
 
     !! Coagulation rate
-    f_coag = (-2.0_dp*kb*T*beta)/(3.0_dp*eta) * (1.0_dp + g23*g43) * phi 
+    f_coag = -0.5_dp * Kl0 * phi 
 
   end subroutine calc_coag
 

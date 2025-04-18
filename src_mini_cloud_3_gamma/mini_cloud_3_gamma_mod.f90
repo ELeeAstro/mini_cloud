@@ -500,10 +500,10 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, nu_in, Kn, f_coag0, f_coag2)
+  subroutine calc_coag(m_c, r_c, nu_in, Kn_in, f_coag0, f_coag2)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, nu_in, Kn
+    real(dp), intent(in) :: m_c, r_c, nu_in, Kn_in
 
     real(dp), intent(out) :: f_coag0, f_coag2
 
@@ -512,7 +512,11 @@ module mini_cloud_3_gamma_mod
     real(dp) :: Knd0, phi0, Kl0, Kh0, nu_fac_l_0, nu_fac_h_0
     real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
 
+    real(dp) :: Kn
     real(dp), parameter :: A = 1.639_dp
+
+    !! Limit Kn to avoid large overshoot of Kn << 1 regime.
+    Kn = min(Kn_in,100.0_dp)
 
     nu = max(0.5001_dp, nu_in)
 
