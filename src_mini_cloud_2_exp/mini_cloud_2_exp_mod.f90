@@ -250,7 +250,7 @@ module mini_cloud_2_exp_mod
     real(dp) :: f_nuc_hom, f_cond, f_seed_evap
     real(dp) :: f_coal, f_coag
     real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
-    real(dp) :: Kn, Kn_n, Kn_m
+    real(dp) :: Kn, Kn_n, Kn_m, Kn_b
     real(dp) :: p_v, n_v, fx
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
@@ -277,11 +277,12 @@ module mini_cloud_2_exp_mod
 
     !! Average particle  and population averaged Knudsen numbers
     Kn = mfp/r_c
-    Kn_n = Kn * g23
-    Kn_m = Kn * g53
+    Kn_n = Kn !* g23
+    Kn_m = Kn !* g53
 
+    Kn_b = min(Kn, 100.0_dp)
     !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
+    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
     !! Settling velocity (Stokes regime)
     vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
@@ -449,7 +450,7 @@ module mini_cloud_2_exp_mod
       !! Check if average mass is around 0.1% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
       if (m_c <= (1.001_dp * m_seed)) then
-        tau_evap = 0.1_dp !m_c/abs(f_cond)
+        tau_evap = 0.01_dp !m_c/abs(f_cond)
         !! Seed particle evaporation rate [cm-3 s-1]
         J_evap = -y(1)/tau_evap
       else

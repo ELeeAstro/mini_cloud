@@ -50,7 +50,7 @@ module mini_cloud_vf_mod
     integer :: n_bg
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx
+    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx, Kn_b
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -97,8 +97,9 @@ module mini_cloud_vf_mod
     !! Knudsen number
     Kn = mfp/r_c
 
+    Kn_b = min(Kn, 100.0_dp)
     !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
+    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
     !! Settling velocity (Stokes regime)
     vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 

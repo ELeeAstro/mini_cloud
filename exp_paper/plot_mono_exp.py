@@ -10,7 +10,7 @@ rho_d = 1.99
 dirs = ['../results_2_mono/','../results_2_exp/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -73,7 +73,6 @@ ax1.set_yticks(yticks,yticks_lab)
 
 ax1.set_xlim(0,1500)
 ax2.set_xlim(1e-8,1e-5)
-#ax2.set_xlim(1e-7,1e-3)
 
 plt.ylim(300,3e-3)
 
@@ -93,7 +92,7 @@ ax2.legend(lns, labs,fontsize=10,loc='upper center')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono_exp_Tq.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_exp_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
