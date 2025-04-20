@@ -277,8 +277,8 @@ module mini_cloud_2_exp_mod
 
     !! Average particle  and population averaged Knudsen numbers
     Kn = mfp/r_c
-    Kn_n = Kn !* g23
-    Kn_m = Kn !* g53
+    Kn_n = Kn * g23
+    Kn_m = Kn * g53
 
     Kn_b = min(Kn, 100.0_dp)
     !! Cunningham slip factor (Kim et al. 2005)
@@ -314,7 +314,7 @@ module mini_cloud_2_exp_mod
     call calc_coag(m_c, r_c, Kn, f_coag)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, Kn, vf, f_coal)
+    call calc_coal(r_c, Kn_n, vf, f_coal)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + (f_coag + f_coal)*y(1)**2
@@ -450,7 +450,7 @@ module mini_cloud_2_exp_mod
       !! Check if average mass is around 0.1% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
       if (m_c <= (1.001_dp * m_seed)) then
-        tau_evap = 0.01_dp !m_c/abs(f_cond)
+        tau_evap = 0.1_dp !m_c/abs(f_cond)
         !! Seed particle evaporation rate [cm-3 s-1]
         J_evap = -y(1)/tau_evap
       else
@@ -496,26 +496,29 @@ module mini_cloud_2_exp_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, Kn, vf, f_coal)
+  subroutine calc_coal(r_c, Kn_n, vf, f_coal)
     implicit none
 
-    real(dp), intent(in) :: r_c, Kn, vf
+    real(dp), intent(in) :: r_c, Kn_n, vf
 
     real(dp), intent(out) :: f_coal
 
-    real(dp) :: d_vf,  Stk, E
+    real(dp) :: d_vf,  Stk, E, r_n
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
     d_vf = eps * vf
 
+    !! Number density averaged radius
+    r_n = r_c * g43
+
     !! Calculate E
-    if (Kn >= 1.0_dp) then
+    if (Kn_n >= 1.0_dp) then
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else
       !! Calculate Stokes number
-      Stk = (vf * d_vf)/(grav * r_c)
+      Stk = (vf * d_vf)/(grav * r_N)
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
