@@ -32,7 +32,6 @@ module mini_cloud_3_gamma_mod
   real(dp) :: r0, V0, m0, d0 ! Unit mass and volume
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp) :: V_seed, m_seed
-  real(dp) :: Kn_crit
   real(dp) :: alp = 1.0_dp
 
   real(dp) :: mfp, eta, nu, cT
@@ -51,13 +50,6 @@ module mini_cloud_3_gamma_mod
   real(dp), parameter :: d_N2 = 3.798e-8_dp, LJ_N2 = 71.4_dp * kb, molg_N2 = 14.0067_dp
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
-
-  !! Gamma constants for exponential distribution
-  real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
-  real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), g12 = gamma(1.0_dp/2.0_dp)
-  real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp)
-  
-  real(dp), parameter :: m2eB = (sqrt(8.0_dp)*(g53*g12 + g43*g56))/8.0_dp
 
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
@@ -161,9 +153,6 @@ module mini_cloud_3_gamma_mod
     !! Surface tension of material
     sig = surface_tension(sp, T)
 
-    !! Critical Knudsen number
-    Kn_crit = (mfp * alp * vth)/D
-
     ! -----------------------------------------
     ! ***  parameters for the DLSODE solver  ***
     ! -----------------------------------------
@@ -260,7 +249,7 @@ module mini_cloud_3_gamma_mod
     real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
     real(dp) :: p_v, n_v, fx
 
-    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2
+    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_n
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -294,14 +283,16 @@ module mini_cloud_3_gamma_mod
     !! Knudsen number
     Kn = mfp/r_c
 
-    !! Population averaged Knudsen number  for m and m^2
+    !! Population averaged Knudsen number for n, m and m^2
+    Kn_n = mfp/r_c * nu**(1.0_dp/3.0_dp) * &
+      & exp(log_gamma(max(nu,0.3334_dp) - 1.0_dp/3.0_dp) - log_gamma(nu))
     Kn_m = mfp/r_c * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - log_gamma(nu + 1.0_dp))
     Kn_m2 = mfp/r_c * nu**(1.0_dp/3.0_dp) * & 
       & exp(log_gamma(nu + 5.0_dp/3.0_dp) - log_gamma(nu + 2.0_dp))
 
     !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
+    beta = 1.0_dp + Kn_m*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_m))
 
     !! Settling velocity (Stokes regime)
     vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
@@ -333,7 +324,7 @@ module mini_cloud_3_gamma_mod
     call calc_coag(m_c, r_c, nu, Kn, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, vf, nu, Kn, f_coal0, f_coal2)
+    call calc_coal(r_c, vf, nu, Kn_n, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*y(1)**2
@@ -367,7 +358,7 @@ module mini_cloud_3_gamma_mod
 
     real(dp) :: dmdt_low1, dmdt_high1, dmdt_low2, dmdt_high2
     real(dp) :: c_facl1, c_facg1, lgnu, lgnu1, nuth, nu2th
-    real(dp) :: Knd_m, Knd_m2, fx_m, fx_m2
+    real(dp) :: Knd_m, Knd_m2, fx_m, fx_m2, Kn_crit_m, Kn_crit_m2
 
     !gnu = gamma(nu)
     !gnu1 = gamma(nu+1.0_dp)
@@ -389,8 +380,11 @@ module mini_cloud_3_gamma_mod
     dmdt_high2 = c_facg1 * nu2th * exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1)
 
     !! Kn' (Woitke & Helling 2003)
-    Knd_m = Kn_m/Kn_crit
-    Knd_m2 = Kn_m2/Kn_crit
+    Kn_crit_m = (mfp*dmdt_high1)/dmdt_low1
+    Kn_crit_m2 = (mfp*dmdt_high2)/dmdt_low2
+
+    Knd_m = Kn_m/Kn_crit_m
+    Knd_m2 = Kn_m2/Kn_crit_m2
 
     !! tanh interpolation function
     fx_m = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd_m)))
@@ -569,31 +563,32 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, vf, nu, Kn, f_coal0, f_coal2)
+  subroutine calc_coal(r_c, vf, nu, Kn_n, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_c, vf, nu, Kn
+    real(dp), intent(in) :: r_c, vf, nu, Kn_n
 
     real(dp), intent(out) :: f_coal0, f_coal2
 
-    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1
+    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, r_n
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
     d_vf = eps * vf
 
+    lgnu  = log_gamma(nu)
+    lgnu1 = log_gamma(nu + 1.0_dp)
+
     !! Calculate E
-    if (Kn >= 1.0_dp) then
+    if (Kn_n >= 1.0_dp) then
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else
       !! Calculate Stokes number
-      Stk = (vf * d_vf)/(grav * r_c)
+      r_n = r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu)
+      Stk = (vf * d_vf)/(grav * r_n)
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
-
-    lgnu  = log_gamma(nu)
-    lgnu1 = log_gamma(nu + 1.0_dp)
 
     nu_fac_0 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) &
       & + exp(2.0_dp * log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp * lgnu))

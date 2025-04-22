@@ -509,16 +509,17 @@ module mini_cloud_2_exp_mod
     !! Estimate differential velocity
     d_vf = eps * vf
 
-    !! Number density averaged radius
-    r_n = r_c * g43
-
     !! Calculate E
     if (Kn_n >= 1.0_dp) then
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else
+
+      !! Number density averaged radius
+      r_n = r_c * g43
+
       !! Calculate Stokes number
-      Stk = (vf * d_vf)/(grav * r_N)
+      Stk = (vf * d_vf)/(grav * r_n)
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
