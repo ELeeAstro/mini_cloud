@@ -72,7 +72,7 @@ yticks_lab = ['100','10','1','0.1','0.01','10$^{-3}$']
 ax1.set_yticks(yticks,yticks_lab)
 
 ax1.set_xlim(0,1500)
-ax2.set_xlim(1e-8,1e-5)
+ax2.set_xlim(1e-9,1e-5)
 #ax2.set_xlim(1e-7,1e-3)
 
 plt.ylim(300,3e-3)

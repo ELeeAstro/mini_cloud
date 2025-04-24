@@ -60,10 +60,11 @@ module mini_cloud_3_gamma_mod
 
   contains
 
-  subroutine mini_cloud_3_gamma(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1, q_2)
+  subroutine mini_cloud_3_gamma(ilay, T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1, q_2)
     implicit none
 
     ! Input variables
+    integer, intent(in) :: ilay
     character(len=20), intent(in) :: sp
     character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end
@@ -200,7 +201,7 @@ module mini_cloud_3_gamma_mod
 
     ! Set the printing flag
     ! 0 = no printing, 1 = printing
-    call xsetf(1)
+    call xsetf(0)
 
     ncall = 0
 
@@ -216,7 +217,7 @@ module mini_cloud_3_gamma_mod
       else  if (istate == -1) then
         istate = 2
       else if (istate < -1) then
-        print*, 'dlsode: ', istate
+        print*, 'dlsode: ', istate, ilay
         exit
       end if
 
@@ -249,7 +250,7 @@ module mini_cloud_3_gamma_mod
     real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
     real(dp) :: p_v, n_v, fx
 
-    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_n
+    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -284,11 +285,9 @@ module mini_cloud_3_gamma_mod
     Kn = mfp/r_c
 
     !! Population averaged Knudsen number for n, m and m^2
-    Kn_n = mfp/r_c * nu**(1.0_dp/3.0_dp) * &
-      & exp(log_gamma(max(nu,0.3334_dp) - 1.0_dp/3.0_dp) - log_gamma(nu))
-    Kn_m = mfp/r_c * nu**(1.0_dp/3.0_dp) * &
+    Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - log_gamma(nu + 1.0_dp))
-    Kn_m2 = mfp/r_c * nu**(1.0_dp/3.0_dp) * & 
+    Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
       & exp(log_gamma(nu + 5.0_dp/3.0_dp) - log_gamma(nu + 2.0_dp))
 
     !! Cunningham slip factor (Kim et al. 2005)
@@ -324,7 +323,7 @@ module mini_cloud_3_gamma_mod
     call calc_coag(m_c, r_c, nu, Kn, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, vf, nu, Kn_n, f_coal0, f_coal2)
+    call calc_coal(r_c, vf, nu, Kn_m, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*y(1)**2
@@ -563,10 +562,10 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, vf, nu, Kn_n, f_coal0, f_coal2)
+  subroutine calc_coal(r_c, vf, nu, Kn_m, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_c, vf, nu, Kn_n
+    real(dp), intent(in) :: r_c, vf, nu, Kn_m
 
     real(dp), intent(out) :: f_coal0, f_coal2
 
@@ -580,19 +579,19 @@ module mini_cloud_3_gamma_mod
     lgnu1 = log_gamma(nu + 1.0_dp)
 
     !! Calculate E
-    if (Kn_n >= 1.0_dp) then
+    if (Kn_m >= 1.0_dp) then
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else
       !! Calculate Stokes number
-      r_n = r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu)
+      r_n = max(r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu), r_seed)
       Stk = (vf * d_vf)/(grav * r_n)
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
     nu_fac_0 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) &
       & + exp(2.0_dp * log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp * lgnu))
-    nu_fac_2 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 5.0_dp/3.0_dp) +  log_gamma(nu + 1.0_dp) - 2.0_dp*lgnu1) &
+    nu_fac_2 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) &
       & + exp(2.0_dp * log_gamma(nu + 4.0_dp/3.0_dp) - 2.0_dp * lgnu1))
 
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
@@ -849,7 +848,7 @@ module mini_cloud_3_gamma_mod
       stop
     end select
 
-    surface_tension = max(1.0_dp, sig)
+    surface_tension = max(10.0_dp, sig)
 
       ! Pradhan et al. (2009):
       !Si : 732 - 0.086*(T - 1685.0)

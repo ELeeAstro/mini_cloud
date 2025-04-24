@@ -119,7 +119,7 @@ program test_mini_cloud_2
         rho(1) = (pl(1)*10.0_dp*mu(1)*amu)/(kb * Tl(1)) ! Mass density [g cm-3]
 
         !! Call mini-cloud and perform integrations for a single layer
-        call mini_cloud_3_gamma(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1), q_2(1))
+        call mini_cloud_3_gamma(1, Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1), q_2(1))
 
         !! Calculate settling velocity for this layer
         call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), vf(1))
@@ -181,7 +181,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file
@@ -232,7 +232,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(4.25_dp))/100.0_dp
+      grav = (10.0_dp**(3.25_dp))/100.0_dp
 
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
@@ -277,7 +277,7 @@ program test_mini_cloud_2
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_3_gamma(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i), q_2(i))
+          call mini_cloud_3_gamma(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i), q_2(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i))

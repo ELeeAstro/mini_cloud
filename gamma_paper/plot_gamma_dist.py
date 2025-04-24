@@ -26,7 +26,7 @@ col = sns.color_palette('colorblind')
 lss = ['solid']
 
 na = 1000
-r = np.logspace(-3,2,na) * 1e-4
+r = np.logspace(-3,3,na) * 1e-4
 m = 4.0/3.0 * np.pi * r**3 * rho_d
 
 for i in range(ndir):
@@ -106,10 +106,10 @@ plt.tick_params(axis='both',which='major',labelsize=14)
 plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
-plt.ylim(1e-12,1e-4)
+plt.ylim(1e-10,1e-4)
 #plt.ylim(1e2,1e4)
 
-plt.xlim(1e-3,1e2)
+plt.xlim(1e-3,1e3)
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
