@@ -250,7 +250,7 @@ module mini_cloud_3_gamma_mod
     real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
     real(dp) :: p_v, n_v, fx
 
-    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2
+    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -291,7 +291,8 @@ module mini_cloud_3_gamma_mod
       & exp(log_gamma(nu + 5.0_dp/3.0_dp) - log_gamma(nu + 2.0_dp))
 
     !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn_m*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_m))
+    Kn_b = min(Kn_m, 100.0_dp)
+    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
     !! Settling velocity (Stokes regime)
     vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
@@ -379,8 +380,8 @@ module mini_cloud_3_gamma_mod
     dmdt_high2 = c_facg1 * nu2th * exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1)
 
     !! Kn' (Woitke & Helling 2003)
-    Kn_crit_m = (mfp*dmdt_high1)/dmdt_low1
-    Kn_crit_m2 = (mfp*dmdt_high2)/dmdt_low2
+    Kn_crit_m = (mfp*dmdt_high1)/(dmdt_low1*r_c)
+    Kn_crit_m2 = (mfp*dmdt_high2)/(dmdt_low2*r_c)
 
     Knd_m = Kn_m/Kn_crit_m
     Knd_m2 = Kn_m2/Kn_crit_m2

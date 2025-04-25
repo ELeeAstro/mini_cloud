@@ -88,7 +88,7 @@ ax1.set_ylabel(r'$p_{\rm gas}$ [bar]',fontsize=16)
 ax2.set_zorder(1)
 lns = p_T + p_qc + p_qv + p_qs
 labs = [l.get_label() for l in lns]
-ax2.legend(lns, labs,fontsize=10,loc='upper center')
+ax2.legend(lns, labs,fontsize=10,loc='upper right')
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)

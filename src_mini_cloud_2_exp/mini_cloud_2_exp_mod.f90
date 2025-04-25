@@ -205,7 +205,7 @@ module mini_cloud_2_exp_mod
 
     ! Set the printing flag
     ! 0 = no printing, 1 = printing
-    call xsetf(1)
+    call xsetf(0)
 
     ncall = 0
 
@@ -280,7 +280,7 @@ module mini_cloud_2_exp_mod
     Kn_n = Kn * g23
     Kn_m = Kn * g53
 
-    Kn_b = min(Kn, 100.0_dp)
+    Kn_b = min(Kn_m, 100.0_dp)
     !! Cunningham slip factor (Kim et al. 2005)
     beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
@@ -352,7 +352,7 @@ module mini_cloud_2_exp_mod
     dmdt_low = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat) * g43
 
     !! Critical Knudsen number
-    Kn_crit = (mfp * dmdt_high)/(dmdt_low)
+    Kn_crit = (mfp * dmdt_high)/(dmdt_low * r_c)
 
     !! Kn' (Woitke & Helling 2003)
     Knd = Kn_m/Kn_crit
@@ -516,7 +516,7 @@ module mini_cloud_2_exp_mod
     else
 
       !! Number density averaged radius
-      r_n = r_c * g43
+      r_n = max(r_c * g43, r_seed)
 
       !! Calculate Stokes number
       Stk = (vf * d_vf)/(grav * r_n)

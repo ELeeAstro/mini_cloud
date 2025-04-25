@@ -247,7 +247,7 @@ module mini_cloud_2_mono_mod
 
     real(dp) :: f_nuc_hom, f_cond, f_seed_evap
     real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, Kn, beta, sat, vf_s, vf_e, vf
+    real(dp) :: m_c, r_c, Kn, beta, sat, vf_s, vf_e, vf, Kn_b
     real(dp) :: p_v, n_v, fx
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
@@ -276,7 +276,8 @@ module mini_cloud_2_mono_mod
     Kn = mfp/r_c
 
     !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
+    Kn_b = min(Kn, 100.0_dp)
+    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
     !! Settling velocity (Stokes regime)
     vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
