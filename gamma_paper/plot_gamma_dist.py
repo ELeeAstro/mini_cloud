@@ -17,7 +17,7 @@ m_seed = V_seed * rho_d
 dirs = ['../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig, ax =  plt.subplots()
 
@@ -96,7 +96,7 @@ cbar = plt.colorbar(scalarmappaple,ax=ax)
 cticks = np.linspace(np.log10(pl[0]),np.log10(pl[-1]),10)
 cbar.set_ticks(cticks)
 cbar.ax.tick_params(labelsize=12)
-cbar.ax.set_ylabel('$\log_{10}$ $p$ [bar]',fontsize=14)
+cbar.ax.set_ylabel(r'$\log_{10}$ $p$ [bar]',fontsize=14)
 
 plt.yscale('log')
 plt.xscale('log')
@@ -106,15 +106,15 @@ plt.tick_params(axis='both',which='major',labelsize=14)
 plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
-plt.ylim(1e-10,1e-4)
-#plt.ylim(1e2,1e4)
+#plt.ylim(1e-12,1e-3)
+plt.ylim(1e2,1e4)
 
 plt.xlim(1e-3,1e3)
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_gamma_dist.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_gamma_dist.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

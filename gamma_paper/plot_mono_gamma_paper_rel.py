@@ -10,7 +10,7 @@ rho_d = 1.99
 dirs = ['../results_2_mono/','../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -76,15 +76,19 @@ yticks = [100,10,1,0.1,0.01,1e-3,]
 yticks_lab = ['100','10','1','0.1','0.01','10$^{-3}$']
 ax1.set_yticks(yticks,yticks_lab)
 
-ax1.set_xlim(-150,150)
-ax2.set_xlim(-150,150)
-ax1.set_xticks(np.arange(-150, 150, step=10),minor=True)
-ax2.set_xticks(np.arange(-150, 150, step=10),minor=True)
+#ax1.set_xlim(-100,100)
+#ax2.set_xlim(-500,500)
+#ax1.set_xticks(np.arange(-100, 120, step=20))
+#ax2.set_xticks(np.arange(-500, 600, step=100))
+#ax1.set_xticks(np.arange(-100, 110, step=10),minor=True)
+#ax2.set_xticks(np.arange(-500, 510, step=10),minor=True)
 
-#ax1.set_xlim(-60,60)
-#ax2.set_xlim(-700,700)
-#ax1.set_xticks(np.arange(-60, 60, step=10),minor=True)
-#ax2.set_xticks(np.arange(-700, 700, step=100),minor=True)
+ax1.set_xlim(-100,100)
+ax2.set_xlim(-500,500)
+ax1.set_xticks(np.arange(-100, 120, step=20))
+ax2.set_xticks(np.arange(-500, 600, step=100))
+ax1.set_xticks(np.arange(-100, 110, step=10),minor=True)
+ax2.set_xticks(np.arange(-500, 510, step=10),minor=True)
 
 
 plt.ylim(300,3e-3)
@@ -105,7 +109,7 @@ ax2.legend(lns, labs,fontsize=10,loc='lower right')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono_gamma_rel.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_gamma_rel.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
