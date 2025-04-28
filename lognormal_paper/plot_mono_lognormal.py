@@ -7,10 +7,10 @@ amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
 
-dirs = ['../results_2_mono/','../results_2_exp/']
+dirs = ['../results_2_mono/','../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -53,11 +53,17 @@ for i in range(ndir):
   r_c = np.zeros(nlay)
   r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d))**(1.0/3.0),r_seed) * 1e4
 
-  p_rc = ax1.plot(r_c,pl,c=col[0],label=r'$r_{\rm c}$',ls=lss[i])
-  p_nc = ax2.plot(nd,pl,c=col[1],label=r'$N_{\rm c}$',ls=lss[i])
+  q_s = np.zeros(nlay)
+  q_s[:] = np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3)
+  q_s[:] = np.maximum(q_s[:]/1e6/pl[:],1e-30)
+
+  p_T = ax1.plot(Tl,pl,c=col[0],label=r'T',ls=lss[i])
+  p_qc = ax2.plot(q_1,pl,c=col[1],label=r'$q_{\rm c}$',ls=lss[i])
+  p_qv = ax2.plot(q_v,pl,c=col[2],label=r'$q_{\rm v}$',ls=lss[i])
+  p_qs = ax2.plot(q_s,pl,c=col[4],label=r'$q_{\rm s}$',ls='dotted')
 
 ax1.set_yscale('log')
-ax1.set_xscale('log')
+#ax1.set_xscale('log')
 ax2.set_xscale('log')
 
 plt.gca().invert_yaxis()
@@ -65,29 +71,29 @@ yticks = [100,10,1,0.1,0.01,1e-3,]
 yticks_lab = ['100','10','1','0.1','0.01','10$^{-3}$']
 ax1.set_yticks(yticks,yticks_lab)
 
-ax1.set_xlim(1e-3,1e2)
-#ax2.set_xlim(1e2,1e6)
-ax2.set_xlim(1e-7,1e-3)
+ax1.set_xlim(0,1500)
+ax2.set_xlim(1e-9,1e-5)
+#ax2.set_xlim(1e-7,1e-3)
 
 plt.ylim(300,3e-3)
 
 ax1.tick_params(axis='both',which='major',labelsize=14)
 ax2.tick_params(axis='both',which='major',labelsize=14)
 
-ax1.set_xlabel(r'$r_{\rm c}$ [$\mu$m]',fontsize=16)
-ax2.set_xlabel(r'$N_{\rm c}$ [cm$^{-3}$]',fontsize=16)
+ax1.set_xlabel(r'$T_{\rm gas}$ [K]',fontsize=16)
+ax2.set_xlabel(r'$q$ [g g$^{-1}$]',fontsize=16)
 ax1.set_ylabel(r'$p_{\rm gas}$ [bar]',fontsize=16)
 
 # added these three lines
 ax2.set_zorder(1)
-lns = p_rc + p_nc
+lns = p_T + p_qc + p_qv + p_qs
 labs = [l.get_label() for l in lns]
-ax2.legend(lns, labs,fontsize=10,loc='upper left')
+ax2.legend(lns, labs,fontsize=10,loc='upper center')
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono_exp.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_gamma_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
