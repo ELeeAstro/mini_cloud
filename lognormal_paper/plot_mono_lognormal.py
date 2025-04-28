@@ -7,7 +7,7 @@ amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
 
-dirs = ['../results_2_mono/','../results_3_gamma/']
+dirs = ['../results_2_mono/','../results_3_lognormal/']
 ndir = len(dirs)
 
 fname = 'tracers_425.txt'
@@ -93,7 +93,7 @@ ax2.legend(lns, labs,fontsize=10,loc='upper center')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_mono_gamma_Tq.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_lognormal_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

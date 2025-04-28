@@ -14,7 +14,7 @@ rho_d = 1.99
 V_seed = 4.0/3.0 * np.pi * r_seed**3
 m_seed = V_seed * rho_d
 
-dirs = ['../results_3_gamma/']
+dirs = ['../results_3_lognormal/']
 ndir = len(dirs)
 
 fname = 'tracers_425.txt'

@@ -1,6 +1,6 @@
-program test_mini_cloud_2
+program test_mini_cloud_3
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_3_gamma_mod, only : mini_cloud_3_gamma, rho_d, mol_w_sp
+  use mini_cloud_3_lognormal_mod, only : mini_cloud_3_lognormal, rho_d, mol_w_sp
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
@@ -45,7 +45,7 @@ program test_mini_cloud_2
   t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 1000
 
   !! Start time
   time = 6840.0_dp
@@ -119,7 +119,7 @@ program test_mini_cloud_2
         rho(1) = (pl(1)*10.0_dp*mu(1)*amu)/(kb * Tl(1)) ! Mass density [g cm-3]
 
         !! Call mini-cloud and perform integrations for a single layer
-        call mini_cloud_3_gamma(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1), q_2(1))
+        call mini_cloud_3_lognormal(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1), q_2(1))
 
         !! Calculate settling velocity for this layer
         call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), vf(1))
@@ -277,7 +277,7 @@ program test_mini_cloud_2
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_3_gamma(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i), q_2(i))
+          call mini_cloud_3_lognormal(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i), q_2(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i))
@@ -357,8 +357,8 @@ contains
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_3_gamma/tracers.txt',action='readwrite')
-      open(newunit=u2,file='results_3_gamma/opac.txt',action='readwrite')
+      open(newunit=u1,file='results_3_lognormal/tracers.txt',action='readwrite')
+      open(newunit=u2,file='results_3_lognormal/opac.txt',action='readwrite')
       write(u2,*) wl(:)
       first_call = .False.
     end if
@@ -415,4 +415,4 @@ contains
 
   end subroutine linear_interp
 
-end program test_mini_cloud_2
+end program test_mini_cloud_3
