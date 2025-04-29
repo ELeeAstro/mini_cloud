@@ -272,7 +272,7 @@ module mini_cloud_3_lognormal_mod
 
     !! Calculate log(sigma_g)**2
     lnsig = sqrt(max(log((y(1)*y(3))/(y(2)**2)),0.0_dp))
-    sig = max(exp(lnsig),1.0001_dp)
+    sig = max(exp(lnsig),1.01_dp)
     sig = min(sig,3.0_dp)
 
     lnsig2 = log(sig)**2
