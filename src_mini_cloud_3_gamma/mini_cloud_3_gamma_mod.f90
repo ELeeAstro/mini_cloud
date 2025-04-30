@@ -250,7 +250,7 @@ module mini_cloud_3_gamma_mod
     real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
     real(dp) :: p_v, n_v, fx
 
-    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b
+    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b, Kn_N
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -285,6 +285,8 @@ module mini_cloud_3_gamma_mod
     Kn = mfp/r_c
 
     !! Population averaged Knudsen number for n, m and m^2
+    Kn_N = Kn * nu**(1.0_dp/3.0_dp) * &
+      & exp(log_gamma(max(nu,0.3334_dp) - 1.0_dp/3.0_dp) - log_gamma(nu))
     Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - log_gamma(nu + 1.0_dp))
     Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
@@ -324,7 +326,7 @@ module mini_cloud_3_gamma_mod
     call calc_coag(m_c, r_c, nu, Kn, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, vf, nu, Kn_m, f_coal0, f_coal2)
+    call calc_coal(r_c, vf, nu, Kn_N, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*y(1)**2
@@ -563,10 +565,10 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, vf, nu, Kn_m, f_coal0, f_coal2)
+  subroutine calc_coal(r_c, vf, nu, Kn_N, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_c, vf, nu, Kn_m
+    real(dp), intent(in) :: r_c, vf, nu, Kn_N
 
     real(dp), intent(out) :: f_coal0, f_coal2
 
@@ -580,7 +582,7 @@ module mini_cloud_3_gamma_mod
     lgnu1 = log_gamma(nu + 1.0_dp)
 
     !! Calculate E
-    if (Kn_m >= 1.0_dp) then
+    if (Kn_N >= 1.0_dp) then
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else

@@ -4,46 +4,40 @@ from scipy.special import gammaln  # Use log-gamma instead of gamma
 import seaborn as sns
 
 # Define nu range
-nu = np.logspace(-1, 1, 100)
+sig = np.linspace(1.0, 3.0, 100)
+lnsig2 = np.log(sig)**2
 
-# Compute log-Gamma values
-log_gamma_nu = gammaln(nu)
-log_gamma_nu_p1_3 = gammaln(nu + 1.0/3.0)
-log_gamma_nu_p2_3 = gammaln(nu + 2.0/3.0)
-
-# Compute the terms using exponentials of log-Gamma ratios
-v_l = nu**(-1.0/3.0) * np.exp(log_gamma_nu_p1_3 - log_gamma_nu)
-v_h = nu**(-2.0/3.0) * np.exp(log_gamma_nu_p2_3 - log_gamma_nu)
+# Compute the terms using log-normal expressions
+v_l = np.exp(1/18 * lnsig2)*(np.exp(-0.5 * lnsig2))**1.0
+v_h = np.exp(2/9 * lnsig2)*(np.exp(-0.5 * lnsig2))**2.0
 
 # Plot results
 fig = plt.figure()
 col = sns.color_palette('colorblind')
 
-plt.plot(nu, v_l, label=r'Cond. (${\rm Kn}$ $\ll$ 1)', c=col[0])
-plt.plot(nu, v_h, label=r'Cond. (${\rm Kn}$ $\gg$ 1)', c=col[1])
+plt.plot(sig, v_l, label=r'Cond. (${\rm Kn}$ $\ll$ 1)', c=col[0])
+plt.plot(sig, v_h, label=r'Cond. (${\rm Kn}$ $\gg$ 1)', c=col[1])
 
-plt.vlines(1.0, 0.4, 1, colors='black', ls='dotted')
-plt.text(1.1, 0.5, r'Exponential' "\n" r'distribution', c='black')
 
 plt.legend()
-plt.ylim(0.4, 1)
-plt.xlim(1e-1, 10)
-plt.xscale('log')
+#plt.ylim(0.4, 1)
+plt.xlim(1, 3)
+#plt.xscale('log')
 
 # Add minor ticks every 0.02 on y-axis
 y_major_ticks = np.arange(0.4, 1.02, 0.1)  # Major ticks every 0.1
 y_minor_ticks = np.arange(0.4, 1.025, 0.025)  # Minor ticks every 0.02
 
-plt.yticks(y_major_ticks)  # Set major ticks
-plt.minorticks_on()  # Enable minor ticks
+#plt.yticks(y_major_ticks)  # Set major ticks
+#plt.minorticks_on()  # Enable minor ticks
 plt.gca().set_yticks(y_minor_ticks, minor=True)  # Set minor ticks
 
-plt.xlabel(r'$\nu$', fontsize=16)
-plt.ylabel(r'$\frac{dm}{dt}$(gamma/mono)', fontsize=16)
+plt.xlabel(r'$\sigma_{\rm g}$', fontsize=16)
+plt.ylabel(r'$\frac{dm}{dt}$(log-normal/mono)', fontsize=16)
 
 plt.tick_params(axis='both', which='major', labelsize=14)
 plt.tick_params(axis='both', which='minor', labelsize=10, length=4)  # Customize minor ticks
 
-plt.savefig('gamma_fact_cond.pdf', dpi=144, bbox_inches='tight')
+plt.savefig('lognormal_fact_cond.pdf', dpi=144, bbox_inches='tight')
 
 plt.show()
