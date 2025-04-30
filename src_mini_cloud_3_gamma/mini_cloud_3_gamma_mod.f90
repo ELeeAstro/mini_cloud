@@ -286,7 +286,7 @@ module mini_cloud_3_gamma_mod
 
     !! Population averaged Knudsen number for n, m and m^2
     Kn_N = Kn * nu**(1.0_dp/3.0_dp) * &
-      & exp(log_gamma(max(nu,0.3334_dp) - 1.0_dp/3.0_dp) - log_gamma(nu))
+      & exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.01_dp)) - log_gamma(nu))
     Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - log_gamma(nu + 1.0_dp))
     Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
@@ -496,14 +496,14 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, nu_in, Kn_in, f_coag0, f_coag2)
+  subroutine calc_coag(m_c, r_c, nu, Kn_in, f_coag0, f_coag2)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, nu_in, Kn_in
+    real(dp), intent(in) :: m_c, r_c, nu, Kn_in
 
     real(dp), intent(out) :: f_coag0, f_coag2
 
-    real(dp) :: nu, lgnu, lgnu1
+    real(dp) :: lgnu, lgnu1
 
     real(dp) :: Knd0, phi0, Kl0, Kh0, nu_fac_l_0, nu_fac_h_0
     real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
@@ -514,8 +514,6 @@ module mini_cloud_3_gamma_mod
     !! Limit Kn to avoid large overshoot of Kn << 1 regime.
     Kn = min(Kn_in,100.0_dp)
 
-    nu = max(0.5001_dp, nu_in)
-
     ! !! Particle diffusion rate
     !D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
 
@@ -525,10 +523,10 @@ module mini_cloud_3_gamma_mod
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
 
-    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/3.0_dp) - 2.0_dp * lgnu) & 
+    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/3.0_dp,0.01_dp)) - 2.0_dp * lgnu) & 
       & + A*Kn*nu**(1.0_dp/3.0_dp) &
-      & * (exp(log_gamma(nu - 1.0_dp/3.0_dp) - lgnu) &
-      & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 2.0_dp/3.0_dp) - 2.0_dp*lgnu))
+      & * (exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.01_dp)) - lgnu) &
+      & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 2.0_dp/3.0_dp,0.01_dp)) - 2.0_dp*lgnu))
     nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
       & + A*Kn*nu**(1.0_dp/3.0_dp) &
       & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1) &
@@ -536,8 +534,8 @@ module mini_cloud_3_gamma_mod
 
 
     nu_fac_h_0 = nu**(-1.0_dp/6.0_dp)  &
-      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/2.0_dp) - 2.0_dp * lgnu)  &
-      & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(nu - 1.0_dp/6.0_dp) - 2.0_dp * lgnu) & 
+      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/2.0_dp,0.01_dp)) - 2.0_dp * lgnu)  &
+      & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/6.0_dp,0.01_dp)) - 2.0_dp * lgnu) & 
       & +  exp(log_gamma(nu + 1.0_dp/6.0_dp) - lgnu))
 
     nu_fac_h_2 = nu**(-1.0_dp/6.0_dp)  &
