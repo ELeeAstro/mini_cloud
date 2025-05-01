@@ -250,7 +250,7 @@ module mini_cloud_3_gamma_mod
     real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
     real(dp) :: p_v, n_v, fx
 
-    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b, Kn_N
+    real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -285,7 +285,7 @@ module mini_cloud_3_gamma_mod
     Kn = mfp/r_c
 
     !! Population averaged Knudsen number for n, m and m^2
-    Kn_N = Kn * nu**(1.0_dp/3.0_dp) * &
+    Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.01_dp)) - log_gamma(nu))
     Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - log_gamma(nu + 1.0_dp))
@@ -326,7 +326,7 @@ module mini_cloud_3_gamma_mod
     call calc_coag(m_c, r_c, nu, Kn, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, vf, nu, Kn_N, f_coal0, f_coal2)
+    call calc_coal(r_c, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*y(1)**2
@@ -496,10 +496,10 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, nu, Kn_in, f_coag0, f_coag2)
+  subroutine calc_coag(m_c, r_c, nu_in, Kn_in, f_coag0, f_coag2)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, nu, Kn_in
+    real(dp), intent(in) :: m_c, r_c, nu_in, Kn_in
 
     real(dp), intent(out) :: f_coag0, f_coag2
 
@@ -509,10 +509,12 @@ module mini_cloud_3_gamma_mod
     real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
 
     real(dp) :: Kn
-    real(dp), parameter :: A = 1.639_dp
+    real(dp), parameter :: A = 1.639_dp, H = 0.85_dp
 
     !! Limit Kn to avoid large overshoot of Kn << 1 regime.
     Kn = min(Kn_in,100.0_dp)
+
+    nu = max(0.556_dp, nu_in)
 
     ! !! Particle diffusion rate
     !D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
@@ -527,18 +529,18 @@ module mini_cloud_3_gamma_mod
       & + A*Kn*nu**(1.0_dp/3.0_dp) &
       & * (exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.01_dp)) - lgnu) &
       & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 2.0_dp/3.0_dp,0.01_dp)) - 2.0_dp*lgnu))
+
     nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
       & + A*Kn*nu**(1.0_dp/3.0_dp) &
       & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1) &
       & + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
 
-
-    nu_fac_h_0 = nu**(-1.0_dp/6.0_dp)  &
+    nu_fac_h_0 = H * nu**(-1.0_dp/6.0_dp)  &
       & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/2.0_dp,0.01_dp)) - 2.0_dp * lgnu)  &
       & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/6.0_dp,0.01_dp)) - 2.0_dp * lgnu) & 
       & +  exp(log_gamma(nu + 1.0_dp/6.0_dp) - lgnu))
 
-    nu_fac_h_2 = nu**(-1.0_dp/6.0_dp)  &
+    nu_fac_h_2 = H * nu**(-1.0_dp/6.0_dp)  &
       & * (exp(log_gamma(nu + 5.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/2.0_dp) - 2.0_dp * lgnu1)  &
       & + 2.0*exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 5.0_dp/6.0_dp) - 2.0_dp * lgnu1) & 
       & +  exp(log_gamma(nu + 7.0_dp/6.0_dp) - lgnu1))
@@ -563,14 +565,14 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, vf, nu, Kn_N, f_coal0, f_coal2)
+  subroutine calc_coal(r_c, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_c, vf, nu, Kn_N
+    real(dp), intent(in) :: r_c, vf, nu, Kn_n, Kn_m
 
     real(dp), intent(out) :: f_coal0, f_coal2
 
-    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, r_n
+    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, r_n, E_c
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
@@ -579,8 +581,8 @@ module mini_cloud_3_gamma_mod
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
 
-    !! Calculate E
-    if (Kn_N >= 1.0_dp) then
+    !! Calculate E for number density change
+    if (Kn_n >= 1.0_dp) then
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else
@@ -590,15 +592,26 @@ module mini_cloud_3_gamma_mod
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
+   !! Calculate E for mass change
+    if (Kn_m >= 1.0_dp) then
+      !! E = 1 when Kn > 1
+      E_c = 1.0_dp
+    else
+      !! Calculate Stokes number
+      Stk = (vf * d_vf)/(grav * r_c)
+      E_c = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
+    end if
+
     nu_fac_0 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) &
       & + exp(2.0_dp * log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp * lgnu))
+
     nu_fac_2 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) &
       & + exp(2.0_dp * log_gamma(nu + 4.0_dp/3.0_dp) - 2.0_dp * lgnu1))
 
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
     f_coal0 = -pi*r_c**2*d_vf*E * nu_fac_0
     !! Coalesence flux (Second moment) [cm3 s-1]
-    f_coal2 = 2.0_dp*pi*r_c**2*d_vf*E * nu_fac_2
+    f_coal2 = 2.0_dp*pi*r_c**2*d_vf*E_c * nu_fac_2
 
   end subroutine calc_coal
 

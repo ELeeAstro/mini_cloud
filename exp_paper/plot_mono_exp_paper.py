@@ -66,6 +66,7 @@ yticks_lab = ['100','10','1','0.1','0.01','10$^{-3}$']
 ax1.set_yticks(yticks,yticks_lab)
 
 ax1.set_xlim(1e-3,1e2)
+
 ax2.set_xlim(1e2,1e7)
 #ax2.set_xlim(1e-7,1e-3)
 

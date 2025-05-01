@@ -83,9 +83,10 @@ ax1.set_yticks(yticks,yticks_lab)
 #ax1.set_xticks(np.arange(-50, 50, step=1),minor=True)
 #ax2.set_xticks(np.arange(-50, 50, step=1),minor=True)
 
-ax1.set_xlim(-60,60)
+ax1.set_xlim(-50,50)
 ax2.set_xlim(-700,700)
-ax1.set_xticks(np.arange(-60, 60, step=10),minor=True)
+ax1.set_xticks(np.arange(-50, 60, step=10))
+ax1.set_xticks(np.arange(-50, 50, step=1),minor=True)
 ax2.set_xticks(np.arange(-700, 700, step=100),minor=True)
 
 

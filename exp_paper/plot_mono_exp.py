@@ -10,7 +10,7 @@ rho_d = 1.99
 dirs = ['../results_2_mono/','../results_2_exp/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -87,12 +87,13 @@ ax1.set_ylabel(r'$p_{\rm gas}$ [bar]',fontsize=16)
 ax2.set_zorder(1)
 lns = p_T + p_qc + p_qv + p_qs
 labs = [l.get_label() for l in lns]
-ax2.legend(lns, labs,fontsize=10,loc='upper right')
+#ax2.legend(lns, labs,fontsize=10,loc='upper right')
+ax2.legend(lns, labs,fontsize=10,loc='upper center')
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono_exp_Tq.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_exp_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
