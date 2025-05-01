@@ -1,4 +1,4 @@
-module mini_cloud_2_exp_mod
+module mini_cloud_DMC_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -51,22 +51,16 @@ module mini_cloud_2_exp_mod
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
-  !! Gamma constants for exponential distribution
-  real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
-  real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), g12 = gamma(1.0_dp/2.0_dp)
-  real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp), g76 = gamma(7.0_dp/6.0_dp)
-  real(dp), parameter :: g13 = gamma(1.0_dp/3.0_dp)
-
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
-  public :: mini_cloud_2_exp, RHS_mom, jac_dum
-  private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
+  public :: mini_cloud_DMC, RHS_bin, jac_dum
+  private :: calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct
 
   contains
 
-  subroutine mini_cloud_2_exp(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1)
+  subroutine mini_cloud_DMC(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_c)
     implicit none
 
     ! Input variables
@@ -76,7 +70,7 @@ module mini_cloud_2_exp_mod
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
     ! Input/Output tracer values
-    real(dp), intent(inout) :: q_v, q_0, q_1
+    real(dp), intent(inout) :: q_v, q_0, q_1, q_2
 
     integer :: ncall
 
@@ -98,7 +92,7 @@ module mini_cloud_2_exp_mod
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
-    n_eq = 3
+    n_eq = 4
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -196,7 +190,8 @@ module mini_cloud_2_exp_mod
     !! Give tracer values to y
     y(1) = q_0
     y(2) = q_1
-    y(3) = q_v 
+    y(3) = q_2
+    y(4) = q_v 
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
@@ -233,11 +228,12 @@ module mini_cloud_2_exp_mod
     !! Give y values to tracers
     q_0 = y(1)
     q_1 = y(2)
-    q_v = y(3)
+    q_2 = y(3)
+    q_v = y(4)
 
     deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g)
 
-  end subroutine mini_cloud_2_exp
+  end subroutine mini_cloud_3_lognormal
 
   subroutine RHS_mom(n_eq, time, y, f)
     implicit none
@@ -247,11 +243,15 @@ module mini_cloud_2_exp_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
-    real(dp) :: f_nuc_hom, f_cond, f_seed_evap
-    real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
-    real(dp) :: Kn, Kn_n, Kn_m, Kn_b
+    real(dp) :: f_cond1, f_cond2
+    real(dp) :: f_nuc_hom, f_seed_evap
+    real(dp) :: f_coal0, f_coag0, f_coal2, f_coag2
+    real(dp) :: m_c, m_med, m_n, r_c, r_med, r_n
+    real(dp) :: beta, sat, vf_s, vf_e, vf
     real(dp) :: p_v, n_v, fx
+
+    real(dp) :: lnsig2, lnsig, sig
+    real(dp) ::  Kn, Kn_m, Kn_m2, Kn_n, Kn_b
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -262,105 +262,75 @@ module mini_cloud_2_exp_mod
 
     !! Convert y to real physical numbers to calculate f
     y(1) = y(1)*nd_atm ! Convert to real number density
-    y(2) = y(2)*rho   ! Convert to real mass density
-    y(3) = y(3)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
-    p_v = y(3) * Rd * T     !! Pressure of vapour
+    p_v = y(4) * Rd * T     !! Pressure of vapour
     n_v = p_v/(kb*T)        !! Number density of vapour
-
-    !! Mean mass of particle
-    m_c = max(y(2)/y(1), m_seed)
-
-    !! Mass weighted mean radius of particle
-    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
-
-    !! Average particle  and population averaged Knudsen numbers
-    Kn = mfp/r_c
-    Kn_n = Kn * g23
-    Kn_m = Kn * g53
-
-    Kn_b = min(Kn_m, 100.0_dp)
-    !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
-
-    !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
-     & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
-
-    !! Settling velocity (Epstein regime)
-    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
-
-    !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
-
-    !! Interpolation for settling velocity
-    vf = fx*vf_s + (1.0_dp - fx)*vf_e
 
     !! Find supersaturation ratio
     sat = p_v/p_vap
 
     !! Calculate condensation rate
-    call calc_cond(n_eq, y, r_c, Kn_m, n_v, sat, f_cond)
+    call calc_cond(n_eq, y, )
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
 
     !! Calculate seed particle evaporation rate
-    call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
-
-    !! Calculate the coagulation rate
-    call calc_coag(m_c, r_c, Kn, f_coag)
-
-    !! Calculate the coalescence rate
-    call calc_coal(r_c, Kn_n, vf, f_coal)
+    call calc_seed_evap(n_eq, y, m_c, f_cond1, f_seed_evap)
 
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom + f_seed_evap) + (f_coag + f_coal)*y(1)**2
-    f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond*y(1)
-    f(3) = -f(2)
+    f(1) =
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm
-    f(2) = f(2)/rho
-    f(3) = f(3)/rho
       
     !! Convert y back to ratios
     y(1) = y(1)/nd_atm
-    y(2) = y(2)/rho 
-    y(3) = y(3)/rho
+    y(2) = y(2)/rho
+    y(3) = y(3)/rho**2
+    y(4) = y(4)/rho
 
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(n_eq, y, r_c, Kn_m, n_v, sat, dmdt)
+  subroutine calc_cond(n_eq, y, r_med, Kn_m, Kn_m2, n_v, sat, lnsig2, dmdt1, dmdt2)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, Kn_m, n_v, sat
+    real(dp), intent(in) :: r_med, Kn_m, Kn_m2, n_v, sat, lnsig2
 
-    real(dp), intent(out) :: dmdt
+    real(dp), intent(out) :: dmdt1, dmdt2
 
-    real(dp) :: dmdt_low, dmdt_high, Knd, Kn_crit, fx
+    real(dp) :: dmdt_low1, dmdt_high1, dmdt_low2, dmdt_high2
+    real(dp) :: c_facl1, c_facg1
+    real(dp) :: Knd_m, Knd_m2, fx_m, fx_m2, Kn_crit_m, Kn_crit_m2
 
-    !! Free molecular flow regime (Kn >> 1) [g s-1]
-    dmdt_high = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * alp * (1.0_dp - 1.0_dp/sat) * g53
 
     !! Diffusive limited regime (Kn << 1) [g s-1]
-    dmdt_low = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat) * g43
+    c_facl1 = 4.0_dp * pi * r_med * D * m0 * n_v * (1.0_dp - 1.0_dp/sat)
+    dmdt_low1 = c_facl1 * exp(1.0_dp/18.0_dp * lnsig2)
+    dmdt_low2 = c_facl1 * exp(7.0_dp/18.0_dp * lnsig2)
 
-    !! Critical Knudsen number
-    Kn_crit = (mfp * dmdt_high)/(dmdt_low * r_c)
+    !! Free molecular flow regime (Kn >> 1) [g s-1]
+    c_facg1 = 4.0_dp * pi * r_med**2 * vth * m0 * n_v * alp * (1.0_dp - 1.0_dp/sat)
+    dmdt_high1 = c_facg1 * exp(2.0_dp/9.0_dp * lnsig2)
+    dmdt_high2 = c_facg1 * exp(8.0_dp/9.0_dp * lnsig2)
 
     !! Kn' (Woitke & Helling 2003)
-    Knd = Kn_m/Kn_crit
+    Kn_crit_m = (mfp*dmdt_high1)/(dmdt_low1*r_med)
+    Kn_crit_m2 = (mfp*dmdt_high2)/(dmdt_low2*r_med)
+
+    Knd_m = Kn_m/Kn_crit_m
+    Knd_m2 = Kn_m2/Kn_crit_m2
 
     !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
+    fx_m = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd_m)))
+    fx_m2 = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd_m2)))
 
-    dmdt = dmdt_low * fx + dmdt_high * (1.0_dp - fx)
+    dmdt1 = dmdt_low1 * fx_m + dmdt_high1 * (1.0_dp - fx_m)
+    dmdt2 = dmdt_low2 * fx_m2 + dmdt_high2 * (1.0_dp - fx_m2)
 
   end subroutine calc_cond
 
@@ -380,7 +350,7 @@ module mini_cloud_2_exp_mod
     real(dp), parameter :: alpha = 1.0_dp
     real(dp), parameter :: Nf = 5.0_dp
 
-    !real(dp) :: ac, F, phi, gm, Vm
+    real(dp) :: ac, F, phi, gm, Vm
 
     if (sat > 1.0_dp) then
 
@@ -461,72 +431,6 @@ module mini_cloud_2_exp_mod
     end if
 
   end subroutine calc_seed_evap
-
-  !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, Kn_in, f_coag)
-    implicit none
-
-    real(dp), intent(in) :: m_c, r_c, Kn_in
-
-    real(dp), intent(out) :: f_coag
-
-    real(dp) :: Kl0, Kh0, Kn
-    real(dp) :: Knd, phi
-    real(dp), parameter :: A = 1.639_dp, H = 0.85_dp
-
-    !! Limit Kn to avoid large overshoot of Kn << 1 regime.
-    Kn = min(Kn_in,100.0_dp)
-
-    !! Kn << 1 population averaged kernel
-    Kl0 = (4.0_dp*kb*T)/(3.0_dp*eta) * (1.0_dp + g43*g23 + &
-      & Kn * A * (g23 + g43*g13))
-
-    !! Kn >> 1 population averaged kernel
-    Kh0 = 2.0_dp * H * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * (g53*g12 + 2.0_dp*g43*g56 + g76)
-
-    !! Moran (2022) method using diffusive Knudsen number
-    Knd = (2.0_dp*sqrt(2.0_dp)/pi) * (Kl0/Kh0)
-    
-    !! Interpolation factor
-    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
-
-    !! Coagulation rate
-    f_coag = -0.5_dp * Kl0 * phi 
-
-  end subroutine calc_coag
-
-  !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, Kn_n, vf, f_coal)
-    implicit none
-
-    real(dp), intent(in) :: r_c, Kn_n, vf
-
-    real(dp), intent(out) :: f_coal
-
-    real(dp) :: d_vf,  Stk, E, r_n
-    real(dp), parameter :: eps = 0.5_dp
-
-    !! Estimate differential velocity
-    d_vf = eps * vf
-
-    !! Calculate E
-    if (Kn_n >= 1.0_dp) then
-      !! E = 1 when Kn > 1
-      E = 1.0_dp
-    else
-
-      !! Number density averaged radius
-      r_n = max(r_c * g43, r_seed)
-
-      !! Calculate Stokes number
-      Stk = (vf * d_vf)/(grav * r_n)
-      E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
-    end if
-
-    !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal = -pi*r_c**2*d_vf*E*(g53 + g43**2)
-
-  end subroutine calc_coal
 
   !! Vapour pressure for each species
   real(dp) function p_vap_sp(sp, T)
@@ -902,4 +806,4 @@ module mini_cloud_2_exp_mod
     real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
   end subroutine jac_dum
 
-end module mini_cloud_2_exp_mod
+end module mini_cloud_3_lognormal_mod

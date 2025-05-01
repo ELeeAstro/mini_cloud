@@ -278,7 +278,7 @@ module mini_cloud_3_gamma_mod
     !! Calculate lambda and nu gamma distribution parameters
     sig2 = max(y(3)/y(1) - (y(2)/y(1))**2,m_seed**2)
     lam = sig2/m_c
-    nu = max(m_c**2/sig2,0.01_dp)
+    nu = max(m_c**2/sig2,0.501_dp)
     nu = min(nu,100.0_dp)
 
     !! Knudsen number

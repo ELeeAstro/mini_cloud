@@ -10,7 +10,7 @@ rho_d = 1.99
 dirs = ['../results_2_mono/','../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_425.txt'
+fname = 'tracers_325.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -93,7 +93,7 @@ ax2.legend(lns, labs,fontsize=10,loc='upper center')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_mono_gamma_Tq.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_325_mono_gamma_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

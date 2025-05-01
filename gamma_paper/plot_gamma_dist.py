@@ -17,7 +17,7 @@ m_seed = V_seed * rho_d
 dirs = ['../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_425.txt'
+fname = 'tracers_325.txt'
 
 fig, ax =  plt.subplots()
 
@@ -84,7 +84,7 @@ normalize = mcolors.Normalize(vmin=np.log10(pl[0]), vmax=np.log10(pl[-1]))
 cmap = sns.color_palette("crest", as_cmap=True)
 
 
-for i in range(0,nlay,5):
+for i in range(0,nlay):
   if nu[i] > 0.01: 
     print(pl[i],nu[i])
     plt.plot(r[:]*1e4,fx[:,i],c=cmap(normalize(np.log10(pl[i]))))
@@ -106,15 +106,15 @@ plt.tick_params(axis='both',which='major',labelsize=14)
 plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
-#plt.ylim(1e-12,1e-3)
-plt.ylim(1e2,1e4)
+plt.ylim(1e-12,1e-3)
+#plt.ylim(1e2,1e4)
 
 plt.xlim(1e-3,1e3)
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_gamma_dist.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_325_gamma_dist.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
