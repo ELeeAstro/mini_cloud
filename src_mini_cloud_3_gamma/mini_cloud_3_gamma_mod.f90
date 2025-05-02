@@ -278,7 +278,7 @@ module mini_cloud_3_gamma_mod
     !! Calculate lambda and nu gamma distribution parameters
     sig2 = max(y(3)/y(1) - (y(2)/y(1))**2,m_seed**2)
     lam = sig2/m_c
-    nu = max(m_c**2/sig2,0.501_dp)
+    nu = max(m_c**2/sig2,0.01_dp)
     nu = min(nu,100.0_dp)
 
     !! Knudsen number
@@ -509,12 +509,12 @@ module mini_cloud_3_gamma_mod
     real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
 
     real(dp) :: Kn
-    real(dp), parameter :: A = 1.639_dp, H = 1.0/sqrt(2.0_dp)
+    real(dp), parameter :: A = 1.639_dp, H = 1.0_dp/sqrt(2.0_dp)
 
     !! Limit Kn to avoid large overshoot of Kn << 1 regime.
     Kn = min(Kn_in,100.0_dp)
 
-    nu = max(0.556_dp, nu_in)
+    nu = nu_in
 
     ! !! Particle diffusion rate
     !D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
@@ -628,8 +628,13 @@ module mini_cloud_3_gamma_mod
     select case(sp)
     case('C')
       p_vap_sp = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
-    !case('TiC')
-    !case('SiC')
+    case('TiC')
+      ! Kimura et al. (2023)
+      p_vap = 10.0_dp**(-33600.0_dp/T + 7.652_dp) * atm
+    case('SiC')
+      ! Elspeth 5 polynomial JANAF-NIST fit
+      p_vap =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
+        & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
     case('CaTiO3')
       ! Kozasa et al. (1987)
       p_vap_sp = exp(-79568.2_dp/T + 42.0204_dp) * atm
