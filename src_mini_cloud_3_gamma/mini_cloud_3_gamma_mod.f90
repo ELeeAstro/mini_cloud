@@ -523,21 +523,35 @@ module mini_cloud_3_gamma_mod
     !! Thermal velocity limit rate
     !V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
-    !! Clamp nu values for Kn << 1 regime 
-    nu_1 = max(nu_in,0.667_dp)
+    !! Clamp nu values for Kn << 1 regime
 
-    lgnu  = log_gamma(nu_1)
-    lgnu1 = log_gamma(nu_1 + 1.0_dp)
+    if (Kn >= 0.1_dp) then
+      !! Include slip correction
+      nu_1 = max(nu_in,0.667_dp)
 
-    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 1.0_dp/3.0_dp) - 2.0_dp * lgnu) & 
-      & + A*Kn*nu_1**(1.0_dp/3.0_dp) &
-      & * (exp(log_gamma(nu_1 - 1.0_dp/3.0_dp) - lgnu) &
-      & + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 2.0_dp/3.0_dp) - 2.0_dp*lgnu))
+      lgnu  = log_gamma(nu_1)
+      lgnu1 = log_gamma(nu_1 + 1.0_dp)
 
-    nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
-      & + A*Kn*nu_1**(1.0_dp/3.0_dp) &
-      & * (exp(log_gamma(nu_1 + 2.0_dp/3.0_dp) - lgnu1) &
-      & + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
+      nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 1.0_dp/3.0_dp) - 2.0_dp * lgnu) & 
+        & + A*Kn*nu_1**(1.0_dp/3.0_dp) &
+        & * (exp(log_gamma(nu_1 - 1.0_dp/3.0_dp) - lgnu) &
+        & + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 2.0_dp/3.0_dp) - 2.0_dp*lgnu))
+
+      nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
+        & + A*Kn*nu_1**(1.0_dp/3.0_dp) &
+        & * (exp(log_gamma(nu_1 + 2.0_dp/3.0_dp) - lgnu1) &
+        & + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
+    else
+      !! Don't include slip correction
+      nu_1 = max(nu_in,0.334_dp)
+
+      lgnu  = log_gamma(nu_1)
+      lgnu1 = log_gamma(nu_1 + 1.0_dp)
+
+      nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 1.0_dp/3.0_dp) - 2.0_dp * lgnu)
+
+      nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1)
+    end if
 
 
     !! Clamp nu values for Kn >> 1 regime 
