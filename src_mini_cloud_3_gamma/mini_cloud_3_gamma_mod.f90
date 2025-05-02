@@ -248,7 +248,7 @@ module mini_cloud_3_gamma_mod
     real(dp) :: f_nuc_hom, f_seed_evap
     real(dp) :: f_coal0, f_coag0, f_coal2, f_coag2
     real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
-    real(dp) :: p_v, n_v, fx
+    real(dp) :: p_v, n_v, fx,  nu_n
 
     real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
@@ -285,8 +285,9 @@ module mini_cloud_3_gamma_mod
     Kn = mfp/r_c
 
     !! Population averaged Knudsen number for n, m and m^2
-    Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
-      & exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.001_dp)) - log_gamma(nu))
+    nu_n = max(nu,0.3334_dp)
+    Kn_n = Kn * nu_n**(1.0_dp/3.0_dp) * &
+      & exp(log_gamma(nu_n - 1.0_dp/3.0_dp) - log_gamma(nu_n))
     Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - log_gamma(nu + 1.0_dp))
     Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
@@ -508,13 +509,13 @@ module mini_cloud_3_gamma_mod
     real(dp) :: Knd0, phi0, Kl0, Kh0, nu_fac_l_0, nu_fac_h_0
     real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
 
-    real(dp) :: Kn
+    real(dp) :: Kn, nu_1, nu_2
     real(dp), parameter :: A = 1.639_dp, H = 1.0_dp/sqrt(2.0_dp)
 
     !! Limit Kn to avoid large overshoot of Kn << 1 regime.
     Kn = min(Kn_in,100.0_dp)
 
-    nu = nu_in
+
 
     ! !! Particle diffusion rate
     !D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
@@ -522,28 +523,38 @@ module mini_cloud_3_gamma_mod
     !! Thermal velocity limit rate
     !V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
-    lgnu  = log_gamma(nu)
-    lgnu1 = log_gamma(nu + 1.0_dp)
+    !! Clamp nu values for Kn << 1 regime 
+    nu_1 = max(nu_in,0.667_dp)
 
-    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/3.0_dp,0.001_dp)) - 2.0_dp * lgnu) & 
-      & + A*Kn*nu**(1.0_dp/3.0_dp) &
-      & * (exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.001_dp)) - lgnu) &
-      & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 2.0_dp/3.0_dp,0.001_dp)) - 2.0_dp*lgnu))
+    lgnu  = log_gamma(nu_1)
+    lgnu1 = log_gamma(nu_1 + 1.0_dp)
 
-    nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
-      & + A*Kn*nu**(1.0_dp/3.0_dp) &
-      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1) &
-      & + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
+    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 1.0_dp/3.0_dp) - 2.0_dp * lgnu) & 
+      & + A*Kn*nu_1**(1.0_dp/3.0_dp) &
+      & * (exp(log_gamma(nu_1 - 1.0_dp/3.0_dp) - lgnu) &
+      & + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 2.0_dp/3.0_dp) - 2.0_dp*lgnu))
 
-    nu_fac_h_0 = H * nu**(-1.0_dp/6.0_dp)  &
-      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/2.0_dp,0.001_dp)) - 2.0_dp * lgnu)  &
-      & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/6.0_dp,0.001_dp)) - 2.0_dp * lgnu) & 
-      & +  exp(log_gamma(nu + 1.0_dp/6.0_dp) - lgnu))
+    nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
+      & + A*Kn*nu_1**(1.0_dp/3.0_dp) &
+      & * (exp(log_gamma(nu_1 + 2.0_dp/3.0_dp) - lgnu1) &
+      & + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
 
-    nu_fac_h_2 = H * nu**(-1.0_dp/6.0_dp)  &
-      & * (exp(log_gamma(nu + 5.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/2.0_dp) - 2.0_dp * lgnu1)  &
-      & + 2.0*exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 5.0_dp/6.0_dp) - 2.0_dp * lgnu1) & 
-      & +  exp(log_gamma(nu + 7.0_dp/6.0_dp) - lgnu1))
+
+    !! Clamp nu values for Kn >> 1 regime 
+    nu_2 = max(nu_in,0.501_dp)
+
+    lgnu  = log_gamma(nu_2)
+    lgnu1 = log_gamma(nu_2 + 1.0_dp)
+
+    nu_fac_h_0 = H * nu_2**(-1.0_dp/6.0_dp)  &
+      & * (exp(log_gamma(nu_2 + 2.0_dp/3.0_dp) + log_gamma(nu_2 - 1.0_dp/2.0_dp) - 2.0_dp * lgnu)  &
+      & + 2.0*exp(log_gamma(nu_2 + 1.0_dp/3.0_dp) + log_gamma(nu_2 - 1.0_dp/6.0_dp) - 2.0_dp * lgnu) & 
+      & +  exp(log_gamma(nu_2 + 1.0_dp/6.0_dp) - lgnu))
+
+    nu_fac_h_2 = H * nu_2**(-1.0_dp/6.0_dp)  &
+      & * (exp(log_gamma(nu_2 + 5.0_dp/3.0_dp) + log_gamma(nu_2 + 1.0_dp/2.0_dp) - 2.0_dp * lgnu1)  &
+      & + 2.0*exp(log_gamma(nu_2 + 4.0_dp/3.0_dp) + log_gamma(nu_2 + 5.0_dp/6.0_dp) - 2.0_dp * lgnu1) & 
+      & +  exp(log_gamma(nu_2 + 7.0_dp/6.0_dp) - lgnu1))
 
     Kl0 = (4.0_dp*kb*T)/(3.0_dp*eta) * nu_fac_l_0
     Kl2 = (4.0_dp*kb*T)/(3.0_dp*eta) * nu_fac_l_2
@@ -559,8 +570,8 @@ module mini_cloud_3_gamma_mod
     Knd2 = (2.0_dp*sqrt(2.0_dp)/pi) * Kl2/Kh2
     phi2 = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd2**2)
 
-    f_coag0 = (-2.0_dp*kb*T)/(3.0_dp*eta) * nu_fac_l_0 * phi0
-    f_coag2 = (4.0_dp*kb*T)/(3.0_dp*eta) * nu_fac_l_2 * phi2
+    f_coag0 = -0.5_dp * Kl0  * phi0
+    f_coag2 = Kl2 * phi2
 
   end subroutine calc_coag
 
@@ -572,7 +583,7 @@ module mini_cloud_3_gamma_mod
 
     real(dp), intent(out) :: f_coal0, f_coal2
 
-    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, r_n, E_c
+    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, r_n, E_c, K0
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
@@ -608,10 +619,12 @@ module mini_cloud_3_gamma_mod
     nu_fac_2 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) &
       & + exp(2.0_dp * log_gamma(nu + 4.0_dp/3.0_dp) - 2.0_dp * lgnu1))
 
+    K0 = 2.0_dp * pi * r_c**2 * d_vf
+
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal0 = -pi*r_c**2*d_vf*E * nu_fac_0
+    f_coal0 = -0.5_dp * K0 * E * nu_fac_0
     !! Coalesence flux (Second moment) [cm3 s-1]
-    f_coal2 = 2.0_dp*pi*r_c**2*d_vf*E_c * nu_fac_2
+    f_coal2 = K0 * E_c * nu_fac_2
 
   end subroutine calc_coal
 

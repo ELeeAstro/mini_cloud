@@ -4,33 +4,55 @@ from scipy.special import gammaln  # Use log-gamma instead of gamma
 import seaborn as sns
 
 # Define nu range
-nu = np.logspace(np.log10(1.0/2.0), 1, 100)
-#nu = np.logspace(-1, 2, 100)
+#nu = np.logspace(np.log10(1.0/2.0), 1, 100)
+nu = np.logspace(-2, 2, 1000)
 
-# Compute log-gamma values
-log_gamma_nu = gammaln(nu)
-log_gamma_nu_p1_3 = gammaln(nu + 1.0/3.0)
-log_gamma_nu_m1_3 = gammaln(nu - 1.0/3.0)
-log_gamma_nu_p2_3 = gammaln(nu + 2.0/3.0)
-log_gamma_nu_p1_6 = gammaln(nu + 1.0/6.0)
-log_gamma_nu_m1_2 = gammaln(nu - 1.0/2.0)
-log_gamma_nu_m1_6 = gammaln(nu - 1.0/6.0)
+
+
+# Compute the terms using exponentials of log-gamma for Kn << 1 with clamping
+Kn = 0.1
+A = 1.165
+B = 0.483
+C = 0.997
+
+nu_1 = np.maximum(0.667,nu)
+log_gamma_nu_p1_3 = gammaln(nu_1 + 1.0/3.0)
+log_gamma_nu_m1_3 = gammaln(nu_1 - 1.0/3.0)
+log_gamma_nu_m2_3 = gammaln(nu_1 - 2.0/3.0)
+log_gamma_nu = gammaln(nu_1)
+B_l = (2.0 * (1.0 + np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_3 - 2.0 * log_gamma_nu) + 
+      1.639*Kn*nu_1**(1.0/3.0) 
+      * (np.exp(log_gamma_nu_m1_3 - log_gamma_nu) 
+      + np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m2_3 - 2.0*log_gamma_nu)))) / (4.0*(1.0 + Kn * (A + B*np.exp(-C/Kn))))
 
 H = 1.0/np.sqrt(2.0)
 
-# Compute the terms using exponentials of log-gamma
-B_l = (2.0 * (1.0 + np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_3 - 2 * log_gamma_nu))) / 4.0
-B_h = (0.85 * np.sqrt(8.0) * nu**(-1.0/6.0) * 
+nu_2 = np.maximum(0.501,nu)
+log_gamma_nu = gammaln(nu_2)
+log_gamma_nu_p1_3 = gammaln(nu_2 + 1.0/3.0)
+log_gamma_nu_m1_3 = gammaln(nu_2 - 1.0/3.0)
+log_gamma_nu_p2_3 = gammaln(nu_2 + 2.0/3.0)
+log_gamma_nu_p1_6 = gammaln(nu_2 + 1.0/6.0)
+log_gamma_nu_m1_2 = gammaln(nu_2 - 1.0/2.0)
+log_gamma_nu_m1_6 = gammaln(nu_2 - 1.0/6.0)
+
+B_h = (0.85 * np.sqrt(8.0) * nu_2**(-1.0/6.0) * 
+       (np.exp(log_gamma_nu_p2_3 + log_gamma_nu_m1_2 - 2.0 * log_gamma_nu) + 
+        2.0*np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_6 - 2.0 * log_gamma_nu) + 
+        np.exp(log_gamma_nu_p1_6 - log_gamma_nu))) / 8.0
+B_h_2 = (H * np.sqrt(8.0) * nu_2**(-1.0/6.0) * 
        (np.exp(log_gamma_nu_p2_3 + log_gamma_nu_m1_2 - 2 * log_gamma_nu) + 
         2.0*np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_6 - 2 * log_gamma_nu) + 
         np.exp(log_gamma_nu_p1_6 - log_gamma_nu))) / 8.0
-B_h_2 = (H * np.sqrt(8.0) * nu**(-1.0/6.0) * 
-       (np.exp(log_gamma_nu_p2_3 + log_gamma_nu_m1_2 - 2 * log_gamma_nu) + 
-        2.0*np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_6 - 2 * log_gamma_nu) + 
-        np.exp(log_gamma_nu_p1_6 - log_gamma_nu))) / 8.0        
+
+
+
+log_gamma_nu = gammaln(nu)
+log_gamma_nu_p2_3 = gammaln(nu + 2.0/3.0)  
+log_gamma_nu_p1_3 = gammaln(nu + 1.0/3.0)        
 grav = (nu**(-2.0/3.0) * 
         (np.exp(log_gamma_nu_p2_3 - log_gamma_nu) + 
-         np.exp(2 * log_gamma_nu_p1_3 - 2 * log_gamma_nu))) / 2.0
+         np.exp(2 * log_gamma_nu_p1_3 - 2.0 * log_gamma_nu))) / 2.0
 
 # Plot results
 fig = plt.figure()
@@ -47,17 +69,18 @@ plt.vlines(1.0, 0.7, 1.7, colors='black', ls='dotted')
 plt.text(1.1, 0.75, r'Exponential' "\n" r'distribution', c='black')
 
 plt.legend()
-plt.ylim(0.7, 1.7)
-plt.xlim(0.5, 10)
+#plt.ylim(0.7, 1.7)
+plt.xlim(0.01, 100)
 plt.xscale('log')
+plt.yscale('log')
 
 # Add minor ticks every 0.02 on y-axis
-y_major_ticks = np.arange(0.7, 1.8, 0.1)  # Major ticks every 0.1
-y_minor_ticks = np.arange(0.7, 1.7, 0.025)  # Minor ticks every 0.02
+#y_major_ticks = np.arange(0.7, 1.8, 0.1)  # Major ticks every 0.1
+#y_minor_ticks = np.arange(0.7, 1.7, 0.025)  # Minor ticks every 0.02
 
-plt.yticks(y_major_ticks)  # Set major ticks
-plt.minorticks_on()  # Enable minor ticks
-plt.gca().set_yticks(y_minor_ticks, minor=True)  # Set minor ticks
+#plt.yticks(y_major_ticks)  # Set major ticks
+#plt.minorticks_on()  # Enable minor ticks
+#plt.gca().set_yticks(y_minor_ticks, minor=True)  # Set minor ticks
 
 plt.xlabel(r'$\nu$', fontsize=16)
 plt.ylabel(r'$\frac{dN_{\rm c}}{dt}$(gamma/mono)', fontsize=16)
