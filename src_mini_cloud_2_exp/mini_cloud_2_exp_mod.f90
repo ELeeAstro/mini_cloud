@@ -472,7 +472,7 @@ module mini_cloud_2_exp_mod
 
     real(dp) :: Kl0, Kh0, Kn
     real(dp) :: Knd, phi
-    real(dp), parameter :: A = 1.639_dp, H = 0.85_dp
+    real(dp), parameter :: A = 1.639_dp, H = 1.0/sqrt(2.0_dp)
 
     !! Limit Kn to avoid large overshoot of Kn << 1 regime.
     Kn = min(Kn_in,100.0_dp)

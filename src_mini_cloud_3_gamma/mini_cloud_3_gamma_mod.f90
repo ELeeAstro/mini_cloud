@@ -509,7 +509,7 @@ module mini_cloud_3_gamma_mod
     real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
 
     real(dp) :: Kn
-    real(dp), parameter :: A = 1.639_dp, H = 0.85_dp
+    real(dp), parameter :: A = 1.639_dp, H = 1.0/sqrt(2.0_dp)
 
     !! Limit Kn to avoid large overshoot of Kn << 1 regime.
     Kn = min(Kn_in,100.0_dp)
