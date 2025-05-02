@@ -286,7 +286,7 @@ module mini_cloud_3_gamma_mod
 
     !! Population averaged Knudsen number for n, m and m^2
     Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
-      & exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.01_dp)) - log_gamma(nu))
+      & exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.001_dp)) - log_gamma(nu))
     Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - log_gamma(nu + 1.0_dp))
     Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
@@ -525,10 +525,10 @@ module mini_cloud_3_gamma_mod
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
 
-    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/3.0_dp,0.01_dp)) - 2.0_dp * lgnu) & 
+    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/3.0_dp,0.001_dp)) - 2.0_dp * lgnu) & 
       & + A*Kn*nu**(1.0_dp/3.0_dp) &
-      & * (exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.01_dp)) - lgnu) &
-      & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 2.0_dp/3.0_dp,0.01_dp)) - 2.0_dp*lgnu))
+      & * (exp(log_gamma(max(nu - 1.0_dp/3.0_dp,0.001_dp)) - lgnu) &
+      & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 2.0_dp/3.0_dp,0.001_dp)) - 2.0_dp*lgnu))
 
     nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
       & + A*Kn*nu**(1.0_dp/3.0_dp) &
@@ -536,8 +536,8 @@ module mini_cloud_3_gamma_mod
       & + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
 
     nu_fac_h_0 = H * nu**(-1.0_dp/6.0_dp)  &
-      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/2.0_dp,0.01_dp)) - 2.0_dp * lgnu)  &
-      & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/6.0_dp,0.01_dp)) - 2.0_dp * lgnu) & 
+      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/2.0_dp,0.001_dp)) - 2.0_dp * lgnu)  &
+      & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log_gamma(max(nu - 1.0_dp/6.0_dp,0.001_dp)) - 2.0_dp * lgnu) & 
       & +  exp(log_gamma(nu + 1.0_dp/6.0_dp) - lgnu))
 
     nu_fac_h_2 = H * nu**(-1.0_dp/6.0_dp)  &
