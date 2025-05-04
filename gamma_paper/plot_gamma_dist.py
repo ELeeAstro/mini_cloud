@@ -26,7 +26,7 @@ col = sns.color_palette('colorblind')
 lss = ['solid']
 
 na = 1000
-r = np.logspace(-3,3,na) * 1e-4
+r = np.logspace(-3,2,na) * 1e-4
 m = 4.0/3.0 * np.pi * r**3 * rho_d
 
 for i in range(ndir):
@@ -72,7 +72,7 @@ for i in range(ndir):
 
   nu = np.zeros(nlay)
   nu[:] = m_c[:]**2/sig2[:]
-  nu[:] = np.minimum(nu[:],100.0)
+  nu[:] = np.minimum(nu[:],10.0)
 
   fx = np.zeros((na,nlay))
   for n in range(na):
@@ -84,7 +84,7 @@ normalize = mcolors.Normalize(vmin=np.log10(pl[0]), vmax=np.log10(pl[-1]))
 cmap = sns.color_palette("crest", as_cmap=True)
 
 
-for i in range(0,nlay):
+for i in range(0,nlay,5):
   if nu[i] > 0.01: 
     print(pl[i],nu[i])
     plt.plot(r[:]*1e4,fx[:,i],c=cmap(normalize(np.log10(pl[i]))))
@@ -107,9 +107,9 @@ plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
 plt.ylim(1e-12,1e-3)
-#plt.ylim(1e2,1e4)
+#plt.ylim(1e2,1e5)
 
-plt.xlim(1e-3,1e3)
+plt.xlim(1e-3,1e2)
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)

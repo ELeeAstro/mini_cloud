@@ -330,7 +330,7 @@ module mini_cloud_3_lognormal_mod
     call calc_coag(m_med, r_med, lnsig2, Kn, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_med, r_n, vf, lnsig2, Kn_n, f_coal0, f_coal2)
+    call calc_coal(r_med, r_n, r_c, vf, lnsig2, Kn_n, Kn_m, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*y(1)**2
@@ -503,7 +503,7 @@ module mini_cloud_3_lognormal_mod
     real(dp) :: Knd2, phi2, Kl2, Kh2, exp_fac_l_2, exp_fac_h_2
 
     real(dp) :: Kn
-    real(dp), parameter :: A = 1.639_dp
+    real(dp), parameter :: A = 1.639_dp, H = 1.0_dp/sqrt(2.0_dp)
 
     ! !! Particle diffusion rate
     !D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_med)
@@ -516,8 +516,8 @@ module mini_cloud_3_lognormal_mod
     exp_fac_l_0 = (1.0_dp + exp(1.0_dp/9.0_dp * lnsig2) + Kn*A*(exp(1.0_dp/18.0_dp * lnsig2) + exp(5.0_dp/18.0_dp * lnsig2)))
     exp_fac_l_2 = (1.0_dp + exp(1.0_dp/9.0_dp * lnsig2) + Kn*A*(exp(-5.0_dp/18.0_dp * lnsig2) + exp(-1.0_dp/18.0_dp * lnsig2)))
 
-    exp_fac_h_0 = (exp(25.0_dp/72.0_dp * lnsig2) + 2.0*exp(5.0_dp/72.0_dp * lnsig2) + exp(1.0_dp/72.0_dp * lnsig2))
-    exp_fac_h_2 = (exp(37.0_dp/72.0_dp * lnsig2) + 2.0*exp(17.0_dp/72.0_dp * lnsig2) + exp(13.0_dp/72.0_dp * lnsig2))
+    exp_fac_h_0 = H * (exp(25.0_dp/72.0_dp * lnsig2) + 2.0*exp(5.0_dp/72.0_dp * lnsig2) + exp(1.0_dp/72.0_dp * lnsig2))
+    exp_fac_h_2 = H * (exp(37.0_dp/72.0_dp * lnsig2) + 2.0*exp(17.0_dp/72.0_dp * lnsig2) + exp(13.0_dp/72.0_dp * lnsig2))
 
     Kl0 = (4.0_dp*kb*T)/(3.0_dp*eta) * exp_fac_l_0
     Kl2 = (4.0_dp*kb*T)/(3.0_dp*eta) * exp_fac_l_2
@@ -533,20 +533,20 @@ module mini_cloud_3_lognormal_mod
     Knd2 = (2.0_dp*sqrt(2.0_dp)/pi) * Kl2/Kh2
     phi2 = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd2**2)
 
-    f_coag0 = (-2.0_dp*kb*T)/(3.0_dp*eta) * exp_fac_l_0 * phi0
-    f_coag2 = (4.0_dp*kb*T)/(3.0_dp*eta) * exp_fac_l_2 * phi2
+    f_coag0 = -0.5_dp * Kl0 * phi0
+    f_coag2 = Kl2 * phi2
 
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_med, r_n, vf, lnsig2, Kn_n, f_coal0, f_coal2)
+  subroutine calc_coal(r_med, r_n, r_c, vf, lnsig2, Kn_n, Kn_m, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_med, r_n, vf, lnsig2, Kn_n
+    real(dp), intent(in) :: r_med, r_n, r_c, vf, lnsig2, Kn_n, Kn_m
 
     real(dp), intent(out) :: f_coal0, f_coal2
 
-    real(dp) :: d_vf, Stk, E, exp_fac_0, exp_fac_2
+    real(dp) :: d_vf, Stk, E_n, E_m, exp_fac_0, exp_fac_2, K0
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
@@ -555,20 +555,31 @@ module mini_cloud_3_lognormal_mod
     !! Calculate E
     if (Kn_n >= 1.0_dp) then
       !! E = 1 when Kn > 1
-      E = 1.0_dp
+      E_n = 1.0_dp
     else
       !! Calculate Stokes number
       Stk = (vf * d_vf)/(grav * r_n)
-      E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
+      E_n = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
+    end if
+
+    if (Kn_m >= 1.0_dp) then
+      !! E = 1 when Kn > 1
+      E_m = 1.0_dp
+    else
+      !! Calculate Stokes number
+      Stk = (vf * d_vf)/(grav * r_c)
+      E_m = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
     exp_fac_0 = (exp(2.0_dp/9.0_dp * lnsig2) + exp(1.0_dp/9.0_dp * lnsig2))
     exp_fac_2 = (exp(8.0_dp/9.0_dp * lnsig2) + exp(7.0_dp/9.0_dp * lnsig2))
 
+    K0 = 2.0_dp * pi * r_med**2 * d_vf
+
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal0 = -pi*r_med**2*d_vf*E * exp_fac_0
+    f_coal0 = -0.5_dp * K0 * E_n * exp_fac_0
     !! Coalesence flux (Second moment) [cm3 s-1]
-    f_coal2 = 2.0_dp*pi*r_med**2*d_vf*E * exp_fac_2
+    f_coal2 = K0 * E_m * exp_fac_2
 
   end subroutine calc_coal
 

@@ -66,8 +66,8 @@ grav = (nu**(-2.0/3.0) *
 fig = plt.figure()
 col = sns.color_palette('colorblind')
 
-plt.plot(nu, B_l, label=r'Coag. (${\rm Kn}$ $\ll$ 1)', c=col[0])
-plt.plot(nu, B_l_2, label=r'Coag. (${\rm Kn}$ $\ll$ 1)', c=col[0],ls='dashed')
+#plt.plot(nu, B_l, label=r'Coag. (${\rm Kn}$ $\ll$ 1)', c=col[0])
+plt.plot(nu, B_l_2, label=r'Coag. (${\rm Kn}$ $\ll$ 1)', c=col[0])
 plt.plot(nu, B_h, label=r'Coag. (${\rm Kn}$ $\gg$ 1, $H$ = 0.85)', c=col[1])
 plt.plot(nu, B_h_2, label=r'Coag. (${\rm Kn}$ $\gg$ 1, $H$ = 1/$\sqrt{2}$)', c=col[1], ls = 'dashed')
 plt.plot(nu, grav, label=r'Coal.', c=col[2])

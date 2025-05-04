@@ -3,7 +3,7 @@ import matplotlib.pylab as plt
 from scipy.special import gamma
 import seaborn as sns
 
-nu = np.logspace(-2,2,1000)
+nu = np.logspace(-1,1,1000)
 
 print(nu)
 
@@ -31,8 +31,8 @@ plt.hlines(1, 1e-2, 100, colors='black', linestyles='dotted')
 plt.ylabel(r'Kn(gamma)/Kn(mono)',fontsize=16)
 plt.xlabel(r'$\nu$',fontsize=16)
 
-plt.ylim(1e-2,1000)
-plt.xlim(1e-2,100)
+plt.ylim(1e-1,1000)
+plt.xlim(1e-1,10)
 
 plt.yscale('log')
 plt.xscale('log')

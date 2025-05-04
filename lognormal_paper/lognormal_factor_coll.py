@@ -7,10 +7,21 @@ import seaborn as sns
 sig = np.linspace(1.0, 3.0, 100)
 lnsig2 = np.log(sig)**2
 
+rfac = np.exp(-0.5 * lnsig2)
+
+H = 1.0/np.sqrt(2.0)
+Kn = 0.01
+A = 1.165
+B = 0.483
+C = 0.997
+
 # Compute the terms using log-normal resuls
-B_l = (2.0 * (1.0 + np.exp(1.0/9.0 * lnsig2))) / 4.0
-B_h = (np.exp(1.0/9.0 * lnsig2)) / 8.0
-grav = (np.exp(2.0/9.0 * lnsig2) + np.exp(1.0/9.0 * lnsig2)) / 2.0
+B_l = (2.0 * (1.0 + np.exp(1.0/9.0 * lnsig2) \
+  + Kn*1.639*(np.exp(1.0/18.0 * lnsig2) + np.exp(5.0/18.0 * lnsig2)))) / (4.0*(1.0 + Kn * (A + B*np.exp(-C/Kn))))
+
+B_h = (H * np.sqrt(8.0)*rfac**2*(np.exp(25.0/72.0 * lnsig2) + 2.0*np.exp(5.0/72.0 * lnsig2) +  np.exp(1.0/72.0 * lnsig2))) / 8.0
+
+grav = (rfac**2*(np.exp(2.0/9.0 * lnsig2) + np.exp(1.0/9.0 * lnsig2))) / 2.0
 
 # Plot results
 fig = plt.figure()
