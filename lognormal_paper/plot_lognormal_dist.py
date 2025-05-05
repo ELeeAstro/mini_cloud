@@ -120,7 +120,7 @@ plt.xlim(1e-3,1e3)
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_lognormal_dist.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_lognormal_dist.png',dpi=300,bbox_inches='tight')
 
 plt.show()
 
