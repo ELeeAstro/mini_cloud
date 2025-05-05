@@ -53,7 +53,9 @@ module mini_cloud_vf_mod
     real(dp), allocatable, dimension(:) :: VMR_bg
     real(dp) :: N_c, rho_c, Z_c, sig2, lam, nu
     real(dp) :: m_c, r_c, m_c2, r_c2, r_n, m_seed
-    real(dp) :: Kn, beta, vf_s, vf_e, fx, Rey, St, Ep, gam_fac, lgnu, lgnu1, lgnu2
+    real(dp) :: vf_s, vf_e, fx, Rey, St, Ep, gam_fac, lgnu, lgnu1, lgnu2
+
+    real(dp) :: nu_n, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
     real(dp), parameter :: A = 1.639_dp
 
@@ -115,34 +117,43 @@ module mini_cloud_vf_mod
     !! Mass^2 weighted mean radius of particle
     r_c2 = max(((3.0_dp*m_c2)/(4.0_dp*pi*rho_d))**(third), r_seed)
 
+    lgnu  = log_gamma(nu)
+    lgnu1 = log_gamma(nu + 1.0_dp)
+    lgnu2 = log_gamma(nu + 2.0_dp)
+
     !! Number weighted mean radius
-    r_n = max(r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - log_gamma(nu)), r_seed)
+    r_n = max(r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu), r_seed)
 
     !! Monodisperse Knudsen number
-    Kn = min(mfp/r_c,100.0_dp)
+    Kn = mfp/r_c
+    Kn_b = min(Kn, 100.0_dp)
 
-    !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
+    !! Population averaged Knudsen number for n, m and m^2
+    nu_n = max(nu,0.3334_dp)
+    Kn_n = Kn * nu_n**(1.0_dp/3.0_dp) * &
+      & exp(log_gamma(nu_n - 1.0_dp/3.0_dp) - log_gamma(nu_n))
+    Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
+      & exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1)
+    Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
+      & exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu2)
 
     !! Now find moment dependent settling velocities
     St = (2.0_dp * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) 
     Ep = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
 
-    lgnu  = log_gamma(nu)
-    lgnu1 = log_gamma(nu + 1.0_dp)
-    lgnu2 = log_gamma(nu + 2.0_dp)
-
-
     !! Zeroth moment
     !! Settling velocity (Stokes regime)
     Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
     gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) & 
-      & + A*Kn*nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
     vf_s = St * gam_fac * Rey
 
     !! Settling velocity (Epstein regime)
     gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
     vf_e = Ep * gam_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_n)))
 
     !! Interpolation for settling velocity
     v_f(1) = fx*vf_s + (1.0_dp - fx)*vf_e
@@ -151,12 +162,15 @@ module mini_cloud_vf_mod
     !! Settling velocity (Stokes regime)
     Rey = (1.0_dp + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
     gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) & 
-      & + A*Kn*nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
     vf_s = St * gam_fac * Rey
 
     !! Settling velocity (Epstein regime)
     gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
     vf_e = Ep * gam_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m)))
 
     !! Interpolation for settling velocity
     v_f(2) = fx*vf_s + (1.0_dp - fx)*vf_e
@@ -165,12 +179,15 @@ module mini_cloud_vf_mod
     !! Settling velocity (Stokes regime)
     Rey = (1.0_dp + ((0.45_dp*grav*r_c2**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
     gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 8.0_dp/3.0_dp) - lgnu2) & 
-      & + A*Kn*nu**(-1.0/3.0) * exp(log_gamma(nu + 7.0_dp/3.0_dp) - lgnu2))
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 7.0_dp/3.0_dp) - lgnu2))
     vf_s = St * gam_fac * Rey
 
     !! Settling velocity (Epstein regime)
     gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 7.0_dp/3.0_dp) - lgnu2))
     vf_e = Ep * gam_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m2)))
 
     !! Interpolation for settling velocity
     v_f(3) = fx*vf_s + (1.0_dp - fx)*vf_e
