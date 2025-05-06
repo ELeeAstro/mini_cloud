@@ -26,8 +26,15 @@ col = sns.color_palette('colorblind')
 lss = ['solid']
 
 na = 1000
-r = np.logspace(-3,2,na) * 1e-4
-m = 4.0/3.0 * np.pi * r**3 * rho_d
+
+r_min = r_seed
+r_max = 100.0 * 1e-4
+
+m_min = 4.0/3.0 * np.pi * r_min**3 * rho_d 
+m_max = 4.0/3.0 * np.pi * r_max**3 * rho_d
+
+m = np.logspace(np.log10(m_min),np.log10(m_max),na)
+r = ((3.0*m)/(4.0*np.pi*rho_d))**(1.0/3.0)
 
 for i in range(ndir):
 
@@ -58,7 +65,7 @@ for i in range(ndir):
   rho[:] = (pl[:]*1e6*mu[:]*amu)/(kb * Tl[:])
 
   m_c = np.zeros(nlay)
-  m_c[:] = (q_1[:]*rho[:])/(q_0[:]*nd_atm[:])
+  m_c[:] = np.maximum((q_1[:]*rho[:])/(q_0[:]*nd_atm[:]),m_seed)
 
   r_c = np.zeros(nlay)
   r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d))**(1.0/3.0),r_seed) * 1e4
@@ -67,12 +74,12 @@ for i in range(ndir):
   sig2[:] = np.maximum((q_2[:]*rho[:]**2)/(q_0[:]*nd_atm[:]) - ((q_1[:]*rho[:])/(q_0[:]*nd_atm[:]))**2,m_seed**2)
 
 
-  lam = np.zeros(nlay)
-  lam[:] = sig2[:]/m_c[:]
-
   nu = np.zeros(nlay)
-  nu[:] = m_c[:]**2/sig2[:]
+  nu[:] = np.maximum(m_c[:]**2/sig2[:],0.01)
   nu[:] = np.minimum(nu[:],10.0)
+
+  lam = np.zeros(nlay)
+  lam[:] = m_c[:]/nu[:]
 
   fx = np.zeros((na,nlay))
   for n in range(na):
@@ -86,8 +93,11 @@ cmap = sns.color_palette("crest", as_cmap=True)
 
 for i in range(0,nlay,5):
   if nu[i] > 0.01: 
-    print(pl[i],nu[i])
+  #if (pl[i] < 1e-2):
+    print('y',pl[i],nu[i],r_c[i],nd[i],lam[i],sig2[i])
     plt.plot(r[:]*1e4,fx[:,i],c=cmap(normalize(np.log10(pl[i]))))
+  else:
+   print('n',pl[i],nu[i],r_c[i],nd[i],lam[i],sig2[i])
 
 scalarmappaple = cm.ScalarMappable(norm=normalize, cmap=cmap)
 scalarmappaple.set_array(np.log10(pl))

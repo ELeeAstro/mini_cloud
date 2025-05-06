@@ -44,10 +44,10 @@ program test_mini_cloud_2
   logical :: end
 
   !! time step
-  t_step = 1000.0_dp
+  t_step = 500.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 2000000
 
   !! Start time
   time = 6840.0_dp
@@ -182,7 +182,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file
@@ -233,7 +233,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(4.25_dp))/100.0_dp
+      grav = (10.0_dp**(3.25_dp))/100.0_dp
 
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))

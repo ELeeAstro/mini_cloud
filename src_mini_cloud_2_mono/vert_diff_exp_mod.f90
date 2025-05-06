@@ -5,7 +5,7 @@ module vert_diff_exp_mod
 
   integer, parameter :: dp = REAL64 ! Precision variable
 
-  real(dp), parameter :: CFL = 0.90_dp
+  real(dp), parameter :: CFL = 0.95_dp
   real(dp), parameter :: R = 8.31446261815324e7_dp
   real(dp), parameter :: kb = 1.380649e-16_dp
 

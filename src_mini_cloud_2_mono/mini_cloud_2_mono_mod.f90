@@ -203,7 +203,7 @@ module mini_cloud_2_mono_mod
 
     ! Set the printing flag
     ! 0 = no printing, 1 = printing
-    call xsetf(1)
+    call xsetf(0)
 
     ncall = 0
 
@@ -439,9 +439,9 @@ module mini_cloud_2_mono_mod
 
     else 
 
-      !! Check if average mass is around 0.01% the seed particle mass
+      !! Check if average mass is around 0.1% the seed particle mass
       !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <= (1.0001_dp * m_seed)) then
+      if (m_c <= (1.001_dp * m_seed)) then
         tau_evap = 0.1_dp !m_c/abs(f_cond)
         !! Seed particle evaporation rate [cm-3 s-1]
         J_evap = -y(1)/tau_evap
@@ -542,8 +542,13 @@ module mini_cloud_2_mono_mod
     select case(sp)
     case('C')
       p_vap_sp = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
-    !case('TiC')
-    !case('SiC')
+    case('TiC')
+      ! Kimura et al. (2023)
+      p_vap = 10.0_dp**(-33600.0_dp/T + 7.652_dp) * atm
+    case('SiC')
+      ! Elspeth 5 polynomial JANAF-NIST fit
+      p_vap =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
+        & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
     case('CaTiO3')
       ! Kozasa et al. (1987)
       p_vap_sp = exp(-79568.2_dp/T + 42.0204_dp) * atm

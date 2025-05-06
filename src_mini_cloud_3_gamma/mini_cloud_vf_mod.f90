@@ -107,9 +107,9 @@ module mini_cloud_vf_mod
 
     !! Calculate lambda and nu gamma distribution parameters
     sig2 = max(Z_c/rho_c - (rho_c/N_c)**2,m_seed**2)
-    lam = sig2/m_c
     nu = max(m_c**2/sig2,0.01_dp)
     nu = min(nu,100.0_dp)
+    lam = m_c/nu
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)

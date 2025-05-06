@@ -42,10 +42,10 @@ program test_mini_cloud_2
   logical :: end
 
   !! time step
-  t_step = 1000.0_dp
+  t_step = 500.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 2000000
 
   !! Start time
   time = 6840.0_dp
@@ -167,7 +167,7 @@ program test_mini_cloud_2
 
       !! Find pressure level grid - logspaced between p_top and p_bot
       p_top = 3e-3_dp * 1e5_dp
-      p_bot = 300.0_dp * 1e5_dp
+      p_bot = 15.0_dp * 1e5_dp!300.0_dp * 1e5_dp
 
       p_top = log10(p_top)
       p_bot = log10(p_bot)
@@ -281,10 +281,6 @@ program test_mini_cloud_2
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), q_2(i), vf_q(i,:))
-
-          ! Force mass weighted settling velocity for all moments
-          vf_q(i,1) = vf_q(i,2)
-          vf_q(i,3) = vf_q(i,2)
 
           !! Calculate the opacity at the wavelength grid
          !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
