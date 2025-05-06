@@ -282,6 +282,10 @@ program test_mini_cloud_2
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), q_2(i), vf_q(i,:))
 
+          ! Force mass weighted settling velocity for all moments
+          vf_q(i,1) = vf_q(i,2)
+          vf_q(i,3) = vf_q(i,2)
+
           !! Calculate the opacity at the wavelength grid
          !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do

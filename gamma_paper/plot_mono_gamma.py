@@ -10,7 +10,7 @@ rho_d = 1.99
 dirs = ['../results_2_mono/','../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_425.txt'
+fname = 'tracers_325.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -34,7 +34,8 @@ for i in range(ndir):
   q_v = data[:,8]
   q_0 = data[:,9]
   q_1 = data[:,10]
-  vf = data[:,11]
+#  q_2 = data[:,11]
+#  vf = data[:,12]
 
   nlay = len(pl)
 
@@ -58,9 +59,11 @@ for i in range(ndir):
   q_s[:] = np.maximum(q_s[:]/1e6/pl[:],1e-30)
 
   p_T = ax1.plot(Tl,pl,c=col[0],label=r'T',ls=lss[i])
-  p_qc = ax2.plot(q_1,pl,c=col[1],label=r'$q_{\rm c}$',ls=lss[i])
+  p_qc = ax2.plot(q_1,pl,c=col[1],label=r'$q_{\rm 1}$',ls=lss[i])
   p_qv = ax2.plot(q_v,pl,c=col[2],label=r'$q_{\rm v}$',ls=lss[i])
   p_qs = ax2.plot(q_s,pl,c=col[4],label=r'$q_{\rm s}$',ls='dotted')
+  #p_0 = ax2.plot(q_0,pl,c=col[5],label=r'$q_{\rm 0}$',ls=lss[i])
+  #p_2 = ax2.plot(q_2,pl,c=col[6],label=r'$q_{\rm 2}$',ls=lss[i])
 
 ax1.set_yscale('log')
 #ax1.set_xscale('log')
@@ -93,7 +96,7 @@ ax2.legend(lns, labs,fontsize=10,loc='upper center')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_mono_gamma_Tq.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_325_mono_gamma_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
