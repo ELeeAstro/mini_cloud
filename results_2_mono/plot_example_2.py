@@ -7,7 +7,7 @@ amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
 
-fname = 'tracers.txt'
+fname = 'tracers_325.txt'
 
 data = np.loadtxt(fname)
 

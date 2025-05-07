@@ -657,10 +657,10 @@ module mini_cloud_3_gamma_mod
       p_vap_sp = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
     case('TiC')
       ! Kimura et al. (2023)
-      p_vap = 10.0_dp**(-33600.0_dp/T + 7.652_dp) * atm
+      p_vap_sp = 10.0_dp**(-33600.0_dp/T + 7.652_dp) * atm
     case('SiC')
       ! Elspeth 5 polynomial JANAF-NIST fit
-      p_vap =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
+      p_vap_sp =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
         & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
     case('CaTiO3')
       ! Kozasa et al. (1987)
@@ -671,7 +671,7 @@ module mini_cloud_3_gamma_mod
         &  + 6.02422e-7_dp*T**2 - 6.86899e-11_dp*T**3)
     case('VO')
       ! NIST 5 param fit
-      p_vap = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
+      p_vap_sp = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
         & + 5.72078e-7_dp*T**2 - 7.41840e-11_dp*T**3)
     case('Al2O3')
       ! Kozasa et al. (1987)
@@ -719,8 +719,11 @@ module mini_cloud_3_gamma_mod
       ! Morley et al. (2012)
       p_vap_sp =  10.0_dp**(8.550_dp - 13889.0_dp/T) * bar
     case('ZnS')
+      ! Elspeth 5 polynomial Barin data fit
+      p_vap_sp = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
+        &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)       
       ! Morley et al. (2012)
-      p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
+      !p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
     case('KCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &

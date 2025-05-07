@@ -37,20 +37,25 @@ module mini_cloud_vf_mod
 
   contains
 
-  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, q_0, q_1, v_f)
+  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, & 
+    & ndust, q_0, q_1, v_f)
     implicit none
 
     ! Input variables
+    integer, intent(in) :: ndust
     character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, rho_d, q_0, q_1
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, q_0
     real(dp), dimension(:), intent(in) :: bg_VMR_in
+    real(dp), dimension(ndust), intent(in) :: rho_d, q_1
 
     real(dp), intent(out) :: v_f
 
-    integer :: n_bg
+    integer :: n_bg, j
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx
+    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx, N_c, rho_c_t, rho_d_m
+    real(dp), dimension(ndust) :: rho_c
+
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -87,12 +92,22 @@ module mini_cloud_vf_mod
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
+    rho_c(:) = q_1(:)*rho
+    rho_c_t = sum(rho_c(:))
+    N_c = q_0*nd_atm
+
     !! Calculate vf from final results of interaction
     !! Mean mass of particle
-    m_c = (q_1*rho)/(q_0*nd_atm)
+    m_c = (rho_c_t/N_c)
 
+    rho_d_m = 0.0_dp
+    do j = 1, ndust
+      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * rho_d(j)
+    end do
+
+  
     !! Mass weighted mean radius of particle
-    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
+    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
 
     !! Knudsen number
     Kn = mfp/r_c
@@ -101,12 +116,12 @@ module mini_cloud_vf_mod
     beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
 
     !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
+    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta) & 
      & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+     & + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
     !! Settling velocity (Epstein regime)
-    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+    vf_e = (sqrt(pi)*grav*rho_d_m*r_c)/(2.0_dp*cT*rho)
 
     !! tanh interpolation function
     fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))

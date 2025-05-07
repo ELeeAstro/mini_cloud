@@ -23,19 +23,30 @@ module mini_cloud_2_mono_mix_mod
   real(dp), parameter :: pa = 10.0_dp ! pa to dyne
   real(dp), parameter :: mmHg = 1333.22387415_dp  ! mmHg to dyne
 
-  !! Global variables
+  !! Global atmospheric variables
   real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
-  real(dp) :: p_vap, rho_s, vth, sig, D
-
-  !! Cloud global constants - some passed into from main
-  real(dp) :: rho_d, mol_w_sp
-  real(dp) :: r0, V0, m0, d0 ! Unit mass and volume
-  real(dp), parameter :: r_seed = 1e-7_dp
-  real(dp) :: V_seed, m_seed
-  real(dp) :: Kn_crit
-  real(dp) :: alp = 1.0_dp
-
   real(dp) :: mfp, eta, nu, cT
+
+  real(dp), parameter :: r_seed = 1e-7_dp
+
+  !! Cloud properties container
+  type cld_sp
+
+    character(len=20) :: sp
+    real(dp) :: rho_d, mol_w_sp
+    real(dp) :: p_vap, rho_s, vth, sig, D
+    real(dp) :: V_seed, m_seed, Kn_crit, alp
+    real(dp) :: r0, V0, m0, d0, r_seed
+
+    real(dp) :: sat
+
+  end type cld_sp
+
+  integer :: ndust
+
+  !! Cloud properties array
+  type(cld_sp), dimension(:), allocatable :: cld
+
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -61,17 +72,20 @@ module mini_cloud_2_mono_mix_mod
 
   contains
 
-  subroutine mini_cloud_2_mono_mix(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1)
+  subroutine mini_cloud_2_mono_mix(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp_in, sp_bg, &
+    & n_in, rho_d, mol_w_sp, q_v, q_0, q_1)
     implicit none
 
     ! Input variables
-    character(len=20), intent(in) :: sp
+    integer, intent(in) :: n_in
+    character(len=20), dimension(n_in), intent(in) :: sp_in
     character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
     ! Input/Output tracer values
-    real(dp), intent(inout) :: q_v, q_0, q_1
+    real(dp), intent(inout) :: q_0
+    real(dp), dimension(n_in), intent(inout) :: q_v, q_1, rho_d, mol_w_sp
 
     integer :: ncall
 
@@ -88,12 +102,14 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: rtol, atol
 
     !! Work variables
-    integer :: n_bg
+    integer :: n_bg, j
     real(dp), allocatable, dimension(:) :: VMR_bg
+
+    ndust = n_in
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
-    n_eq = 3
+    n_eq = ndust*2+1
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -131,31 +147,41 @@ module mini_cloud_2_mono_mix_mod
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
-    !! Basic cloud properties
-    m0 = mol_w_sp * amu
-    V0 = m0 / rho_d
-    r0 = ((3.0_dp*V0)/(4.0_dp*pi))**(third)
-    V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
-    m_seed = V_seed * rho_d
-    d0 = 2.0_dp * r0
+    !! Calculate basic cloud properties
+    allocate(cld(ndust))
+    do j = 1, ndust
+      !! Basic cloud properties
+      cld(j)%sp = sp_in(j)
+      cld(j)%mol_w_sp = mol_w_sp(j)
+      cld(j)%rho_d = rho_d(j)
+      cld(j)%m0 = mol_w_sp(j) * amu
+      cld(j)%V0 = cld(j)%m0 / cld(j)%rho_d
+      cld(j)%r0 = ((3.0_dp*cld(j)%V0)/(4.0_dp*pi))**(third)
+      cld(j)%V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+      cld(j)%m_seed = cld(j)%V_seed * cld(j)%rho_d
+      cld(j)%d0 = 2.0_dp * cld(j)%r0
 
-    !! Saturation vapour pressure
-    p_vap = p_vap_sp(sp, T)
+      cld(j)%alp = 1.0_dp
 
-    !! Saturation vapour density
-    rho_s = p_vap/(Rd*T)
+      !! Saturation vapour pressure
+      cld(j)%p_vap = p_vap_sp(cld(j)%sp, T)
 
-    !! Thermal velocity
-    vth = sqrt((kb*T)/(2.0_dp*pi*m0))
+      !! Saturation vapour density
+      cld(j)%rho_s = cld(j)%p_vap/(Rd*T)
 
-    !! Gaseous diffusion constant
-    D = 5.0_dp/(16.0_dp*Avo*d0**2*rho) * sqrt((R_gas*T*mu)/(2.0_dp*pi) * (mol_w_sp + mu)/mol_w_sp)
+      !! Thermal velocity
+      cld(j)%vth = sqrt((kb*T)/(2.0_dp*pi*cld(j)%m0))
 
-    !! Surface tension of material
-    sig = surface_tension(sp, T)
+      !! Gaseous diffusion constant
+      cld(j)%D = 5.0_dp/(16.0_dp*Avo*cld(j)%d0**2*rho) * &
+        & sqrt((R_gas*T*mu)/(2.0_dp*pi) * (cld(j)%mol_w_sp + mu)/cld(j)%mol_w_sp)
 
-    !! Critical Knudsen number
-    Kn_crit = (mfp * alp * vth)/D
+      !! Surface tension of material
+      cld(j)%sig = surface_tension(cld(j)%sp, T)
+
+      !! Critical Knudsen number
+      cld(j)%Kn_crit = (mfp * cld(j)%alp * cld(j)%vth)/cld(j)%D
+    end do
 
     ! -----------------------------------------
     ! ***  parameters for the DLSODE solver  ***
@@ -193,8 +219,8 @@ module mini_cloud_2_mono_mix_mod
 
     !! Give tracer values to y
     y(1) = q_0
-    y(2) = q_1
-    y(3) = q_v 
+    y(2:2+ndust-1) = q_1(:)
+    y(2+ndust:2+ndust+ndust-1) = q_v 
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
@@ -203,7 +229,7 @@ module mini_cloud_2_mono_mix_mod
 
     ! Set the printing flag
     ! 0 = no printing, 1 = printing
-    call xsetf(1)
+    call xsetf(0)
 
     ncall = 0
 
@@ -230,10 +256,10 @@ module mini_cloud_2_mono_mix_mod
 
     !! Give y values to tracers
     q_0 = y(1)
-    q_1 = y(2)
-    q_v = y(3)
+    q_1(:) = y(2:2+ndust-1)
+    q_v(:) = y(2+ndust:2+ndust+ndust-1)
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g)
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, cld)
 
   end subroutine mini_cloud_2_mono_mix
 
@@ -245,10 +271,15 @@ module mini_cloud_2_mono_mix_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
-    real(dp) :: f_nuc_hom, f_cond, f_seed_evap
     real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, Kn, beta, sat, vf_s, vf_e, vf
-    real(dp) :: p_v, n_v, fx
+    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, vf, Kn_b
+    real(dp) :: fx
+
+    integer :: j
+    real(dp) :: N_c, rho_c_t, rho_d_m
+    real(dp), dimension(ndust) :: rho_c, rho_v
+    real(dp), dimension(ndust) :: p_v, n_v
+    real(dp), dimension(ndust) :: f_nuc_hom, f_cond, f_seed_evap
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -258,33 +289,40 @@ module mini_cloud_2_mono_mix_mod
     y(:) = max(y(:),1e-30_dp)
 
     !! Convert y to real physical numbers to calculate f
-    y(1) = y(1)*nd_atm ! Convert to real number density
-    y(2) = y(2)*rho   ! Convert to real mass density
-    y(3) = y(3)*rho   ! Convert to real mass density
+    N_c = y(1)*nd_atm ! Convert to real number density
+    rho_c(:) = y(2:2+ndust-1)*rho   ! Convert to real mass density
+    rho_v(:) = y(2+ndust:2+ndust+ndust-1)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
-    p_v = y(3) * Rd * T     !! Pressure of vapour
-    n_v = p_v/(kb*T)        !! Number density of vapour
+    p_v(:) = rho_v(:) * Rd * T     !! Pressure of vapour
+    n_v(:) = p_v(:)/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
-    m_c = max(y(2)/y(1), m_seed)
+    rho_c_t = sum(rho_c(:))
+    m_c = max(rho_c_t/N_c, cld(1)%m_seed)
+
+    rho_d_m = 0.0_dp
+    do j = 1, ndust
+      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * cld(j)%rho_d
+    end do
 
     !! Mass weighted mean radius of particle
-    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
+    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
 
     !! Knudsen number
     Kn = mfp/r_c
 
     !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
+    Kn_b = min(Kn, 100.0_dp)
+    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
     !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
+    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta) & 
      & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+     & + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
     !! Settling velocity (Epstein regime)
-    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+    vf_e = (sqrt(pi)*grav*rho_d_m*r_c)/(2.0_dp*cT*rho)
 
     !! tanh interpolation function
     fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
@@ -293,16 +331,16 @@ module mini_cloud_2_mono_mix_mod
     vf = fx*vf_s + (1.0_dp - fx)*vf_e
 
     !! Find supersaturation ratio
-    sat = p_v/p_vap
+    cld(:)%sat = p_v(:)/cld(:)%p_vap
 
     !! Calculate condensation rate
-    call calc_cond(n_eq, y, r_c, Kn, n_v, sat, f_cond)
+    call calc_cond(ndust, r_c, Kn, n_v(:), f_cond)
 
     !! Calculate homogenous nucleation rate
-    call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
+    call calc_hom_nuc(ndust, n_v(:), f_nuc_hom)
 
     !! Calculate seed particle evaporation rate
-    call calc_seed_evap(n_eq, y, m_c, f_cond, f_seed_evap)
+    call calc_seed_evap(ndust, N_c, m_c, f_cond, f_seed_evap)
 
     !! Calculate the coagulation rate
     call calc_coag(m_c, r_c, beta, f_coag)
@@ -311,145 +349,150 @@ module mini_cloud_2_mono_mix_mod
     call calc_coal(r_c, Kn, vf, f_coal)
 
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom + f_seed_evap) + (f_coag + f_coal)*y(1)**2
-    f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond*y(1)
-    f(3) = -f(2)
+    f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag + f_coal)*N_c**2
+    f(2:2+ndust-1) = cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) + f_cond(:)*N_c
+    f(2+ndust:2+ndust+ndust-1) = -f(2:2+ndust-1)
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm
-    f(2) = f(2)/rho
-    f(3) = f(3)/rho
-      
-    !! Convert y back to ratios
-    y(1) = y(1)/nd_atm
-    y(2) = y(2)/rho 
-    y(3) = y(3)/rho
+    f(2:) = f(2:)/rho
 
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(n_eq, y, r_c, Kn, n_v, sat, dmdt)
+  subroutine calc_cond(ndust, r_c, Kn, n_v, dmdt)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, Kn, n_v, sat
+    integer, intent(in) :: ndust
+    real(dp), intent(in) :: r_c, Kn
+    real(dp), dimension(ndust), intent(in) :: n_v
 
-    real(dp), intent(out) :: dmdt
+    real(dp), dimension(ndust), intent(out) :: dmdt
 
+    integer :: j
     real(dp) :: dmdt_low, dmdt_high, Knd, fx
 
-    !! Free molecular flow regime (Kn >> 1) [g s-1]
-    dmdt_high = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * alp * (1.0_dp - 1.0_dp/sat)
+    do j = 1, ndust
+      !! Free molecular flow regime (Kn >> 1) [g s-1]
+      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp * (1.0_dp - 1.0_dp/cld(j)%sat)
 
-    !! Diffusive limited regime (Kn << 1) [g s-1]
-    dmdt_low = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat)
+      !! Diffusive limited regime (Kn << 1) [g s-1]
+      dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) * (1.0_dp - 1.0_dp/cld(j)%sat)
 
-    !! Kn' (Woitke & Helling 2003)
-    Knd = Kn/Kn_crit
+      !! Kn' (Woitke & Helling 2003)
+      Knd = Kn/cld(j)%Kn_crit
 
-    !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
+      !! tanh interpolation function
+      fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
 
-    dmdt = dmdt_low * fx + dmdt_high * (1.0_dp - fx)
+      dmdt(j) = dmdt_low * fx + dmdt_high * (1.0_dp - fx)
+    end do
 
   end subroutine calc_cond
 
   !! Classical nucleation theory (CNT)
-  subroutine calc_hom_nuc(n_eq, y, sat, n_v, J_hom)
+  subroutine calc_hom_nuc(ndust, n_v, J_hom)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: sat, n_v
+    integer, intent(in) :: ndust
+    real(dp), dimension(ndust), intent(in) :: n_v
 
-    real(dp), intent(out) :: J_hom
+    real(dp), dimension(ndust), intent(out) :: J_hom
 
+    integer :: j
     real(dp) :: ln_ss, theta_inf, N_inf, N_star, N_star_1, dg_rt, Zel, tau_gr
     real(dp) :: f0, kbT
 
     real(dp), parameter :: alpha = 1.0_dp
     real(dp), parameter :: Nf = 5.0_dp
 
-    real(dp) :: ac, F, phi, gm, Vm
+    do j = 1, ndust
 
-    if (sat > 1.0_dp) then
+      if (j > 1) then
+        J_hom(j) = 0.0_dp
+        cycle
+      end if
 
-      ! Efficency Variables
-      ln_ss = log(sat) ! Natural log of saturation ratio
-      f0 = 4.0_dp * pi * r0**2 ! Monomer Area
-      kbT = kb * T         ! kb * T
+      if (cld(j)%sat > 1.0_dp) then
 
-      !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
-      theta_inf = (f0 * sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
-      N_inf = (((twothird) * theta_inf) / ln_ss)**3
+        ! Efficency Variables
+        ln_ss = log(cld(j)%sat) ! Natural log of saturation ratio
+        f0 = 4.0_dp * pi * cld(j)%r0**2 ! Monomer Area
+        kbT = kb * T         ! kb * T
 
-      !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
-      N_star = 1.0_dp + (N_inf / 8.0_dp) &
-        & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
-        & - 2.0_dp*(Nf/N_inf)**third)**3
-      N_star = max(1.00001_dp, N_star) ! Ensure no div 0
-      N_star_1 = N_star - 1.0_dp
+        !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
+        theta_inf = (f0 * cld(j)%sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
+        N_inf = (((twothird) * theta_inf) / ln_ss)**3
 
-      !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
-      dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
+        !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
+        N_star = 1.0_dp + (N_inf / 8.0_dp) &
+          & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
+          & - 2.0_dp*(Nf/N_inf)**third)**3
+        N_star = max(1.00001_dp, N_star) ! Ensure no div 0
+        N_star_1 = N_star - 1.0_dp
 
-      !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
-      Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
-        & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
+        !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
+        dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
 
-      !! Calculate !!inverse!! of tau_gr
-      tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
-        & / (2.0_dp * pi * mol_w_sp * amu)) * n_v
+        !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
+        Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
+          & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
 
-      !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
-      J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+        !! Calculate !!inverse!! of tau_gr
+        tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
+          & / (2.0_dp * pi * cld(j)%mol_w_sp * amu)) * n_v(j)
 
-      ! ac = (2.0_dp*mol_w_sp*sig)/(rho_d*R_gas*T*log(sat))
-      ! Vm = 4.0_dp/3.0_dp * pi * ac**3
-      ! gm = Vm/V0
-      ! F = (4.0_dp/3.0_dp)*pi*sig*ac**2
-      ! phi = p/(sqrt(2.0_dp*pi*mol_w_sp*kb*T))
-      ! Zel = sqrt(F/(3.0_dp*pi*kb*T*gm**2))
-      ! J_hom = 4.0_dp * pi * ac**2 * phi * Zel * n_v * exp(-F/(kb*T))
-    else 
-      !! Unsaturated, zero nucleation
-      J_hom = 0.0_dp
-    end if
+        !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
+        J_hom(j) = n_v(j) * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+
+      else 
+        !! Unsaturated, zero nucleation
+        J_hom(j) = 0.0_dp
+      end if
+    end do
     
   end subroutine calc_hom_nuc
 
   !! Seed particle evaporation
-  subroutine calc_seed_evap(n_eq, y, m_c, f_cond, J_evap)
+  subroutine calc_seed_evap(ndust, N_c, m_c, f_cond, J_evap)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y
-    real(dp), intent(in) :: m_c, f_cond
+    integer, intent(in) :: ndust
+    real(dp), dimension(ndust), intent(in) :: f_cond
+    real(dp), intent(in) :: N_c, m_c
 
-    real(dp), intent(out) :: J_evap
+    real(dp), dimension(ndust), intent(out) :: J_evap
 
+    integer :: j
     real(dp) :: tau_evap
 
-    if ((f_cond >= 0.0_dp)) then
+    do j = 1, ndust
 
-      !! If growing or too little number density then evaporation can't take place
-      J_evap = 0.0_dp
-
-    else 
-
-      !! Check if average mass is around 0.1% the seed particle mass
-      !! This means the core is (probably) exposed to the air and can evaporate freely
-      if (m_c <= (1.001_dp * m_seed)) then
-        tau_evap = 1.0_dp !max(m_c/abs(f_cond),1.0_dp)
-        !! Seed particle evaporation rate [cm-3 s-1]
-        J_evap = -y(1)/tau_evap
-      else
-        !! There is still some mantle to evaporate from
-        J_evap = 0.0_dp
+      if (j > 1) then
+        J_evap(j) = 0.0_dp
+        cycle
       end if
 
-    end if
+      if ((f_cond(j) >= 0.0_dp)) then
+
+        !! If growing or too little number density then evaporation can't take place
+        J_evap(j) = 0.0_dp
+
+      else 
+
+        !! Check if average mass is around 0.1% the seed particle mass
+        !! This means the core is (probably) exposed to the air and can evaporate freely
+        if (m_c <= (1.001_dp * cld(j)%m_seed)) then
+          tau_evap = 0.1_dp !m_c/abs(f_cond)
+          !! Seed particle evaporation rate [cm-3 s-1]
+          J_evap(j) = -N_c/tau_evap
+        else
+          !! There is still some mantle to evaporate from
+          J_evap(j) = 0.0_dp
+        end if
+
+      end if
+    end do
 
   end subroutine calc_seed_evap
 
@@ -461,10 +504,8 @@ module mini_cloud_2_mono_mix_mod
 
     real(dp), intent(out) :: f_coag
 
-    real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
-
-    real(dp), parameter :: A1 = 9.55e5_dp
-    real(dp), parameter :: B1 = 0.345_dp*A1, C1 = 0.145_dp*A1, D1 = 1.11_dp*A1
+    real(dp) :: phi, D_r, V_r
+    real(dp) :: Knd
 
     !! Particle diffusion rate
     D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
@@ -472,26 +513,10 @@ module mini_cloud_2_mono_mix_mod
     !! Thermal velocity limit rate
     V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
-    !! Polovnikov, Azarov and Veshchunov (2016) approach
-    !! Gamma value - mono-disperse assumption
-    gam = (3.0_dp*D_r)/(r_c*V_r)
-
-    ! Interpolation expression - kernel is free molecular regime * phi
-    phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 
-
-    ! Coagulation flux (Zeroth moment) [cm3 s-1]
-    f_coag = -8.0_dp * r_c**2 * sqrt((pi*kb*T)/m_c) * phi
-
-    !! Fuchs approach (Fuchs 1964)
-    !!! Ratio fraction
-    ! lam_r = (8.0_dp*D_r)/(pi*V_r)
-    ! !! Interpolation function
-    ! del_r = ((2.0_dp*r_c + lam_r)**3 - (4.0_dp*r_c**2 + lam_r**2)**(1.5_dp))/(6.0_dp*r_c*lam_r) &
-    !   & - 2.0_dp*r_c 
-    ! !! Correction factor
-    ! phi = 2.0_dp*r_c/(2.0_dp*r_c + sqrt(2.0_dp)*del_r) + (4.0_dp*D_r)/(r_c*sqrt(2.0_dp)*V_r) 
-    ! !! Coagulation flux (Zeroth moment) [cm3 s-1]
-    ! f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)
+    !! Moran (2022) method using diffusive Knudsen number
+    Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
+    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
+    f_coag = (-4.0_dp*kb*T*beta)/(3.0_dp*eta) * phi
 
   end subroutine calc_coag
 
@@ -521,7 +546,6 @@ module mini_cloud_2_mono_mix_mod
 
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
     f_coal = -2.0_dp*pi*r_c**2*d_vf*E
-    !f_coal = 0.0_dp
 
   end subroutine calc_coal
 
@@ -538,8 +562,13 @@ module mini_cloud_2_mono_mix_mod
     select case(sp)
     case('C')
       p_vap_sp = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
-    !case('TiC')
-    !case('SiC')
+    case('TiC')
+      ! Kimura et al. (2023)
+      p_vap_sp = 10.0_dp**(-33600.0_dp/T + 7.652_dp) * atm
+    case('SiC')
+      ! Elspeth 5 polynomial JANAF-NIST fit
+      p_vap_sp =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
+        & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
     case('CaTiO3')
       ! Kozasa et al. (1987)
       p_vap_sp = exp(-79568.2_dp/T + 42.0204_dp) * atm
@@ -549,7 +578,7 @@ module mini_cloud_2_mono_mix_mod
         &  + 6.02422e-7_dp*T**2 - 6.86899e-11_dp*T**3)
     case('VO')
       ! NIST 5 param fit
-      p_vap = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
+      p_vap_sp = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
         & + 5.72078e-7_dp*T**2 - 7.41840e-11_dp*T**3)
     case('Al2O3')
       ! Kozasa et al. (1987)
@@ -597,8 +626,9 @@ module mini_cloud_2_mono_mix_mod
       ! Morley et al. (2012)
       p_vap_sp =  10.0_dp**(8.550_dp - 13889.0_dp/T) * bar
     case('ZnS')
-      ! Morley et al. (2012)
-      p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
+      ! Elspeth 5 polynomial Barin data fit
+      p_vap_sp = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
+        &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)
     case('KCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
@@ -682,7 +712,7 @@ module mini_cloud_2_mono_mix_mod
     character(len=20), intent(in) :: sp
     real(dp), intent(in) :: T
 
-    real(dp) :: TC
+    real(dp) :: TC, sig
 
     TC = T - 273.15_dp
 
