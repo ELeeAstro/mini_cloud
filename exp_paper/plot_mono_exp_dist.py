@@ -9,11 +9,13 @@ kb = 1.380649e-16
 amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
+V_seed = 4.0/3.0 * np.pi * r_seed**3
+m_seed = V_seed * rho_d
 
 dirs = ['../results_2_exp/']
 ndir = len(dirs)
 
-fname = 'tracers_425.txt'
+fname = 'tracers_425_2.txt'
 
 fig, ax =  plt.subplots()
 
@@ -21,9 +23,17 @@ col = sns.color_palette('colorblind')
 
 lss = ['solid']
 
-na = 100
-r = np.logspace(-3,2,na) * 1e-4
-m = 4.0/3.0 * np.pi * r**3 * rho_d
+na = 1000
+
+r_min = r_seed
+r_max = 100.0 * 1e-4
+
+m_min = 4.0/3.0 * np.pi * r_min**3 * rho_d
+m_max = 4.0/3.0 * np.pi * r_max**3 * rho_d
+
+m = np.logspace(np.log10(m_min),np.log10(m_max),na)
+r = ((3.0*m)/(4.0*np.pi*rho_d))**(1.0/3.0)
+
 
 for i in range(ndir):
 
@@ -97,7 +107,7 @@ plt.xlim(1e-3,1e2)
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_mono_exp_dist.pdf',dpi=144,bbox_inches='tight')
+#plt.savefig('Y_425_mono_exp_dist.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

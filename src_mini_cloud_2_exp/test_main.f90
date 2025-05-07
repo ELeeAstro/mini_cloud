@@ -22,8 +22,8 @@ program test_mini_cloud_2
   character(len=20) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho
-  real(dp), allocatable, dimension(:) :: q_0, q_1, q_v, vf, r_c, m_c, q0, r_c_old, del
-  real(dp), allocatable, dimension(:,:) :: VMR, q
+  real(dp), allocatable, dimension(:) :: q_0, q_1, q_v, r_c, m_c, q0, r_c_old, del
+  real(dp), allocatable, dimension(:,:) :: VMR, q, vf_q
   real(dp) :: grav
 
   integer :: n_wl
@@ -38,10 +38,10 @@ program test_mini_cloud_2
   logical :: end
 
   !! time step
-  t_step = 1000.0_dp
+  t_step = 500.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 2000000
 
   !! Start time
   time = 6840.0_dp
@@ -88,7 +88,7 @@ program test_mini_cloud_2
       mol_w_sp = 74.551_dp
 
       allocate(q_v(nlay),q_0(nlay),q_1(nlay))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay))
+      allocate(r_c(nlay), m_c(nlay), vf_q(nlay,2))
 
       !! Initial conditions
       q_v(1) = 1.17e-7_dp  ! ~K abundance ratio at Solar (VMR)
@@ -117,7 +117,7 @@ program test_mini_cloud_2
         call mini_cloud_2_exp(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1))
 
         !! Calculate settling velocity for this layer
-        call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), vf(1))
+        call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), vf_q(1,:))
 
         !! Calculate the opacity at the weavelength grid
         call opac_mie(1, sp, Tl(1), mu(1), pl(1), q_0(1), q_1(1), rho_d, n_wl, wl(:), k_ext(1,:), ssa(1,:), g(1,:))
@@ -134,7 +134,7 @@ program test_mini_cloud_2
         !! Mass weighted mean radius of particle [um]
         r_c(1) = ((3.0_dp*m_c(1))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp) * 1e4_dp
 
-        print*, 'q', n, q_v(1), q_0(1), q_1(1), vf(1)
+        print*, 'q', n, q_v(1), q_0(1), q_1(1), vf_q(1,:)
         print*, 'r', n, m_c(1), r_c(1), rho_d
         print*, 'o', n, k_ext(1,1), ssa(1,1), g(1,1), k_ext(1,n_wl), ssa(1,n_wl), g(1,n_wl)
 
@@ -176,7 +176,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file
@@ -227,7 +227,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(3.25_dp))/100.0_dp
+      grav = (10.0_dp**(4.25_dp))/100.0_dp
 
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
@@ -244,7 +244,7 @@ program test_mini_cloud_2
       m_seed = V_seed * rho_d
 
       allocate(q_v(nlay), q_0(nlay), q_1(nlay), q0(3), q(nlay,3))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay), r_c_old(nlay), del(nlay))
+      allocate(r_c(nlay), m_c(nlay), vf_q(nlay,2), r_c_old(nlay), del(nlay))
 
       q_v(:) = 1e-30_dp
       q_0(:) = 1e-30_dp
@@ -270,7 +270,7 @@ program test_mini_cloud_2
           call mini_cloud_2_exp(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
 
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i))
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf_q(i,:))
 
           !! Calculate the opacity at the wavelength grid
          !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
@@ -280,7 +280,7 @@ program test_mini_cloud_2
         q(:,2) = q_0(:)
         q(:,3) = q_1(:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2, q(:,2:3), q0(2:3))
+        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf_q(:,:), 2, q(:,2:3), q0(2:3))
 
         call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
 
@@ -330,7 +330,7 @@ program test_mini_cloud_2
       print*, del(:)/t_step
 
       do i = 1, nlay
-        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_0(i), q_1(i), r_c(i), vf(i), q_0(i)*nd_atm(i)
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_0(i), q_1(i), r_c(i), vf_q(i,:), q_0(i)*nd_atm(i)
       end do
 
       !! mini-cloud test output
@@ -358,7 +358,7 @@ contains
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_0(i), q_1(i), vf(i)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_0(i), q_1(i), vf_q(i,:)
       write(u2,*) t, time, k_ext(i,:), ssa(i,:), g(i,:)
     end do
 
