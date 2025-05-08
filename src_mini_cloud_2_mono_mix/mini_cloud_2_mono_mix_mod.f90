@@ -277,7 +277,7 @@ module mini_cloud_2_mono_mix_mod
 
     integer :: j
     real(dp) :: N_c, rho_c_t, rho_d_m
-    real(dp), dimension(ndust) :: rho_c, rho_v
+    real(dp), dimension(ndust) :: rho_c, rho_v, r_mix
     real(dp), dimension(ndust) :: p_v, n_v
     real(dp), dimension(ndust) :: f_nuc_hom, f_cond, f_seed_evap
 
@@ -300,6 +300,8 @@ module mini_cloud_2_mono_mix_mod
     !! Mean mass of particle
     rho_c_t = sum(rho_c(:))
     m_c = max(rho_c_t/N_c, cld(1)%m_seed)
+
+    r_mix(:) = rho_c(:)/rho_c_t
 
     rho_d_m = 0.0_dp
     do j = 1, ndust
@@ -350,7 +352,7 @@ module mini_cloud_2_mono_mix_mod
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag + f_coal)*N_c**2
-    f(2:2+ndust-1) = cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) + f_cond(:)*N_c
+    f(2:2+ndust-1) = cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) + f_cond(:)*N_c*r_mix(:)
     f(2+ndust:2+ndust+ndust-1) = -f(2:2+ndust-1)
 
     !! Convert f to ratios

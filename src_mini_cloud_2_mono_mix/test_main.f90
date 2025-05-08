@@ -166,7 +166,7 @@ program test_mini_cloud_2
       q_1(:,:) = 1e-30_dp
 
       q0(1) = 1.17e-7_dp * mol_w_sp(1)/mu(nlay)
-      q0(2) = 1e-30_dp !3.63e-8_dp * mol_w_sp(2)/mu(nlay)
+      q0(2)  = 3.63e-8_dp * mol_w_sp(2)/mu(nlay)
       q0(3:) = 1e-30_dp
 
       q_v(nlay,1) = q0(1)
