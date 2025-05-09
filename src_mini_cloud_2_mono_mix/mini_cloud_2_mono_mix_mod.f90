@@ -336,7 +336,7 @@ module mini_cloud_2_mono_mix_mod
     cld(:)%sat = p_v(:)/cld(:)%p_vap
 
     !! Calculate condensation rate
-    call calc_cond(ndust, r_c, Kn, n_v(:), f_cond)
+    call calc_cond(ndust, r_c, Kn, n_v(:), r_mix(:), f_cond)
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(ndust, n_v(:), f_nuc_hom)
@@ -352,7 +352,7 @@ module mini_cloud_2_mono_mix_mod
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag + f_coal)*N_c**2
-    f(2:2+ndust-1) = cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) + f_cond(:)*N_c*r_mix(:)
+    f(2:2+ndust-1) = cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) + f_cond(:)*N_c
     f(2+ndust:2+ndust+ndust-1) = -f(2:2+ndust-1)
 
     !! Convert f to ratios
@@ -362,12 +362,12 @@ module mini_cloud_2_mono_mix_mod
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(ndust, r_c, Kn, n_v, dmdt)
+  subroutine calc_cond(ndust, r_c, Kn, n_v, r_mix, dmdt)
     implicit none
 
     integer, intent(in) :: ndust
     real(dp), intent(in) :: r_c, Kn
-    real(dp), dimension(ndust), intent(in) :: n_v
+    real(dp), dimension(ndust), intent(in) :: n_v, r_mix
 
     real(dp), dimension(ndust), intent(out) :: dmdt
 
@@ -375,11 +375,17 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: dmdt_low, dmdt_high, Knd, fx
 
     do j = 1, ndust
+
       !! Free molecular flow regime (Kn >> 1) [g s-1]
       dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp * (1.0_dp - 1.0_dp/cld(j)%sat)
 
       !! Diffusive limited regime (Kn << 1) [g s-1]
       dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) * (1.0_dp - 1.0_dp/cld(j)%sat)
+
+      if (cld(j)%sat < 1.0_dp) then
+        dmdt_high = dmdt_high * r_mix(j)
+        dmdt_low = dmdt_low * r_mix(j)
+      end if
 
       !! Kn' (Woitke & Helling 2003)
       Knd = Kn/cld(j)%Kn_crit
