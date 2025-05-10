@@ -25,7 +25,7 @@ module mini_cloud_2_exp_mod
 
   !! Global variables
   real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
-  real(dp) :: p_vap, rho_s, vth, sig, D
+  real(dp) :: p_vap,  vth, sig, D
 
   !! Cloud global constants - some passed into from main
   real(dp) :: rho_d, mol_w_sp
@@ -127,6 +127,9 @@ module mini_cloud_2_exp_mod
     !! Specific gas constant of layer [erg g-1 K-1]
     Rd = R_gas/mu
 
+    !! Specific gas constant of vapour [erg g-1 K-1]
+    Rd_v = R_gas/mol_w_sp   
+
     !! Calculate dynamical viscosity for this layer
     call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
 
@@ -146,9 +149,6 @@ module mini_cloud_2_exp_mod
 
     !! Saturation vapour pressure
     p_vap = p_vap_sp(sp, T)
-
-    !! Saturation vapour density
-    rho_s = p_vap/(Rd*T)
 
     !! Thermal velocity
     vth = sqrt((kb*T)/(2.0_dp*pi*m0))
@@ -266,7 +266,7 @@ module mini_cloud_2_exp_mod
     y(3) = y(3)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
-    p_v = y(3) * Rd * T     !! Pressure of vapour
+    p_v = y(3) * Rd_v * T     !! Pressure of vapour
     n_v = p_v/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
@@ -380,8 +380,6 @@ module mini_cloud_2_exp_mod
     real(dp), parameter :: alpha = 1.0_dp
     real(dp), parameter :: Nf = 5.0_dp
 
-    !real(dp) :: ac, F, phi, gm, Vm
-
     if (sat > 1.0_dp) then
 
       ! Efficency Variables
@@ -414,13 +412,6 @@ module mini_cloud_2_exp_mod
       !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
       J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
 
-      ! ac = (2.0_dp*mol_w_sp*sig)/(rho_d*R_gas*T*log(sat))
-      ! Vm = 4.0_dp/3.0_dp * pi * ac**3
-      ! gm = Vm/V0
-      ! F = (4.0_dp/3.0_dp)*pi*sig*ac**2
-      ! phi = p/(sqrt(2.0_dp*pi*mol_w_sp*kb*T))
-      ! Zel = sqrt(F/(3.0_dp*pi*kb*T*gm**2))
-      ! J_hom = 4.0_dp * pi * ac**2 * phi * Zel * n_v * exp(-F/(kb*T))
     else 
       !! Unsaturated, zero nucleation
       J_hom = 0.0_dp
@@ -485,7 +476,7 @@ module mini_cloud_2_exp_mod
     Kh0 = 2.0_dp * H * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * (g53*g12 + 2.0_dp*g43*g56 + g76)
 
     !! Moran (2022) method using diffusive Knudsen number
-    Knd = (2.0_dp*sqrt(2.0_dp)/pi) * (Kl0/Kh0)
+    Knd = (2.0_dp*sqrt(2.0_dp))/pi * (Kl0/Kh0)
     
     !! Interpolation factor
     phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)

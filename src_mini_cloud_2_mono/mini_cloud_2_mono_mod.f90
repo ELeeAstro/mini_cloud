@@ -24,8 +24,8 @@ module mini_cloud_2_mono_mod
   real(dp), parameter :: mmHg = 1333.22387415_dp  ! mmHg to dyne
 
   !! Global variables
-  real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
-  real(dp) :: p_vap, rho_s, vth, sig, D
+  real(dp) :: T, mu, nd_atm, rho, p, grav, Rd, Rd_v
+  real(dp) :: p_vap, vth, sig, D
 
   !! Cloud global constants - some passed into from main
   real(dp) :: rho_d, mol_w_sp
@@ -122,6 +122,9 @@ module mini_cloud_2_mono_mod
     !! Specific gas constant of layer [erg g-1 K-1]
     Rd = R_gas/mu
 
+    !! Specific gas constant for species [erg g-1 K-1]
+    Rd_v = R_gas/mol_w_sp
+
     !! Calculate dynamical viscosity for this layer
     call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
 
@@ -141,9 +144,6 @@ module mini_cloud_2_mono_mod
 
     !! Saturation vapour pressure
     p_vap = p_vap_sp(sp, T)
-
-    !! Saturation vapour density
-    rho_s = p_vap/(Rd*T)
 
     !! Thermal velocity
     vth = sqrt((kb*T)/(2.0_dp*pi*m0))
@@ -263,7 +263,7 @@ module mini_cloud_2_mono_mod
     y(3) = y(3)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
-    p_v = y(3) * Rd * T     !! Pressure of vapour
+    p_v = y(3) * Rd_v * T     !! Pressure of vapour
     n_v = p_v/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
@@ -356,7 +356,7 @@ module mini_cloud_2_mono_mod
 
   end subroutine calc_cond
 
-  !! Classical nucleation theory (CNT)
+  !! Modified classical nucleation theory (MCNT)
   subroutine calc_hom_nuc(n_eq, y, sat, n_v, J_hom)
     implicit none
 
@@ -372,11 +372,9 @@ module mini_cloud_2_mono_mod
     real(dp), parameter :: alpha = 1.0_dp
     real(dp), parameter :: Nf = 5.0_dp
 
-    real(dp) :: ac, F, phi, gm, Vm
-
     if (sat > 1.0_dp) then
 
-      ! Efficency Variables
+      !! Efficency Variables
       ln_ss = log(sat) ! Natural log of saturation ratio
       f0 = 4.0_dp * pi * r0**2 ! Monomer Area
       kbT = kb * T         ! kb * T
@@ -406,13 +404,6 @@ module mini_cloud_2_mono_mod
       !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
       J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
 
-      ! ac = (2.0_dp*mol_w_sp*sig)/(rho_d*R_gas*T*log(sat))
-      ! Vm = 4.0_dp/3.0_dp * pi * ac**3
-      ! gm = Vm/V0
-      ! F = (4.0_dp/3.0_dp)*pi*sig*ac**2
-      ! phi = p/(sqrt(2.0_dp*pi*mol_w_sp*kb*T))
-      ! Zel = sqrt(F/(3.0_dp*pi*kb*T*gm**2))
-      ! J_hom = 4.0_dp * pi * ac**2 * phi * Zel * n_v * exp(-F/(kb*T))
     else 
       !! Unsaturated, zero nucleation
       J_hom = 0.0_dp
@@ -462,11 +453,8 @@ module mini_cloud_2_mono_mod
 
     real(dp), intent(out) :: f_coag
 
-    real(dp) :: phi, del_r, D_r, V_r, lam_r, gam
+    real(dp) :: phi, D_r, V_r
     real(dp) :: Knd
-
-    real(dp), parameter :: A1 = 9.55e5_dp
-    real(dp), parameter :: B1 = 0.345_dp*A1, C1 = 0.145_dp*A1, D1 = 1.11_dp*A1
 
     !! Particle diffusion rate
     D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
@@ -478,25 +466,6 @@ module mini_cloud_2_mono_mod
     Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
     phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
     f_coag = (-4.0_dp*kb*T*beta)/(3.0_dp*eta) * phi
-
-    !! Polovnikov, Azarov and Veshchunov (2016) approach
-    !! Gamma value - mono-disperse assumption
-    !gam = (3.0_dp*D_r)/(r_c*V_r)
-    ! Interpolation expression - kernel is free molecular regime * phi
-    !phi = (gam + A1*gam**2 + B1*gam**3)/(1.5_dp + C1*gam + D1*gam**2 + B1*gam**3) 
-    ! Coagulation flux (Zeroth moment) [cm3 s-1]
-    !f_coag = -8.0_dp * r_c**2 * sqrt((pi*kb*T)/m_c) * phi
-
-    !! Fuchs approach (Fuchs 1964)
-    !!! Ratio fraction
-    ! lam_r = (8.0_dp*D_r)/(pi*V_r)
-    ! !! Interpolation function
-    ! del_r = ((2.0_dp*r_c + lam_r)**3 - (4.0_dp*r_c**2 + lam_r**2)**(1.5_dp))/(6.0_dp*r_c*lam_r) &
-    !   & - 2.0_dp*r_c 
-    ! !! Correction factor
-    ! phi = 2.0_dp*r_c/(2.0_dp*r_c + sqrt(2.0_dp)*del_r) + (4.0_dp*D_r)/(r_c*sqrt(2.0_dp)*V_r) 
-    ! !! Coagulation flux (Zeroth moment) [cm3 s-1]
-    ! f_coag = -(4.0_dp * kb * T * beta)/(3.0_dp * eta * phi)
 
   end subroutine calc_coag
 
@@ -606,8 +575,11 @@ module mini_cloud_2_mono_mod
       ! Morley et al. (2012)
       p_vap_sp =  10.0_dp**(8.550_dp - 13889.0_dp/T) * bar
     case('ZnS')
+      ! Elspeth 5 polynomial Barin data fit
+      p_vap_sp = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
+        &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)      
       ! Morley et al. (2012)
-      p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
+      !p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
     case('KCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &

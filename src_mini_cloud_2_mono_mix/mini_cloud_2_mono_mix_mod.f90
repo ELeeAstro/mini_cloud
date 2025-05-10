@@ -33,7 +33,7 @@ module mini_cloud_2_mono_mix_mod
   type cld_sp
 
     character(len=20) :: sp
-    real(dp) :: rho_d, mol_w_sp
+    real(dp) :: rho_d, mol_w_sp, Rd_v
     real(dp) :: p_vap, rho_s, vth, sig, D
     real(dp) :: V_seed, m_seed, Kn_crit, alp
     real(dp) :: r0, V0, m0, d0, r_seed
@@ -181,6 +181,10 @@ module mini_cloud_2_mono_mix_mod
 
       !! Critical Knudsen number
       cld(j)%Kn_crit = (mfp * cld(j)%alp * cld(j)%vth)/cld(j)%D
+
+      !! Specific gas constant of vapour [erg g-1 K-1]
+      cld(j)%Rd_v = R_gas/cld(j)%mol_w_sp
+
     end do
 
     ! -----------------------------------------
@@ -294,7 +298,7 @@ module mini_cloud_2_mono_mix_mod
     rho_v(:) = y(2+ndust:2+ndust+ndust-1)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
-    p_v(:) = rho_v(:) * Rd * T     !! Pressure of vapour
+    p_v(:) = rho_v(:) * cld(:)%Rd_v * T     !! Pressure of vapour
     n_v(:) = p_v(:)/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
@@ -393,6 +397,7 @@ module mini_cloud_2_mono_mix_mod
       !! tanh interpolation function
       fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
 
+      !! Mass change rate
       dmdt(j) = dmdt_low * fx + dmdt_high * (1.0_dp - fx)
     end do
 
@@ -637,6 +642,8 @@ module mini_cloud_2_mono_mix_mod
       ! Elspeth 5 polynomial Barin data fit
       p_vap_sp = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
         &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)
+      ! Morley et al. (2012)
+      !p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar        
     case('KCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &

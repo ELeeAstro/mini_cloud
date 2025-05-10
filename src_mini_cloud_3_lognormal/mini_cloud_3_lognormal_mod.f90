@@ -24,7 +24,7 @@ module mini_cloud_3_lognormal_mod
   real(dp), parameter :: mmHg = 1333.22387415_dp  ! mmHg to dyne
 
   !! Global variables
-  real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
+  real(dp) :: T, mu, nd_atm, rho, p, grav, Rd, Rd_v
   real(dp) :: p_vap, rho_s, vth, sig, D
 
   !! Cloud global constants - some passed into from main
@@ -120,6 +120,9 @@ module mini_cloud_3_lognormal_mod
 
     !! Specific gas constant of layer [erg g-1 K-1]
     Rd = R_gas/mu
+
+    !! Specific gas constant of vapour [erg g-1 K-1]
+    Rd_v = R_gas/mol_w_sp
 
     !! Calculate dynamical viscosity for this layer
     call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
@@ -267,7 +270,7 @@ module mini_cloud_3_lognormal_mod
     y(4) = y(4)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
-    p_v = y(4) * Rd * T     !! Pressure of vapour
+    p_v = y(4) * Rd_v * T     !! Pressure of vapour
     n_v = p_v/(kb*T)        !! Number density of vapour
 
     !! Calculate log(sigma_g)**2
@@ -377,10 +380,11 @@ module mini_cloud_3_lognormal_mod
     dmdt_high1 = c_facg1 * exp(2.0_dp/9.0_dp * lnsig2)
     dmdt_high2 = c_facg1 * exp(8.0_dp/9.0_dp * lnsig2)
 
-    !! Kn' (Woitke & Helling 2003)
+    !! Critical Knudsen number
     Kn_crit_m = (mfp*dmdt_high1)/(dmdt_low1*r_med)
     Kn_crit_m2 = (mfp*dmdt_high2)/(dmdt_low2*r_med)
 
+    !! Kn' (Woitke & Helling 2003)
     Knd_m = Kn_m/Kn_crit_m
     Knd_m2 = Kn_m2/Kn_crit_m2
 
@@ -408,8 +412,6 @@ module mini_cloud_3_lognormal_mod
 
     real(dp), parameter :: alpha = 1.0_dp
     real(dp), parameter :: Nf = 5.0_dp
-
-    real(dp) :: ac, F, phi, gm, Vm
 
     if (sat > 1.0_dp) then
 
@@ -443,13 +445,6 @@ module mini_cloud_3_lognormal_mod
       !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
       J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
 
-      ! ac = (2.0_dp*mol_w_sp*sig)/(rho_d*R_gas*T*log(sat))
-      ! Vm = 4.0_dp/3.0_dp * pi * ac**3
-      ! gm = Vm/V0
-      ! F = (4.0_dp/3.0_dp)*pi*sig*ac**2
-      ! phi = p/(sqrt(2.0_dp*pi*mol_w_sp*kb*T))
-      ! Zel = sqrt(F/(3.0_dp*pi*kb*T*gm**2))
-      ! J_hom = 4.0_dp * pi * ac**2 * phi * Zel * n_v * exp(-F/(kb*T))
     else 
       !! Unsaturated, zero nucleation
       J_hom = 0.0_dp
