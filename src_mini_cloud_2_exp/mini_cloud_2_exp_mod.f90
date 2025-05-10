@@ -24,7 +24,7 @@ module mini_cloud_2_exp_mod
   real(dp), parameter :: mmHg = 1333.22387415_dp  ! mmHg to dyne
 
   !! Global variables
-  real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
+  real(dp) :: T, mu, nd_atm, rho, p, grav, Rd, Rd_v
   real(dp) :: p_vap,  vth, sig, D
 
   !! Cloud global constants - some passed into from main

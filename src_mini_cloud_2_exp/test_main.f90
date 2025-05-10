@@ -176,7 +176,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file

@@ -42,10 +42,10 @@ program test_mini_cloud_3
   logical :: end
 
   !! time step
-  t_step = 1000.0_dp
+  t_step = 500.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 2000000
 
   !! Start time
   time = 6840.0_dp
