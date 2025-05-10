@@ -2,15 +2,19 @@ import numpy as np
 import matplotlib.pylab as plt
 import seaborn as sns
 
+R = 8.31446261815324e7
 kb = 1.380649e-16
 amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
 
+mol_w_sp = 74.5513
+Rd_v = R/mol_w_sp
+
 dirs = ['../results_2_mono/','../results_3_lognormal/']
 ndir = len(dirs)
 
-fname = 'tracers_425.txt'
+fname = 'tracers_325.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -54,8 +58,8 @@ for i in range(ndir):
   r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d))**(1.0/3.0),r_seed) * 1e4
 
   q_s = np.zeros(nlay)
-  q_s[:] = np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3)
-  q_s[:] = np.maximum(q_s[:]/1e6/pl[:],1e-30)
+  q_s[:] = (np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3))/(Rd_v * Tl[:])
+  q_s[:] = q_s[:]/rho[:]
 
   p_T = ax1.plot(Tl,pl,c=col[0],label=r'T',ls=lss[i])
   p_qc = ax2.plot(q_1,pl,c=col[1],label=r'$q_{\rm c}$',ls=lss[i])
@@ -93,7 +97,7 @@ ax2.legend(lns, labs,fontsize=10,loc='upper center')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_mono_lognormal_Tq.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_325_mono_lognormal_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
