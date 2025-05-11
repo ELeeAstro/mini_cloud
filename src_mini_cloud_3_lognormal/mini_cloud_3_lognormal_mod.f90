@@ -60,10 +60,11 @@ module mini_cloud_3_lognormal_mod
 
   contains
 
-  subroutine mini_cloud_3_lognormal(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1, q_2)
+  subroutine mini_cloud_3_lognormal(ilay, T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp, sp_bg, q_v, q_0, q_1, q_2)
     implicit none
 
     ! Input variables
+    integer, intent(in) :: ilay
     character(len=20), intent(in) :: sp
     character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end
@@ -219,7 +220,7 @@ module mini_cloud_3_lognormal_mod
       else  if (istate == -1) then
         istate = 2
       else if (istate < -1) then
-        print*, 'dlsode: ', istate
+        print*, 'dlsode: ', istate, ilay
         exit
       end if
 

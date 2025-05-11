@@ -13,6 +13,7 @@ module mini_cloud_vf_mod
   real(dp), parameter :: twothird = 2.0_dp/3.0_dp
 
   real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -37,20 +38,26 @@ module mini_cloud_vf_mod
 
   contains
 
-  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, q_0, q_1, v_f)
+  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, q_0, q_1, q_2, v_f)
     implicit none
 
     ! Input variables
     character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, rho_d, q_0, q_1
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, rho_d, q_0, q_1, q_2
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
-    real(dp), intent(out) :: v_f
+    real(dp), dimension(3), intent(out) :: v_f
 
     integer :: n_bg
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx
+    real(dp) :: N_c, rho_c, Z_c, lnsig2, lnsig, sig
+    real(dp) :: m_med, m_c, m_n, r_med, r_c, m_c2, r_c2, r_n, m_seed
+    real(dp) :: vf_s, vf_e, fx, Rey, St, Ep, exp_fac
+
+    real(dp) :: Kn, Kn_m, Kn_m2, Kn_b, Kn_n
+
+    real(dp), parameter :: A = 1.639_dp
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -87,32 +94,97 @@ module mini_cloud_vf_mod
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
+    m_seed = V_seed * rho_d
+
+    N_c = q_0 * nd_atm
+    rho_c = q_1 * rho
+    Z_c = q_2 * rho**2
+
     !! Calculate vf from final results of interaction
     !! Mean mass of particle
-    m_c = (q_1*rho)/(q_0*nd_atm)
+    m_c = rho_c/N_c
+    m_c2 = Z_c/rho_c
 
-    !! Mass weighted mean radius of particle
+    !! Calculate log(sigma_g)**2
+    lnsig = sqrt(max(log((N_c*Z_c)/(rho_c**2)),0.0_dp))
+    sig = max(exp(lnsig),1.01_dp)
+    sig = min(sig,3.0_dp)
+
+    lnsig2 = log(sig)**2
+
+    !! Mean mass of particle
+    m_c = max(rho_c/N_c, m_seed)
+    m_med = max(m_c * exp(-0.5_dp * lnsig2),m_seed)
+    m_n = max(m_med * exp(0.5_dp * lnsig2),m_seed)
+    m_c2 = max(Z_c/rho_c, m_seed)
+
+    !! Mass weighted mean radii of particle
+    r_med = max(((3.0_dp*m_med)/(4.0_dp*pi*rho_d))**(third), r_seed)
+    r_n = max(((3.0_dp*m_n)/(4.0_dp*pi*rho_d))**(third), r_seed)
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
+    r_c2 = max(((3.0_dp*m_c2)/(4.0_dp*pi*rho_d))**(third), r_seed)
 
-    !! Knudsen number
-    Kn = mfp/r_c
 
-    !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn))
+    !! Monodisperse Knudsen number
+    Kn = mfp/r_med
+    Kn_b = min(Kn, 100.0_dp)
 
+    !! Population averaged Knudsen number for n, m and m^2
+    Kn_n = Kn * exp(1.0_dp/18.0_dp * lnsig2)
+    Kn_m = Kn * exp(-5.0_dp/18.0_dp * lnsig2)
+    Kn_m2 = Kn * exp(-11.0_dp/18.0_dp * lnsig2)
+
+    !! Now find moment dependent settling velocities
+    St = (2.0_dp * grav * r_med**2 * (rho_d - rho))/(9.0_dp * eta) 
+    Ep = (sqrt(pi)*grav*rho_d*r_med)/(2.0_dp*cT*rho)
+
+    !! Zeroth moment
     !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
-     & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    exp_fac = exp(2.0_dp/9.0_dp * lnsig2) + A*Kn_b*exp(1.0_dp/18.0_dp * lnsig2)
+    vf_s = St * exp_fac * Rey
 
     !! Settling velocity (Epstein regime)
-    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+    exp_fac = exp(1.0_dp/18.0_dp * lnsig2)
+    vf_e = Ep * exp_fac
 
     !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_n)))
 
     !! Interpolation for settling velocity
-    v_f = fx*vf_s + (1.0_dp - fx)*vf_e
+    v_f(1) = fx*vf_s + (1.0_dp - fx)*vf_e
+
+    !! First moment
+    !! Settling velocity (Stokes regime)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    exp_fac = exp(8.0_dp/9.0_dp * lnsig2) + A*Kn_b*exp(7.0_dp/18.0_dp * lnsig2)
+    vf_s = St * exp_fac * Rey
+
+    !! Settling velocity (Epstein regime)
+    exp_fac = exp(7.0_dp/18.0_dp * lnsig2)
+    vf_e = Ep * exp_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m)))
+
+    !! Interpolation for settling velocity
+    v_f(2) = fx*vf_s + (1.0_dp - fx)*vf_e
+
+    !! Second moment
+    !! Settling velocity (Stokes regime)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_c2**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    exp_fac = exp(14.0_dp/9.0_dp * lnsig2) + A*Kn_b*exp(13.0_dp/18.0_dp * lnsig2)
+    vf_s = St * exp_fac * Rey
+
+    !! Settling velocity (Epstein regime)
+    exp_fac = exp(13.0_dp/18.0_dp * lnsig2)
+    vf_e = Ep * exp_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m2)))
+
+    !! Interpolation for settling velocity
+    v_f(3) = fx*vf_s + (1.0_dp - fx)*vf_e
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 

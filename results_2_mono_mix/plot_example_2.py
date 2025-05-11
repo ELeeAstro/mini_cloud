@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pylab as plt
 import seaborn as sns
-
+R = 8.31446261815324e7
 bar = 1e6
 kb = 1.380649e-16
 amu = 1.66053906660e-24
@@ -13,6 +13,8 @@ fname = 'tracers.txt'
 ndust = 2
 rho_d = [1.99, 3.9]
 mol_w_sp = [74.5513, 97.4450]
+
+Rd_v = [R/mol_w_sp[0],R/mol_w_sp[1]]
 
 data = np.loadtxt(fname,skiprows=3)
 
@@ -55,11 +57,11 @@ r_c = np.zeros(nlay)
 r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d_m[:]))**(1.0/3.0),r_seed) * 1e4
 
 q_s = np.zeros((nlay,ndust))
-q_s[:,0] = np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3)
-q_s[:,0] = np.maximum(q_s[:,0]/1e6/pl[:],1e-30)
+q_s[:,0] = np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3)/(Rd_v[0] * Tl[:])
+q_s[:,0] = q_s[:,0]/rho[:]
 
-q_s[:,1] = np.exp(-4.75507888e4/Tl[:] + 3.66993865e1 - 2.49490016e-3*Tl[:] + 7.29116854e-7*Tl[:]**2 - 1.12734453e-10*Tl[:]**3)
-q_s[:,1] = np.maximum(q_s[:,1]/1e6/pl[:],1e-30)
+q_s[:,1] = np.exp(-4.75507888e4/Tl[:] + 3.66993865e1 - 2.49490016e-3*Tl[:] + 7.29116854e-7*Tl[:]**2 - 1.12734453e-10*Tl[:]**3)/(Rd_v[1] * Tl[:])
+q_s[:,1] = q_s[:,1]/rho[:]
 
 fig = plt.figure()
 
