@@ -11,10 +11,10 @@ rho_d = 1.99
 mol_w_sp = 74.5513
 Rd_v = R/mol_w_sp
 
-dirs = ['../results_2_mono/','../results_3_gamma/']
+dirs = ['../results_2_mono/','../results_2_exp/','../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_425.txt'
+fname = 'tracers_325.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -22,7 +22,7 @@ ax2 = ax1.twiny()
 
 col = sns.color_palette('colorblind')
 
-lss = ['dashed','solid']
+lss = ['dashed','dotted','solid']
 
 for i in range(ndir):
 
@@ -65,7 +65,7 @@ for i in range(ndir):
   p_T = ax1.plot(Tl,pl,c=col[0],label=r'T',ls=lss[i])
   p_qc = ax2.plot(q_1,pl,c=col[1],label=r'$q_{\rm 1}$',ls=lss[i])
   p_qv = ax2.plot(q_v,pl,c=col[2],label=r'$q_{\rm v}$',ls=lss[i])
-  p_qs = ax2.plot(q_s,pl,c=col[4],label=r'$q_{\rm s}$',ls='dotted')
+  p_qs = ax2.plot(q_s,pl,c=col[4],label=r'$q_{\rm s}$',ls='dashdot')
   #p_0 = ax2.plot(q_0,pl,c=col[5],label=r'$q_{\rm 0}$',ls=lss[i])
   #p_2 = ax2.plot(q_2,pl,c=col[6],label=r'$q_{\rm 2}$',ls=lss[i])
 
@@ -95,12 +95,12 @@ ax1.set_ylabel(r'$p_{\rm gas}$ [bar]',fontsize=16)
 ax2.set_zorder(1)
 lns = p_T + p_qc + p_qv + p_qs
 labs = [l.get_label() for l in lns]
-ax2.legend(lns, labs,fontsize=10,loc='upper center')
+ax2.legend(lns, labs,fontsize=10,loc='upper right')
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_mono_gamma_Tq.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_325_mono_gamma_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
