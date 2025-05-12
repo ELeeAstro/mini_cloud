@@ -25,7 +25,7 @@ module mini_cloud_3_gamma_mod
 
   !! Global variables
   real(dp) :: T, mu, nd_atm, rho, p, grav, Rd, Rd_v
-  real(dp) :: p_vap, rho_s, vth, sig, D
+  real(dp) :: p_vap, vth, sig, D
 
   !! Cloud global constants - some passed into from main
   real(dp) :: rho_d, mol_w_sp
@@ -144,9 +144,6 @@ module mini_cloud_3_gamma_mod
 
     !! Saturation vapour pressure
     p_vap = p_vap_sp(sp, T)
-
-    !! Saturation vapour density
-    rho_s = p_vap/(Rd*T)
 
     !! Thermal velocity
     vth = sqrt((kb*T)/(2.0_dp*pi*m0))

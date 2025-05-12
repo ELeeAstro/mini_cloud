@@ -43,7 +43,7 @@ program test_mini_cloud_2
   logical :: end
 
   !! time step
-  t_step = 100.0_dp
+  t_step = 500.0_dp
 
   !! Number of iterations
   n_it = 10000!2000000
@@ -180,11 +180,12 @@ program test_mini_cloud_2
    
       do n = 1, n_it
 
+        !$omp do schedule(dynamic)
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
           call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, & 
-            & nsp, rho_d(:), mol_w_sp(:), q_v(i,:), q_0(i), q_1(i,:))
+            & nsp, q_v(i,:), q_0(i), q_1(i,:))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
@@ -193,6 +194,7 @@ program test_mini_cloud_2
           !! Calculate the opacity at the wavelength grid
           call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
+        !$omp end do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
@@ -349,9 +351,9 @@ program test_mini_cloud_2
       !! Lower mass mixing ratio boundary conditions for vapour + cloud (VMR taken from Asplund et al. 2001)
       !! Assume cloud = zero boundary condition (all evaporated)
       q0(1) = 9.33e-8_dp * mol_w_sp(1)/mu(nlay)
-      q0(2)  = 3.55e-5_dp * mol_w_sp(2)/mu(nlay)
-      q0(3)  = 2.88e-5_dp * mol_w_sp(3)/mu(nlay)
-      q0(4)  = 2.69e-6_dp * mol_w_sp(4)/mu(nlay)
+      q0(2) = 3.55e-5_dp * mol_w_sp(2)/mu(nlay)
+      q0(3) = 2.88e-5_dp * mol_w_sp(3)/mu(nlay)
+      q0(4) = 2.69e-6_dp * mol_w_sp(4)/mu(nlay)
       q0(5:) = 1e-30_dp
 
       !! Initial vapour ratios at lower atmosphere
@@ -373,7 +375,7 @@ program test_mini_cloud_2
 
           !! Call mini-cloud and perform integrations for a single layer
           call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, & 
-            & nsp, rho_d(:), mol_w_sp(:), q_v(i,:), q_0(i), q_1(i,:))
+            & nsp, q_v(i,:), q_0(i), q_1(i,:))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 

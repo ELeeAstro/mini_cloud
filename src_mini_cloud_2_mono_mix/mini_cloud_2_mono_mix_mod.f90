@@ -28,17 +28,19 @@ module mini_cloud_2_mono_mix_mod
   real(dp) :: mfp, eta, nu, cT
 
   real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
 
   !! Cloud properties container
   type cld_sp
 
     character(len=20) :: sp
     real(dp) :: rho_d, mol_w_sp, Rd_v
-    real(dp) :: p_vap, rho_s, vth, sig, D
-    real(dp) :: V_seed, m_seed, Kn_crit, alp
-    real(dp) :: r0, V0, m0, d0, r_seed, nu
+    real(dp) :: p_vap, vth, sig, D
+    real(dp) :: m_seed, Kn_crit, alp_c
+    real(dp) :: r0, V0, m0, d0, r_seed, nu_key
 
-    real(dp) :: sat
+    integer :: inuc
+    real(dp) :: sat, Nf, alp_nuc
 
   end type cld_sp
 
@@ -77,7 +79,7 @@ module mini_cloud_2_mono_mix_mod
   contains
 
   subroutine mini_cloud_2_mono_mix(ilay, T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp_in, sp_bg, &
-    & n_in, rho_d, mol_w_sp, q_v, q_0, q_1)
+    & n_in, q_v, q_0, q_1)
     implicit none
 
     ! Input variables
@@ -89,7 +91,7 @@ module mini_cloud_2_mono_mix_mod
 
     ! Input/Output tracer values
     real(dp), intent(inout) :: q_0
-    real(dp), dimension(n_in), intent(inout) :: q_v, q_1, rho_d, mol_w_sp
+    real(dp), dimension(n_in), intent(inout) :: q_v, q_1
 
     integer :: ncall
 
@@ -151,54 +153,8 @@ module mini_cloud_2_mono_mix_mod
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
-    !! Calculate basic cloud properties
-    allocate(cld(ndust))
-    do j = 1, ndust
-      !! Basic cloud properties
-      cld(j)%sp = sp_in(j)
-      cld(j)%mol_w_sp = mol_w_sp(j)
-      cld(j)%rho_d = rho_d(j)
-      cld(j)%m0 = mol_w_sp(j) * amu
-      cld(j)%V0 = cld(j)%m0 / cld(j)%rho_d
-      cld(j)%r0 = ((3.0_dp*cld(j)%V0)/(4.0_dp*pi))**(third)
-      cld(j)%V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
-      cld(j)%m_seed = cld(j)%V_seed * cld(j)%rho_d
-      cld(j)%d0 = 2.0_dp * cld(j)%r0
-
-      cld(j)%alp = 1.0_dp
-
-      !! Saturation vapour pressure
-      cld(j)%p_vap = p_vap_sp(cld(j)%sp, T)
-
-      !! Saturation vapour density
-      cld(j)%rho_s = cld(j)%p_vap/(Rd*T)
-
-      !! Thermal velocity
-      cld(j)%vth = sqrt((kb*T)/(2.0_dp*pi*cld(j)%m0))
-
-      !! Gaseous diffusion constant
-      cld(j)%D = 5.0_dp/(16.0_dp*Avo*cld(j)%d0**2*rho) * &
-        & sqrt((R_gas*T*mu)/(2.0_dp*pi) * (cld(j)%mol_w_sp + mu)/cld(j)%mol_w_sp)
-
-      !! Surface tension of material
-      cld(j)%sig = surface_tension(cld(j)%sp, T)
-
-      !! Critical Knudsen number
-      cld(j)%Kn_crit = (mfp * cld(j)%alp * cld(j)%vth)/cld(j)%D
-
-      !! Specific gas constant of vapour [erg g-1 K-1]
-      cld(j)%Rd_v = R_gas/cld(j)%mol_w_sp
-
-      !! Find stoichiometric coefficient
-      select case(trim(cld(j)%sp))
-      case('Mg2SiO3')
-        cld(j)%nu = 2.0_dp
-      case('Al2O3')
-        cld(j)%nu = 2.0_dp      
-      case default
-        cld(j)%nu = 1.0_dp        
-      end select
-    end do
+    !! Get the basic cloud species properties
+    call cloud_sp(ndust, sp_in, T, rho, mu, mfp)
 
     ! -----------------------------------------
     ! ***  parameters for the DLSODE solver  ***
@@ -226,6 +182,7 @@ module mini_cloud_2_mono_mix_mod
     rwork(1) = 0.0_dp               ! Critical T value (don't integrate past time here)
     rwork(5) = 0.0_dp              ! Initial starting timestep (start low, will adapt in DLSODE)
     rwork(6) = 0.0_dp       ! Maximum timestep
+    rwork(7) = 0.0_dp       ! Minimum timestep
 
     iwork(5) = 0               ! Max order required
     iwork(6) = 1000000               ! Max number of internal steps
@@ -257,7 +214,11 @@ module mini_cloud_2_mono_mix_mod
 
       ncall = ncall + 1
 
-      if (istate < 0) then
+      if (mod(ncall,10) == 0) then
+        istate = 1
+      else  if (istate == -1) then
+        istate = 2
+      else if (istate < -1) then
         print*, 'dlsode: ', istate, ilay, t_now
         exit
       end if
@@ -388,15 +349,17 @@ module mini_cloud_2_mono_mix_mod
     real(dp), dimension(ndust), intent(out) :: dmdt
 
     integer :: j
-    real(dp) :: dmdt_low, dmdt_high, Knd, fx
+    real(dp) :: dmdt_low, dmdt_high, Knd, Kn_crit, fx
 
     do j = 1, ndust
 
       !! Diffusive limited regime (Kn << 1) [g s-1]
-      dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) * (1.0_dp - 1.0_dp/cld(j)%sat) / cld(j)%nu
+      dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) &
+        & *  (1.0_dp - 1.0_dp/cld(j)%sat) / cld(j)%nu_key
 
       !! Free molecular flow regime (Kn >> 1) [g s-1]
-      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp * (1.0_dp - 1.0_dp/cld(j)%sat) / cld(j)%nu
+      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp_c & 
+        & * (1.0_dp - 1.0_dp/cld(j)%sat) / cld(j)%nu_key
 
       !! If evaporation, weight rate by current condensed volume ratio (Woitke et al. 2020)
       if (cld(j)%sat < 1.0_dp) then
@@ -404,8 +367,10 @@ module mini_cloud_2_mono_mix_mod
         dmdt_low = dmdt_low * V_mix(j) 
       end if
 
+      Kn_crit = (mfp*dmdt_high)/(dmdt_low*r_c)
+
       !! Kn' (Woitke & Helling 2003)
-      Knd = Kn/cld(j)%Kn_crit
+      Knd = Kn/Kn_crit
 
       !! tanh interpolation function
       fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
@@ -429,12 +394,11 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: ln_ss, theta_inf, N_inf, N_star, N_star_1, dg_rt, Zel, tau_gr
     real(dp) :: f0, kbT
 
-    real(dp), parameter :: alpha = 1.0_dp
-    real(dp), parameter :: Nf = 0.0_dp
+    real(dp) :: alpha, Nf
 
     do j = 1, ndust
 
-      if (j > 1) then
+      if (cld(j)%inuc == 0) then
         J_hom(j) = 0.0_dp
         cycle
       end if
@@ -445,6 +409,9 @@ module mini_cloud_2_mono_mix_mod
         ln_ss = log(cld(j)%sat) ! Natural log of saturation ratio
         f0 = 4.0_dp * pi * cld(j)%r0**2 ! Monomer Area
         kbT = kb * T         ! kb * T
+
+        alpha = cld(j)%alp_nuc
+        Nf = cld(j)%Nf
 
         !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
         theta_inf = (f0 * cld(j)%sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
@@ -494,7 +461,7 @@ module mini_cloud_2_mono_mix_mod
 
     do j = 1, ndust
 
-      if (j > 1) then
+      if (cld(j)%inuc == 0) then
         J_evap(j) = 0.0_dp
         cycle
       end if
@@ -948,6 +915,199 @@ module mini_cloud_2_mono_mix_mod
     eta_out = 1.0_dp/eta_out
 
   end subroutine eta_construct
+
+  subroutine cloud_sp(ndust, sp_in, T, rho, mu, mfp)
+    implicit none
+
+    integer, intent(in) :: ndust
+    character(len=20), dimension(ndust), intent(in) :: sp_in
+    real(dp), intent(in) :: T, rho, mu, mfp
+
+    integer :: j
+
+    !! Allocate global cld type array
+    allocate(cld(ndust))
+
+    !! Look over number of dust species
+    do j = 1, ndust
+
+      !! First get the constant values from a select case
+
+      cld(j)%sp = sp_in(j)
+
+      !! Calculate the basic cloud properties
+      select case(trim(cld(j)%sp))
+
+      case('C')
+
+        cld(j)%mol_w_sp = 12.0107_dp
+        cld(j)%rho_d = 2.27_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 1
+        cld(j)%Nf = 5.0_dp
+        cld(j)%alp_nuc = 1.0_dp
+        cld(j)%nu_key = 1.0_dp
+
+      case('TiC')
+
+        cld(j)%mol_w_sp = 59.8777_dp
+        cld(j)%rho_d = 4.93_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case('SiC')
+
+        cld(j)%mol_w_sp = 40.0962_dp
+        cld(j)%rho_d = 3.21_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case('CaTiO3')
+
+        cld(j)%mol_w_sp = 135.943_dp
+        cld(j)%rho_d = 3.98_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case('Al2O3')
+
+        cld(j)%mol_w_sp = 101.961_dp
+        cld(j)%rho_d = 3.986_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 2.0_dp
+
+      case('TiO2')
+
+        cld(j)%mol_w_sp = 79.866_dp
+        cld(j)%rho_d = 4.23_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 1
+        cld(j)%Nf = 0.0_dp
+        cld(j)%alp_nuc = 1.0_dp
+        cld(j)%nu_key = 1.0_dp
+
+      case('VO')
+
+        cld(j)%mol_w_sp = 66.94090_dp
+        cld(j)%rho_d = 5.76_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp      
+
+      case('Fe')
+
+        cld(j)%mol_w_sp = 55.845_dp
+        cld(j)%rho_d = 7.87_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case('Mg2SiO4')
+
+        cld(j)%mol_w_sp = 140.693_dp
+        cld(j)%rho_d =  3.21_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 2.0_dp
+
+      case('MgSiO3')
+
+        cld(j)%mol_w_sp = 100.389_dp
+        cld(j)%rho_d =  3.19_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case('MnS')
+
+        cld(j)%mol_w_sp = 87.003_dp
+        cld(j)%rho_d =  4.08_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case('Na2S')
+
+        cld(j)%mol_w_sp = 78.0445_dp
+        cld(j)%rho_d =  1.856_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 2.0_dp
+
+      case('ZnS')
+
+        cld(j)%mol_w_sp = 97.445_dp
+        cld(j)%rho_d = 4.09_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case('KCl')
+
+        cld(j)%mol_w_sp = 74.551_dp
+        cld(j)%rho_d = 1.99_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 1
+        cld(j)%Nf = 5.0_dp
+        cld(j)%alp_nuc = 1.0_dp
+        cld(j)%nu_key = 1.0_dp 
+  
+      case('H2O')
+
+        cld(j)%mol_w_sp = 18.015_dp
+        cld(j)%rho_d = 0.93_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case('NH3')
+
+        cld(j)%mol_w_sp = 17.031_dp
+        cld(j)%rho_d = 0.87_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+        cld(j)%nu_key = 1.0_dp
+
+      case default
+        print*, 'Cloud species not found: ',   trim(cld(j)%sp)
+        print*, 'STOP'
+        stop     
+      end select
+
+      !! Find the constant values for the cloud species
+      cld(j)%m0 = cld(j)%mol_w_sp * amu
+      cld(j)%V0 = cld(j)%m0 / cld(j)%rho_d
+      cld(j)%r0 = ((3.0_dp*cld(j)%V0)/(4.0_dp*pi))**(third)
+      cld(j)%m_seed = V_seed * cld(j)%rho_d
+      cld(j)%d0 = 2.0_dp * cld(j)%r0
+
+      !! Find the constant values for the cloud species
+      !! that are specific for the layer
+
+      !! Saturation vapour pressure
+      cld(j)%p_vap = p_vap_sp(cld(j)%sp, T)
+
+      !! Thermal velocity
+      cld(j)%vth = sqrt((kb*T)/(2.0_dp*pi*cld(j)%m0))
+
+      !! Gaseous diffusion constant
+      cld(j)%D = 5.0_dp/(16.0_dp*Avo*cld(j)%d0**2*rho) * &
+        & sqrt((R_gas*T*mu)/(2.0_dp*pi) * (cld(j)%mol_w_sp + mu)/cld(j)%mol_w_sp)
+
+      !! Surface tension of material
+      cld(j)%sig = surface_tension(cld(j)%sp, T)
+
+      !! Specific gas constant of vapour [erg g-1 K-1]
+      cld(j)%Rd_v = R_gas/cld(j)%mol_w_sp
+
+    end do
+
+
+  end subroutine cloud_sp
 
   !! Dummy jacobian subroutine required for dlsode
   subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)
