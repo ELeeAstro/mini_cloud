@@ -43,10 +43,10 @@ program test_mini_cloud_2
   logical :: end
 
   !! time step
-  t_step = 500.0_dp
+  t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 2000000
+  n_it = 10000!2000000
 
   !! Start time
   time = 6840.0_dp
@@ -271,7 +271,7 @@ program test_mini_cloud_2
 
       nsp = 4
 
-      nlay = 100
+      nlay = 200
       nlev = nlay + 1
 
       n_wl = 11
@@ -285,7 +285,7 @@ program test_mini_cloud_2
       allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay))
 
       !! Find pressure level grid (pa) - logspaced between p_top and p_bot
-      p_top = 1e-4_dp * 1e5_dp
+      p_top = 1e-2_dp * 1e5_dp
       p_bot = 1000.0_dp * 1e5_dp
 
       p_top = log10(p_top)
@@ -306,7 +306,7 @@ program test_mini_cloud_2
       grav = (10.0_dp**(4.5_dp))/100.0_dp
 
       !! Find T-p profile - assume semi-grey atmosphere and use Eddington approximation
-      T_eff = 1000.0_dp ! [K]
+      T_eff = 1300.0_dp ! [K]
       k_ir = 1e-2_dp ! [cm^2 g-1]
       do i = 1, nlay
         tau = (k_ir * (pl(i) * 10.0_dp))/(grav*100.0_dp)
@@ -331,9 +331,9 @@ program test_mini_cloud_2
 
       !! Assumed condensate species
       allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp))
-      sp = (/'TiO2  ', 'Al2O3 ', 'Fe    ', 'MgSiO3'/)
-      rho_d = (/4.23_dp, 3.987_dp, 7.874_dp, 3.2_dp/)
-      mol_w_sp = (/79.8658_dp, 101.96128_dp, 55.8450_dp, 100.3887_dp/)
+      sp = (/'TiO2   ', 'Mg2SiO4', 'Fe     ', 'Al2O3  '/)
+      rho_d = (/4.23_dp, 3.21_dp, 7.874_dp, 3.986_dp/)
+      mol_w_sp = (/79.8658_dp, 140.693_dp, 55.8450_dp, 101.961_dp/)
 
       !! Seed particle mass (assume rho_d at first index)
       m_seed = V_seed * rho_d(1)
@@ -349,9 +349,9 @@ program test_mini_cloud_2
       !! Lower mass mixing ratio boundary conditions for vapour + cloud (VMR taken from Asplund et al. 2001)
       !! Assume cloud = zero boundary condition (all evaporated)
       q0(1) = 9.33e-8_dp * mol_w_sp(1)/mu(nlay)
-      q0(2)  = 2.69e-6_dp * mol_w_sp(2)/mu(nlay)
+      q0(2)  = 3.55e-5_dp * mol_w_sp(2)/mu(nlay)
       q0(3)  = 2.88e-5_dp * mol_w_sp(3)/mu(nlay)
-      q0(4)  = 3.55e-5_dp * mol_w_sp(4)/mu(nlay)
+      q0(4)  = 2.69e-6_dp * mol_w_sp(4)/mu(nlay)
       q0(5:) = 1e-30_dp
 
       !! Initial vapour ratios at lower atmosphere
@@ -438,7 +438,7 @@ program test_mini_cloud_2
         !! increment time
         time = time + t_step
 
-        print*, n, time, maxval(del(:))
+        print*, n, time, maxval(del(:)/t_step)
 
         if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end

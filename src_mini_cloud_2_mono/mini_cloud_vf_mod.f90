@@ -63,10 +63,10 @@ module mini_cloud_vf_mod
     nd_atm = p/(kb*T)  
 
     !! Zero velocity if little amount of clouds
-    ! if (q_0*nd_atm < 1e-10_dp) then
-    !   v_f = 0.0_dp
-    !   return
-    ! end if
+    if (q_0*nd_atm < 1e-10_dp) then
+      v_f = 1.0e-10_dp
+      return
+    end if
 
     n_bg = size(bg_VMR_in)
     allocate(VMR_bg(n_bg))
@@ -103,7 +103,7 @@ module mini_cloud_vf_mod
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
-    r_c = min(r_c,100.0_dp*1e-4_dp)
+    r_c = min(r_c,1e-2_dp)
 
     !! Knudsen number
     Kn = mfp/r_c
@@ -124,6 +124,8 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f = fx*vf_s + (1.0_dp - fx)*vf_e
+
+    vf = max(v_f, 1.0e-10_dp)
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 

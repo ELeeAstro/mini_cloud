@@ -68,7 +68,7 @@ module mini_cloud_vf_mod
 
     !! Zero velocity if little amount of clouds
     ! if (q_0*nd_atm < 1e-10_dp) then
-    !   v_f = 0.0_dp
+    !   v_f(:) = 1.0e-10_dp
     !   return
     ! end if
 
@@ -157,6 +157,7 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f(1) = fx*vf_s + (1.0_dp - fx)*vf_e
+    v_f(1) = max(v_f(1),1e-10_dp)
 
     !! First moment
     !! Settling velocity (Stokes regime)
@@ -174,6 +175,7 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f(2) = fx*vf_s + (1.0_dp - fx)*vf_e
+    v_f(2) = max(v_f(2),1e-10_dp)
 
     !! Second moment
     !! Settling velocity (Stokes regime)
@@ -191,6 +193,7 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f(3) = fx*vf_s + (1.0_dp - fx)*vf_e
+    v_f(3) = max(v_f(3),1e-10_dp)
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 

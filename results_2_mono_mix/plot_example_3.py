@@ -12,9 +12,9 @@ r_seed = 1e-7
 
 fname = 'tracers.txt'
 
-ndust = 2
-rho_d = [4.23, 3.987, 7.874, 3.2]
-mol_w_sp = [79.8658, 101.96128, 55.8450, 100.3887]
+ndust = 4
+rho_d = [4.23, 3.21, 7.874, 3.986]
+mol_w_sp = [79.8658, 140.693, 55.8450, 101.961]
 
 Rd_v = [R/mol_w_sp[0],R/mol_w_sp[1],R/mol_w_sp[2],R/mol_w_sp[3]]
 
@@ -27,8 +27,8 @@ mu = data[:,5]
 VMR = data[:,6:8]
 q_v = data[:,8:12]
 q_0 = data[:,12]
-q_1 = data[:,13:15]
-vf = data[:,15]
+q_1 = data[:,13:17]
+vf = data[:,17]
 
 nlay = len(pl)
 
@@ -62,13 +62,13 @@ q_s[:,0] = (np.exp(-7.70443e4/Tl[:] +  4.03144e1 - 2.59140e-3*Tl[:] + \
   6.02422e-7*Tl[:]**2 - 6.86899e-11*Tl[:]**3))/(Rd_v[0] * Tl[:])
 q_s[:,0] = q_s[:,0]/rho[:]
 
-q_s[:,1] = (np.exp(-73503.0/Tl[:] + 22.005) * atm)/(Rd_v[1] * Tl[:])
+q_s[:,1] = (np.exp(-62279.0/Tl[:] + 20.944) * atm)/(Rd_v[1] * Tl[:])
 q_s[:,1] = q_s[:,1]/rho[:]
 
 q_s[:,2] = (np.exp(15.71 - 47664.0/Tl[:]) * bar)/(Rd_v[2] * Tl[:])
 q_s[:,2] = q_s[:,2]/rho[:]
 
-q_s[:,3] = (np.exp(-58663.0/Tl[:] + 25.37) * bar)/(Rd_v[3] * Tl[:])
+q_s[:,3] = (np.exp(-73503.0/Tl[:] + 22.005) * atm)/(Rd_v[3] * Tl[:])
 q_s[:,3] = q_s[:,3]/rho[:]
 
 fig = plt.figure()
@@ -123,7 +123,9 @@ plt.plot(q_s[:,1],pl,c=col[1],ls='dotted')
 plt.plot(q_s[:,2],pl,c=col[2],ls='dotted')
 plt.plot(q_s[:,3],pl,c=col[3],ls='dotted')
 
-plt.plot(q_0,pl,c=col[4],label=r'$q_{0}$')
+plt.plot(q_0,pl,c=col[4],label=r'$q_{0}$',ls='dashdot')
+
+plt.legend()
 
 plt.yscale('log')
 plt.xscale('log')

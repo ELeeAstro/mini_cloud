@@ -36,7 +36,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: rho_d, mol_w_sp, Rd_v
     real(dp) :: p_vap, rho_s, vth, sig, D
     real(dp) :: V_seed, m_seed, Kn_crit, alp
-    real(dp) :: r0, V0, m0, d0, r_seed
+    real(dp) :: r0, V0, m0, d0, r_seed, nu
 
     real(dp) :: sat
 
@@ -189,6 +189,15 @@ module mini_cloud_2_mono_mix_mod
       !! Specific gas constant of vapour [erg g-1 K-1]
       cld(j)%Rd_v = R_gas/cld(j)%mol_w_sp
 
+      !! Find stoichiometric coefficient
+      select case(trim(cld(j)%sp))
+      case('Mg2SiO3')
+        cld(j)%nu = 2.0_dp
+      case('Al2O3')
+        cld(j)%nu = 2.0_dp      
+      case default
+        cld(j)%nu = 1.0_dp        
+      end select
     end do
 
     ! -----------------------------------------
@@ -248,12 +257,8 @@ module mini_cloud_2_mono_mix_mod
 
       ncall = ncall + 1
 
-      if (mod(ncall,10) == 0) then
-        istate = 1
-      else  if (istate == -1) then
-        istate = 2
-      else if (istate < -1) then
-        print*, 'dlsode: ', istate, ilay
+      if (istate < 0) then
+        print*, 'dlsode: ', istate, ilay, t_now
         exit
       end if
 
@@ -317,6 +322,7 @@ module mini_cloud_2_mono_mix_mod
     !! Bulk material volume mixing ratio
     V_tot = sum(rho_c(:)/cld(:)%rho_d) ! Total condensed volume
     V_mix(:) = (rho_c(:)/cld(:)%rho_d)/V_tot ! Condensed volume mixing ratio
+    !V_mix(:) = rho_c(:)/rho_c_t
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
@@ -387,16 +393,16 @@ module mini_cloud_2_mono_mix_mod
     do j = 1, ndust
 
       !! Diffusive limited regime (Kn << 1) [g s-1]
-      dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) * (1.0_dp - 1.0_dp/cld(j)%sat)
+      dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) * (1.0_dp - 1.0_dp/cld(j)%sat) / cld(j)%nu
 
       !! Free molecular flow regime (Kn >> 1) [g s-1]
-      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp * (1.0_dp - 1.0_dp/cld(j)%sat)
+      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp * (1.0_dp - 1.0_dp/cld(j)%sat) / cld(j)%nu
 
       !! If evaporation, weight rate by current condensed volume ratio (Woitke et al. 2020)
-      !if (cld(j)%sat < 1.0_dp) then
-        dmdt_high = dmdt_high * V_mix(j)
-        dmdt_low = dmdt_low * V_mix(j)
-      !end if
+      if (cld(j)%sat < 1.0_dp) then
+        dmdt_high = dmdt_high * V_mix(j) 
+        dmdt_low = dmdt_low * V_mix(j) 
+      end if
 
       !! Kn' (Woitke & Helling 2003)
       Knd = Kn/cld(j)%Kn_crit
@@ -424,7 +430,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: f0, kbT
 
     real(dp), parameter :: alpha = 1.0_dp
-    real(dp), parameter :: Nf = 5.0_dp
+    real(dp), parameter :: Nf = 0.0_dp
 
     do j = 1, ndust
 
@@ -503,7 +509,7 @@ module mini_cloud_2_mono_mix_mod
         !! Check if average mass is around 0.1% the seed particle mass
         !! This means the core is (probably) exposed to the air and can evaporate freely
         if (m_c <= (1.001_dp * cld(j)%m_seed)) then
-          tau_evap = 0.1_dp !m_c/abs(f_cond)
+          tau_evap = 0.01_dp !m_c/abs(f_cond)
           !! Seed particle evaporation rate [cm-3 s-1]
           J_evap(j) = -N_c/tau_evap
         else

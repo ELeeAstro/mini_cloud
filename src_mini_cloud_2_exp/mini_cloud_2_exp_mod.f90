@@ -216,12 +216,8 @@ module mini_cloud_2_exp_mod
 
       ncall = ncall + 1
 
-      if (mod(ncall,10) == 0) then
-        istate = 1
-      else  if (istate == -1) then
-        istate = 2
-      else if (istate < -1) then
-        print*, 'dlsode: ', istate
+      if (istate < 0) then
+        print*, 'dlsode: ', istate, ilay, t_now
         exit
       end if
 
