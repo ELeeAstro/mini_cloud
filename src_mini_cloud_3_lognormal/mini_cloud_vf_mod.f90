@@ -115,12 +115,11 @@ module mini_cloud_vf_mod
     !! Mean mass of particle
     m_c = max(rho_c/N_c, m_seed)
     m_med = max(m_c * exp(-0.5_dp * lnsig2),m_seed)
-    m_n = max(m_med * exp(0.5_dp * lnsig2),m_seed)
     m_c2 = max(Z_c/rho_c, m_seed)
 
     !! Mass weighted mean radii of particle
     r_med = max(((3.0_dp*m_med)/(4.0_dp*pi*rho_d))**(third), r_seed)
-    r_n = max(((3.0_dp*m_n)/(4.0_dp*pi*rho_d))**(third), r_seed)
+    r_n =  max(r_med * exp(1.0_dp/18.0_dp * lnsig2), r_seed)
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
     r_c2 = max(((3.0_dp*m_c2)/(4.0_dp*pi*rho_d))**(third), r_seed)
 
