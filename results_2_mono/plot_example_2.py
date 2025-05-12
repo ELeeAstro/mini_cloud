@@ -2,12 +2,16 @@ import numpy as np
 import matplotlib.pylab as plt
 import seaborn as sns
 
+R = 8.31446261815324e7
 kb = 1.380649e-16
 amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
 
-fname = 'tracers_325.txt'
+mol_w_sp = 74.5513
+Rd_v = R/mol_w_sp
+
+fname = 'tracers.txt'
 
 data = np.loadtxt(fname)
 
@@ -39,8 +43,8 @@ r_c = np.zeros(nlay)
 r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d))**(1.0/3.0),r_seed) * 1e4
 
 q_s = np.zeros(nlay)
-q_s[:] = np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3)
-q_s[:] = np.maximum(q_s[:]/1e6/pl[:],1e-30)
+q_s[:] = (np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3))/(Rd_v * Tl[:])
+q_s[:] = q_s[:]/rho[:]
 
 fig = plt.figure()
 

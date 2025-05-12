@@ -13,6 +13,7 @@ module mini_cloud_vf_mod
   real(dp), parameter :: twothird = 2.0_dp/3.0_dp
 
   real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -31,6 +32,8 @@ module mini_cloud_vf_mod
 
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
+
+  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
 
   public :: mini_cloud_vf
   private :: eta_construct
@@ -53,7 +56,7 @@ module mini_cloud_vf_mod
     integer :: n_bg, j
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx, N_c, rho_c_t, rho_d_m
+    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx, N_c, rho_c_t, rho_d_m, m_seed
     real(dp), dimension(ndust) :: rho_c
 
 
@@ -65,10 +68,10 @@ module mini_cloud_vf_mod
     nd_atm = p/(kb*T)  
 
     !! Zero velocity if little amount of clouds
-    ! if (q_0*nd_atm < 1e-10_dp) then
-    !   v_f = 0.0_dp
-    !   return
-    ! end if
+    if (q_0*nd_atm < 1e-10_dp) then
+      v_f = 0.0_dp
+      return
+    end if
 
     n_bg = size(bg_VMR_in)
     allocate(VMR_bg(n_bg))
@@ -92,22 +95,27 @@ module mini_cloud_vf_mod
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
+    !! Seed particle mass - assumed first index of rho_d
+    m_seed = V_seed * rho_d(1)
+
+    N_c = q_0*nd_atm
     rho_c(:) = q_1(:)*rho
     rho_c_t = sum(rho_c(:))
-    N_c = q_0*nd_atm
 
     !! Calculate vf from final results of interaction
-    !! Mean mass of particle
-    m_c = (rho_c_t/N_c)
 
+    !! Mean mass of particle
+    m_c = max(rho_c_t/N_c,m_seed)
+
+    !! Average bulk density of particles
     rho_d_m = 0.0_dp
     do j = 1, ndust
       rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * rho_d(j)
     end do
 
-  
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
+    r_c = min(r_c,100.0_dp*1e-4_dp)
 
     !! Knudsen number
     Kn = mfp/r_c

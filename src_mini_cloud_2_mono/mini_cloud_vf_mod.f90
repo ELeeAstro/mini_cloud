@@ -33,6 +33,8 @@ module mini_cloud_vf_mod
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
+  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
+
   public :: mini_cloud_vf
   private :: eta_construct
 
@@ -101,6 +103,7 @@ module mini_cloud_vf_mod
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
+    r_c = min(r_c,100.0_dp*1e-4_dp)
 
     !! Knudsen number
     Kn = mfp/r_c

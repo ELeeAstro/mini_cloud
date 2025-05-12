@@ -262,9 +262,9 @@ program test_mini_cloud_2
 
       r_c_old(:) = r_seed * 1e-4_dp
 
-   
       do n = 1, n_it
 
+        !$omp do schedule(dynamic) 
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
@@ -274,8 +274,9 @@ program test_mini_cloud_2
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i))
 
           !! Calculate the opacity at the wavelength grid
-          call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+          !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
+        !$omp end do  
 
         q(:,1) = q_v(:)
         q(:,2) = q_0(:)
@@ -301,29 +302,26 @@ program test_mini_cloud_2
         !! Mass weighted mean radius of particle [um]
         r_c(:) = max(((3.0_dp*m_c(:))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
 
-        !! increment time
-        time = time + t_step
-
-        print*, n, time
-
         end = .True.
 
         do i = 1, nlay
           del(i) = abs(r_c_old(i) - r_c(i))/r_c_old(i)
           if ((del(i) > 1e-4_dp) .or.  (del(i)/t_step > 1e-4_dp)) then
             end = .False.
-            exit
+            !exit
           end if
         end do
         r_c_old(:) = r_c(:)
 
+        !! increment time
+        time = time + t_step
+
+        print*, n, time, maxval(del(:))
+
         if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
-          print*, del(:)
-          print*, del(:)/t_step
-          exit
+          !exit
         end if
-
 
       end do
 

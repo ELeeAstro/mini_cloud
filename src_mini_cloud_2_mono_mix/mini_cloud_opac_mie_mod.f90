@@ -9,6 +9,9 @@ module mini_cloud_opac_mie_mod
   real(dp), parameter :: kb = 1.380649e-16_dp
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g mol-1 (note, has to be cgs g mol-1 !!!)
 
+  real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+
   type nk_table
 
     character(len=11) :: name
@@ -36,30 +39,33 @@ contains
     implicit none
 
     integer, intent(in) :: n_dust, n_wl
-    character(len=11), dimension(n_dust), intent(in) :: sp
+    character(len=20), dimension(n_dust), intent(in) :: sp
     real(dp), intent(in) :: T_in, mu_in, P_in
-    real(dp), intent(in) :: q_0, q_1, rho_d
+    real(dp), intent(in) :: q_0
     real(dp), dimension(n_wl), intent(in) :: wl
+    real(dp), dimension(n_dust), intent(in) :: q_1, rho_d
 
     real(dp), dimension(n_wl), intent(out) :: k_ext, alb, gg
 
-    integer :: l, n
-    real(dp) :: rho, nd_atm, amean, n_d, m_c
+    integer :: l, n, j
+    real(dp) :: rho, nd_atm, r_c, m_c, N_c, rho_c_t, rho_d_m, m_seed, V_tot
     real(dp) :: x, xsec, q_ext, q_sca, q_abs, g
-    real(dp), dimension(n_dust) :: b_mix
+    real(dp), dimension(n_dust) :: V_mix, rho_c
     complex(dp) :: e_eff, e_eff0
     complex(dp) :: N_eff
     complex(dp), dimension(n_dust) :: N_inc, e_inc
 
-
+    !! Read nk-table for each species
     if (first_call .eqv. .True.) then
       p_2_nk = 'nk_tables/'
       call read_nk_tables(n_dust, sp, n_wl, wl)
       first_call = .False.
     end if
 
+    !! Number density of the atmosphere
     nd_atm = (P_in * 10.0_dp)/(kb * T_in)
 
+    !! If little number density of dust, set cloud opacity to zero
     if (q_0*nd_atm < 1e-10_dp) then
       k_ext(:) = 0.0_dp
       alb(:) = 0.0_dp
@@ -69,28 +75,49 @@ contains
 
     rho = (P_in * 10.0_dp * mu_in * amu)/(kb * T_in)
 
-    m_c = (q_1*rho)/(q_0*nd_atm)
+    !! Seed particle mass (use first rho_d)
+    m_seed = V_seed * rho_d(1)
 
-    amean = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp), 1e-7_dp)
+    !! Number density of clouds
+    N_c = q_0 * nd_atm
 
-    n_d = q_0 * nd_atm
+    !! Mass density of cloud species
+    rho_c(:) = q_1(:) * rho
 
-    xsec = pi * amean**2
+    !! Total condensed mass density
+    rho_c_t = sum(rho_c(:))
+
+    !! Mean particle mass
+    m_c = max(rho_c_t/N_c,m_seed)
+
+    !! Effective bulk density of mixture
+    rho_d_m = 0.0_dp
+    do j = 1, n_dust
+      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * rho_d(j)
+    end do
+
+    !! Mass weighted mean particle size
+    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(1.0_dp/3.0_dp), r_seed)
+
+    !! Cross section
+    xsec = pi * r_c**2
     
-    b_mix(:) = 1.0_dp
+    !! Bulk material volume mixing ratio
+    V_tot = sum(rho_c(:)/rho_d(:)) ! Total condensed volume
+    V_mix(:) = (rho_c(:)/rho_d(:))/V_tot ! Condensed volume mixing ratio
 
     do l = 1, n_wl
 
       !! Size parameter 
-      x = (2.0_dp * pi * amean) / (wl(l) * 1e-4_dp)
+      x = (2.0_dp * pi * r_c) / (wl(l) * 1e-4_dp)
 
-      !! Refractive index
+      !! Refractive index - use effective medium theory (EMT) for mixtures
       !! Use Landau-Lifshitz-Looyenga (LLL) method
       e_eff0 = cmplx(0.0_dp,0.0_dp,dp)
       do n = 1, n_dust
         N_inc(n) = cmplx(nk(n)%n(l),nk(n)%k(l),dp)
         e_inc(n) = m2e(N_inc(n))
-        e_eff0 = e_eff0 + b_mix(n)*e_inc(n)**(1.0_dp/3.0_dp)
+        e_eff0 = e_eff0 + V_mix(n)*e_inc(n)**(1.0_dp/3.0_dp)
       end do
       e_eff = e_eff0**3
       N_eff = e2m(e_eff)
@@ -107,7 +134,7 @@ contains
       end if
 
       !! Calculate the opacity, abledo and mean cosine angle (asymmetry factor)
-      k_ext(l) = (q_ext * xsec * n_d)/rho
+      k_ext(l) = (q_ext * xsec * N_c)/rho
       alb(l) = min(q_sca/q_ext, 0.95_dp)
       gg(l) = max(g, 0.0_dp)
 
@@ -115,7 +142,8 @@ contains
 
   end subroutine opac_mie
 
-  ! Small dielectric sphere approximation, small particle limit x << 1
+  !! Rayleigh scattering regime x << 1, |mx| << 1
+  !! i.e. small particles with minimal field changes
   subroutine rayleigh(x, ri, q_abs, q_sca, q_ext, g)
     implicit none
 
@@ -128,16 +156,18 @@ contains
 
     alp = (ri**2 - 1.0_dp)/(ri**2 + 2.0_dp)
 
+    !! Follow Bohren and Huffman (1983) approximations
     q_sca = 8.0_dp/3.0_dp * x**4 * abs(alp)**2
-    q_ext = 4.0_dp * x * aimag(alp * (1.0_dp + x**2/15.0_dp*alp * ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp)))) + &
-     & 8.0_dp/3.0_dp * x**4 * real(alp**2,dp)
+    q_abs = 4.0_dp * x * &
+      & aimag(alp * (1.0_dp + x**2/15.0_dp*alp * ((ri**4+27.0_dp*ri**2+38.0_dp)/(2.0_dp*ri**2+3.0_dp))))
 
-    q_abs = q_ext - q_sca
+    q_ext = q_abs + q_sca
 
     g = 0.0_dp
 
   end subroutine rayleigh
 
+  !! modified anomalous diffraction theory (MADT) valid for x >> 1, |m - 1| << 1
   subroutine madt(x, ri, q_abs, q_sca, q_ext, g)
     implicit none
 
@@ -201,7 +231,7 @@ contains
 
     integer, intent(in) :: n_dust, n_wl
     real(dp), dimension(n_wl), intent(in) :: wl
-    character(len=11), dimension(n_dust), intent(in) :: sp
+    character(len=20), dimension(n_dust), intent(in) :: sp
 
     integer :: n
 
@@ -218,7 +248,7 @@ contains
         nk(n)%fname = 'CaTiO3[s].dat'
       case('TiO2')
         nk(n)%name = sp(n)
-        nk(n)%fname = 'TiO2_anatase[s].dat'
+        nk(n)%fname = 'TiO2[s].dat'
       case('Al2O3')
         nk(n)%name = sp(n)
         nk(n)%fname = 'Al2O3[s].dat'
@@ -236,7 +266,10 @@ contains
         nk(n)%fname = 'MgSiO3_amorph[s].dat'
       case('KCl') 
         nk(n)%name = sp(n)
-        nk(n)%fname = 'KCl[s].dat'        
+        nk(n)%fname = 'KCl[s].dat'    
+      case('ZnS') 
+        nk(n)%name = sp(n)
+        nk(n)%fname = 'ZnS[s].dat'               
       case('C') 
         nk(n)%name = sp(n)
         nk(n)%fname = 'C[s].dat'

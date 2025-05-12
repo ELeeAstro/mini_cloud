@@ -47,6 +47,8 @@ module mini_cloud_2_mono_mix_mod
   !! Cloud properties array
   type(cld_sp), dimension(:), allocatable :: cld
 
+  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, mfp, eta, nu, cT, cld, ndust)
+
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -66,18 +68,20 @@ module mini_cloud_2_mono_mix_mod
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
+  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
+
   public :: mini_cloud_2_mono_mix, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct
 
   contains
 
-  subroutine mini_cloud_2_mono_mix(T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp_in, sp_bg, &
+  subroutine mini_cloud_2_mono_mix(ilay, T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp_in, sp_bg, &
     & n_in, rho_d, mol_w_sp, q_v, q_0, q_1)
     implicit none
 
     ! Input variables
-    integer, intent(in) :: n_in
+    integer, intent(in) :: n_in, ilay
     character(len=20), dimension(n_in), intent(in) :: sp_in
     character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end
@@ -204,7 +208,7 @@ module mini_cloud_2_mono_mix_mod
     allocate(rwork(rworkdim), iwork(iworkdim))
 
     itol = 1
-    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
+    rtol = 1.0e-2_dp           ! Relative tolerances for each scalar
     atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
@@ -249,7 +253,7 @@ module mini_cloud_2_mono_mix_mod
       else  if (istate == -1) then
         istate = 2
       else if (istate < -1) then
-        print*, 'dlsode: ', istate
+        print*, 'dlsode: ', istate, ilay
         exit
       end if
 
@@ -280,8 +284,8 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: fx
 
     integer :: j
-    real(dp) :: N_c, rho_c_t, rho_d_m
-    real(dp), dimension(ndust) :: rho_c, rho_v, r_mix
+    real(dp) :: N_c, rho_c_t, rho_d_m, V_tot
+    real(dp), dimension(ndust) :: rho_c, rho_v, V_mix
     real(dp), dimension(ndust) :: p_v, n_v
     real(dp), dimension(ndust) :: f_nuc_hom, f_cond, f_seed_evap
 
@@ -305,12 +309,14 @@ module mini_cloud_2_mono_mix_mod
     rho_c_t = sum(rho_c(:))
     m_c = max(rho_c_t/N_c, cld(1)%m_seed)
 
-    r_mix(:) = rho_c(:)/rho_c_t
-
     rho_d_m = 0.0_dp
     do j = 1, ndust
       rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * cld(j)%rho_d
     end do
+
+    !! Bulk material volume mixing ratio
+    V_tot = sum(rho_c(:)/cld(:)%rho_d) ! Total condensed volume
+    V_mix(:) = (rho_c(:)/cld(:)%rho_d)/V_tot ! Condensed volume mixing ratio
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
@@ -340,7 +346,7 @@ module mini_cloud_2_mono_mix_mod
     cld(:)%sat = p_v(:)/cld(:)%p_vap
 
     !! Calculate condensation rate
-    call calc_cond(ndust, r_c, Kn, n_v(:), r_mix(:), f_cond)
+    call calc_cond(ndust, r_c, Kn, n_v(:), V_mix(:), f_cond)
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(ndust, n_v(:), f_nuc_hom)
@@ -366,12 +372,12 @@ module mini_cloud_2_mono_mix_mod
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(ndust, r_c, Kn, n_v, r_mix, dmdt)
+  subroutine calc_cond(ndust, r_c, Kn, n_v, V_mix, dmdt)
     implicit none
 
     integer, intent(in) :: ndust
     real(dp), intent(in) :: r_c, Kn
-    real(dp), dimension(ndust), intent(in) :: n_v, r_mix
+    real(dp), dimension(ndust), intent(in) :: n_v, V_mix
 
     real(dp), dimension(ndust), intent(out) :: dmdt
 
@@ -380,16 +386,17 @@ module mini_cloud_2_mono_mix_mod
 
     do j = 1, ndust
 
-      !! Free molecular flow regime (Kn >> 1) [g s-1]
-      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp * (1.0_dp - 1.0_dp/cld(j)%sat)
-
       !! Diffusive limited regime (Kn << 1) [g s-1]
       dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) * (1.0_dp - 1.0_dp/cld(j)%sat)
 
-      if (cld(j)%sat < 1.0_dp) then
-        dmdt_high = dmdt_high * r_mix(j)
-        dmdt_low = dmdt_low * r_mix(j)
-      end if
+      !! Free molecular flow regime (Kn >> 1) [g s-1]
+      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp * (1.0_dp - 1.0_dp/cld(j)%sat)
+
+      !! If evaporation, weight rate by current condensed volume ratio (Woitke et al. 2020)
+      !if (cld(j)%sat < 1.0_dp) then
+        dmdt_high = dmdt_high * V_mix(j)
+        dmdt_low = dmdt_low * V_mix(j)
+      !end if
 
       !! Kn' (Woitke & Helling 2003)
       Knd = Kn/cld(j)%Kn_crit
@@ -403,7 +410,7 @@ module mini_cloud_2_mono_mix_mod
 
   end subroutine calc_cond
 
-  !! Classical nucleation theory (CNT)
+  !! modified classical nucleation theory (MCNT)
   subroutine calc_hom_nuc(ndust, n_v, J_hom)
     implicit none
 

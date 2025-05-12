@@ -37,6 +37,10 @@ module mini_cloud_2_mono_mod
 
   real(dp) :: mfp, eta, nu, cT
 
+  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, Rd_v, p_vap, vth, sig, D)
+  !$omp threadprivate(rho_d, mol_w_sp, r0, V0, m0, d0, V_seed, m_seed, Kn_crit)
+  !$omp threadprivate(mfp, eta, nu, cT)
+
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
   real(dp), parameter :: d_H2 = 2.827e-8_dp, LJ_H2 = 59.7_dp * kb, molg_H2 = 2.01588_dp
@@ -54,6 +58,8 @@ module mini_cloud_2_mono_mod
 
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
+
+  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
 
   public :: mini_cloud_2_mono, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
@@ -175,7 +181,7 @@ module mini_cloud_2_mono_mod
     allocate(rwork(rworkdim), iwork(iworkdim))
 
     itol = 1
-    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
+    rtol = 1.0e-2_dp           ! Relative tolerances for each scalar
     atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
