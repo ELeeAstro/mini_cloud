@@ -118,7 +118,7 @@ program test_mini_cloud_2
         rho(1) = (pl(1)*10.0_dp*mu(1)*amu)/(kb * Tl(1)) ! Mass density [g cm-3]
 
         !! Call mini-cloud and perform integrations for a single layer
-        call mini_cloud_2_mono(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1))
+        call mini_cloud_2_mono(1, Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1))
 
         !! Calculate settling velocity for this layer
         call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), vf(1))
@@ -268,13 +268,13 @@ program test_mini_cloud_2
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_mono(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
+          call mini_cloud_2_mono(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i))
 
           !! Calculate the opacity at the wavelength grid
-         !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+          call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
 
         q(:,1) = q_v(:)

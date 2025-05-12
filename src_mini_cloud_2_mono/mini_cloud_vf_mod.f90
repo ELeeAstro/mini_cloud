@@ -13,6 +13,7 @@ module mini_cloud_vf_mod
   real(dp), parameter :: twothird = 2.0_dp/3.0_dp
 
   real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -50,7 +51,7 @@ module mini_cloud_vf_mod
     integer :: n_bg
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, fx
+    real(dp) :: N_c, rho_c, m_c, r_c, Kn, beta, vf_s, vf_e, fx, m_seed
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -88,8 +89,15 @@ module mini_cloud_vf_mod
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
     !! Calculate vf from final results of interaction
+
+    !! Seed particle mass
+    m_seed = V_seed * rho_d
+
+    N_c = q_0*nd_atm
+    rho_c = q_1*rho
+
     !! Mean mass of particle
-    m_c = (q_1*rho)/(q_0*nd_atm)
+    m_c = max(rho_c/N_c, m_seed)
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)

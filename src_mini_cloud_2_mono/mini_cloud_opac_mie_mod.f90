@@ -9,6 +9,11 @@ module mini_cloud_opac_mie_mod
   real(dp), parameter :: kb = 1.380649e-16_dp
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g mol-1 (note, has to be cgs g mol-1 !!!)
 
+  real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+
+
+  
   type nk_table
 
     character(len=11) :: name
@@ -44,45 +49,58 @@ contains
     real(dp), dimension(n_wl), intent(out) :: k_ext, alb, gg
 
     integer :: l, n
-    real(dp) :: rho, nd_atm, amean, n_d, m_c
+    real(dp) :: rho, nd_atm, r_c, m_c, N_c, rho_c, m_seed
     real(dp) :: x, xsec, q_ext, q_sca, q_abs, g
     real(dp), dimension(n_dust) :: b_mix
     complex(dp) :: e_eff, e_eff0
     complex(dp) :: N_eff
     complex(dp), dimension(n_dust) :: N_inc, e_inc
 
-
+    !! If first call read nk table - may need to add more cases in the routine to read the correct table
     if (first_call .eqv. .True.) then
       p_2_nk = 'nk_tables/'
       call read_nk_tables(n_dust, sp, n_wl, wl)
       first_call = .False.
     end if
 
+    !! Number density of atmosphere (convert P to cgs)
     nd_atm = (P_in * 10.0_dp)/(kb * T_in)
 
-    if (q_0*nd_atm < 1e-10_dp) then
+    !! Number density of cloud particle
+    N_c = q_0*nd_atm
+
+    !! If number density is small, the cloud opacity will be near zero
+    if (N_c < 1e-10_dp) then
       k_ext(:) = 0.0_dp
       alb(:) = 0.0_dp
       gg(:) = 0.0_dp
       return
     end if
 
+    !! Mass density of atmosphere
     rho = (P_in * 10.0_dp * mu_in * amu)/(kb * T_in)
 
-    m_c = (q_1*rho)/(q_0*nd_atm)
+    !! Seed particle mass
+    m_seed = V_seed * rho_d
 
-    amean = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp), 1e-7_dp)
+    !! Mass density of condensed species
+    rho_c = q_1*rho
 
-    n_d = q_0 * nd_atm
+    !! Mean mass of particles
+    m_c = max(rho_c/N_c, m_seed)
 
-    xsec = pi * amean**2
+    !! Mass weighted radius of particles
+    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp), 1e-7_dp)
+
+    !! Particle cross-section
+    xsec = pi * r_c**2
     
     b_mix(:) = 1.0_dp
 
     do l = 1, n_wl
 
       !! Size parameter 
-      x = (2.0_dp * pi * amean) / (wl(l) * 1e-4_dp)
+      x = (2.0_dp * pi * r_c) / (wl(l) * 1e-4_dp)
 
       !! Refractive index
       !! Use Landau-Lifshitz-Looyenga (LLL) method
@@ -107,7 +125,7 @@ contains
       end if
 
       !! Calculate the opacity, abledo and mean cosine angle (asymmetry factor)
-      k_ext(l) = (q_ext * xsec * n_d)/rho
+      k_ext(l) = (q_ext * xsec * N_c)/rho
       alb(l) = min(q_sca/q_ext, 0.95_dp)
       gg(l) = max(g, 0.0_dp)
 
