@@ -268,7 +268,7 @@ module mini_cloud_2_mono_mod
     n_v = p_v/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
-    m_c = max(N_c/rho_c, m_seed)
+    m_c = max(rho_c/N_c, m_seed)
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
