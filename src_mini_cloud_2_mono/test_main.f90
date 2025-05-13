@@ -264,7 +264,7 @@ program test_mini_cloud_2
 
       do n = 1, n_it
 
-        !$omp do schedule(dynamic) 
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
@@ -276,7 +276,7 @@ program test_mini_cloud_2
           !! Calculate the opacity at the wavelength grid
           !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
-        !$omp end do  
+        !$omp end parallel do  
 
         q(:,1) = q_v(:)
         q(:,2) = q_0(:)
