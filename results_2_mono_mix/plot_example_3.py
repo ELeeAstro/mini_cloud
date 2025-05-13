@@ -71,6 +71,38 @@ q_s[:,2] = q_s[:,2]/rho[:]
 q_s[:,3] = (np.exp(-73503.0/Tl[:] + 22.005) * atm)/(Rd_v[3] * Tl[:])
 q_s[:,3] = q_s[:,3]/rho[:]
 
+V_mix = np.zeros((nlay,ndust))
+for j in range(nlay):
+    V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
+
+m_mix = np.zeros((nlay,ndust))
+for j in range(nlay):
+    m_mix[j,:] = rho_c[j,:]/sum(rho_c[j,:])
+
+fig = plt.figure()
+
+col = sns.color_palette('colorblind')
+
+for j in range(ndust):
+  plt.plot(m_mix[:,j],pl,c=col[j])
+
+plt.yscale('log')
+plt.xscale('log')
+
+plt.gca().invert_yaxis()
+
+fig = plt.figure()
+
+col = sns.color_palette('colorblind')
+
+for j in range(ndust):
+  plt.plot(V_mix[:,j],pl,c=col[j])
+
+plt.yscale('log')
+plt.xscale('log')
+
+plt.gca().invert_yaxis()
+
 fig = plt.figure()
 
 col = sns.color_palette('colorblind')
