@@ -25,7 +25,7 @@ program test_mini_cloud_2
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v
   real(dp), allocatable, dimension(:) :: q_0, vf, r_c, m_c, q0, r_c_old, del
   real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1
-  real(dp) :: grav
+  real(dp) :: grav, met
 
   integer :: n_wl
   real(dp), allocatable, dimension(:) :: wl_e, wl
@@ -190,7 +190,7 @@ program test_mini_cloud_2
         do i = 1, nlay-1
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, & 
+          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, VMR(i,:), t_step, sp, sp_bg, & 
             & nsp, q_v(i,:), q_0(i), q_1(i,:))
 
           !! Calculate settling velocity for this layer
@@ -303,6 +303,9 @@ program test_mini_cloud_2
       !! Assume constant background gas mean molecular weight [g mol-1] @ approx solar
       mu(:) = 2.33_dp
 
+      !! Approx [M/H] log10 Solar metallicity of atmosphere
+      met = 0.0_dp
+
       !! Assume constant gravity [m s-2]
       grav = (10.0_dp**(4.5_dp))/100.0_dp
 
@@ -376,7 +379,7 @@ program test_mini_cloud_2
         do i = 1, nlay-1
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, & 
+          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, VMR(i,:), t_step, sp, sp_bg, & 
             & nsp, q_v(i,:), q_0(i), q_1(i,:))
 
 

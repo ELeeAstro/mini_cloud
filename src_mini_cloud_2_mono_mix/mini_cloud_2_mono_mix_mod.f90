@@ -25,7 +25,7 @@ module mini_cloud_2_mono_mix_mod
 
   !! Global atmospheric variables
   real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
-  real(dp) :: mfp, eta, nu, cT
+  real(dp) :: mfp, eta, nu, cT, met
 
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
@@ -51,7 +51,7 @@ module mini_cloud_2_mono_mix_mod
   !! Cloud properties array
   type(cld_sp), dimension(:), allocatable :: cld
 
-  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, mfp, eta, nu, cT, cld, ndust)
+  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, mfp, eta, nu, cT, met, cld, ndust)
 
 
   !! Diameter, LJ potential and molecular weight for background gases
@@ -80,7 +80,7 @@ module mini_cloud_2_mono_mix_mod
 
   contains
 
-  subroutine mini_cloud_2_mono_mix(ilay, T_in, P_in, grav_in, mu_in, bg_VMR_in, t_end, sp_in, sp_bg, &
+  subroutine mini_cloud_2_mono_mix(ilay, T_in, P_in, grav_in, mu_in, met_in, bg_VMR_in, t_end, sp_in, sp_bg, &
     & n_in, q_v, q_0, q_1)
     implicit none
 
@@ -88,7 +88,7 @@ module mini_cloud_2_mono_mix_mod
     integer, intent(in) :: n_in, ilay
     character(len=20), dimension(n_in), intent(in) :: sp_in
     character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end, met_in
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
     ! Input/Output tracer values
@@ -130,6 +130,9 @@ module mini_cloud_2_mono_mix_mod
 
     !! Change mu_in to mu
     mu = mu_in ! Convert mean molecular weight to mu [g mol-1]
+
+    !! Approx log10 metallicity of atmosphere
+    met = met_in
 
     !! Change gravity to cgs [cm s-2]
     grav = grav_in * 100.0_dp
@@ -430,38 +433,45 @@ module mini_cloud_2_mono_mix_mod
 
       if (cld(j)%sat > 1.0_dp) then
 
-        ! Efficency Variables
-        ln_ss = log(cld(j)%sat) ! Natural log of saturation ratio
-        f0 = 4.0_dp * pi * cld(j)%r0**2 ! Monomer Area
-        kbT = kb * T         ! kb * T
+        if (cld(j)%sp == 'SiO') then
+          !! Special nucleation rate for SiO (Gail et al. 2016)
+          J_hom(j) = n_v(j)**2 * exp(1.33_dp - 4.40e12_dp / (T**3 * log(cld(j)%sat)**2))
 
-        alpha = cld(j)%alp_nuc
-        Nf = cld(j)%Nf
+        else
 
-        !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
-        theta_inf = (f0 * cld(j)%sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
-        N_inf = (((twothird) * theta_inf) / ln_ss)**3
+          ! Efficency Variables
+          ln_ss = log(cld(j)%sat) ! Natural log of saturation ratio
+          f0 = 4.0_dp * pi * cld(j)%r0**2 ! Monomer Area
+          kbT = kb * T         ! kb * T
 
-        !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
-        N_star = 1.0_dp + (N_inf / 8.0_dp) &
-          & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
-          & - 2.0_dp*(Nf/N_inf)**third)**3
-        N_star = max(1.00001_dp, N_star) ! Ensure no div 0
-        N_star_1 = N_star - 1.0_dp
+          alpha = cld(j)%alp_nuc
+          Nf = cld(j)%Nf
 
-        !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
-        dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
+          !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
+          theta_inf = (f0 * cld(j)%sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
+          N_inf = (((twothird) * theta_inf) / ln_ss)**3
 
-        !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
-        Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
-          & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
+          !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
+          N_star = 1.0_dp + (N_inf / 8.0_dp) &
+            & * (1.0_dp + sqrt(1.0_dp + 2.0_dp*(Nf/N_inf)**third) &
+            & - 2.0_dp*(Nf/N_inf)**third)**3
+          N_star = max(1.00001_dp, N_star) ! Ensure no div 0
+          N_star_1 = N_star - 1.0_dp
 
-        !! Calculate !!inverse!! of tau_gr
-        tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
-          & / (2.0_dp * pi * cld(j)%mol_w_v * amu)) * n_v(j)
+          !! delta G (N_star) / RT (Eq. 11 Lee et al. (2015a))
+          dg_rt = theta_inf * (N_star_1 / (N_star_1**third + Nf**third))
 
-        !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
-        J_hom(j) = n_v(j) * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+          !! Calculate Zeldovich factor at N_star (Eq. 9 Lee et al. (2015a))
+          Zel = sqrt((theta_inf / (9.0_dp * pi * (N_star_1)**(4.0_dp/3.0_dp))) &
+            & * ((1.0_dp + 2.0_dp*(Nf/N_star_1)**third)/(1.0_dp + (Nf/N_star_1)**third)**3))
+
+          !! Calculate !!inverse!! of tau_gr
+          tau_gr = (f0 * N_star**(twothird)) * alpha * sqrt(kbT &
+            & / (2.0_dp * pi * cld(j)%mol_w_v * amu)) * n_v(j)
+
+          !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
+          J_hom(j) = n_v(j) * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
+        end if
 
       else 
         !! Unsaturated, zero nucleation
@@ -575,11 +585,11 @@ module mini_cloud_2_mono_mix_mod
     real(dp), intent(in) :: T
 
     real(dp) :: TC
-    real(dp) :: met = 0.0_dp
 
     ! Return vapour pressure in dyne
     select case(sp)
     case('C')
+      ! Gail & Sedlmayr (2013) - I think...
       p_vap_sp = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
     case('TiC')
       ! Kimura et al. (2023)
@@ -589,8 +599,10 @@ module mini_cloud_2_mono_mix_mod
       p_vap_sp =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
         & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
     case('CaTiO3')
+      ! Wakeford et al. (2017) -  taken from VIRGA
+      p_vap_sp = 10.0_dp**(-72160.0_dp/T + 30.24_dp - log10(p/1e6_dp) - 2.0_dp*met) * bar
       ! Kozasa et al. (1987)
-      p_vap_sp = exp(-79568.2_dp/T + 42.0204_dp) * atm
+      !p_vap_sp = exp(-79568.2_dp/T + 42.0204_dp) * atm
     case('TiO2')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-7.70443e4_dp/T +  4.03144e1_dp - 2.59140e-3_dp*T &
@@ -623,12 +635,14 @@ module mini_cloud_2_mono_mix_mod
         & + 3.18636e-7_dp*T**2)
     case('Mg2SiO4')
       ! Visscher et al. (2010)/Visscher notes - taken from CARMA
-      p_vap_sp = 10.0_dp**(14.88_dp - 32488.0_dp/T - 1.4_dp*met - 0.2_dp*log10(1e-6_dp*p)) * bar
+      p_vap_sp = 10.0_dp**(14.88_dp - 32488.0_dp/T - 1.4_dp*met - 0.2_dp*log10(p/1e6_dp)) * bar
       ! Kozasa et al. (1989) - Seems to be too high
       !p_vap_sp = p*10.0**(8.25_dp -  27250.0_dp/T - log10(p/1e6_dp) + 3.58_dp)
     case('MgSiO3','MgSiO3_amorph')
+      ! Vissher - taken from VIRGA
+      p_vap_sp = 10.0_dp**(13.43_dp - 28665.0_dp/T - met) * bar
       ! Ackerman & Marley (2001)
-      p_vap_sp = exp(-58663.0_dp/T + 25.37_dp) * bar
+      !p_vap_sp = exp(-58663.0_dp/T + 25.37_dp) * bar
     case('MgO')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
@@ -646,16 +660,16 @@ module mini_cloud_2_mono_mix_mod
         &  - 6.17347e-8_dp*T**2 + 2.88469e-12_dp*T**3)
      case('MnS')
       ! Morley et al. (2012)
-      p_vap_sp = 10.0_dp**(11.532_dp - 23810.0_dp/T) * bar
+      p_vap_sp = 10.0_dp**(11.532_dp - 23810.0_dp/T - met) * bar
     case('Na2S')
       ! Morley et al. (2012)
-      p_vap_sp =  10.0_dp**(8.550_dp - 13889.0_dp/T) * bar
+      p_vap_sp =  10.0_dp**(8.550_dp - 13889.0_dp/T - 0.5_dp*met) * bar
     case('ZnS')
       ! Elspeth 5 polynomial Barin data fit
       p_vap_sp = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
         &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)
       ! Morley et al. (2012)
-      !p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar        
+      !p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T - met) * bar        
     case('KCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
