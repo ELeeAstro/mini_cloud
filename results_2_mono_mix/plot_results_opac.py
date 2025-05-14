@@ -1,48 +1,68 @@
 import numpy as np
 import matplotlib.pylab as plt
+import seaborn as sns
 
 ## Edit this code to plot the example output for testing
 ## TODO: add dimensionality to fortran output to avoid annoying editing of this script
 
-wl = np.loadtxt('opac.txt',max_rows=1)
+wl = np.loadtxt('opac_k.txt',max_rows=1)
 nwl = len(wl)
 
 print(wl)
 
-data1 = np.loadtxt('opac.txt',skiprows=1)
-it = data1[:,0]
-time = data1[:,1]
-nt = len(time)
+data_k = np.loadtxt('opac_k.txt',skiprows=1)
 
-k_ext = np.zeros((nt,nwl))
-k_ext[:,:] = data1[:,2:2+nwl]
+pl_k = data_k[:,2]/1e6
+k_ext = data_k[:,3:]
 
-a = np.zeros((nt,nwl))
-a[:,:] = data1[:,2+nwl:2+nwl+nwl]
+data_a = np.loadtxt('opac_a.txt',skiprows=1)
 
-g = np.zeros((nt,nwl))
-g[:,:] = data1[:,2+nwl+nwl:]
+pl_a = data_a[:,2]/1e6
+ssa = data_a[:,3:]
 
 
-fig, ax1 = plt.subplots()
+data_g = np.loadtxt('opac_g.txt',skiprows=1)
+
+pl_g = data_g[:,2]/1e6
+g = data_g[:,3:]
+
+fig = plt.figure()
+
+col = sns.color_palette("husl", nwl)
+
 for i in range(nwl):
-  plt.plot(time,k_ext[:,i],label='{:.2f}'.format(wl[i]))
-plt.ylabel('$\kappa_{ext}$ [cm$^{2}$ g$^{-1}$]')
+  plt.plot(k_ext[:,i],pl_k[:],c=col[i],label='{:.2f}'.format(wl[i]))
+
 plt.yscale('log')
+plt.xscale('log')
+
+plt.gca().invert_yaxis()
 plt.legend()
 
-fig, ax1 = plt.subplots()
+fig = plt.figure()
+
+col = sns.color_palette("husl", nwl)
+
 for i in range(nwl):
-  plt.plot(time,a[:,i],label='{:.2f}'.format(wl[i]))
-plt.ylabel('a')
+  plt.plot(ssa[:,i],pl_a[:],c=col[i],label='{:.2f}'.format(wl[i]))
+
 plt.yscale('log')
+#plt.xscale('log')
+
+plt.gca().invert_yaxis()
 plt.legend()
 
-fig, ax1 = plt.subplots()
+fig = plt.figure()
+
+col = sns.color_palette("husl", nwl)
+
 for i in range(nwl):
-  plt.plot(time,g[:,i],label='{:.2f}'.format(wl[i]))
-plt.ylabel('g')
+  plt.plot(g[:,i],pl_g[:],c=col[i],label='{:.2f}'.format(wl[i]))
+
 plt.yscale('log')
+#plt.xscale('log')
+
+plt.gca().invert_yaxis()
 plt.legend()
 
 plt.show()

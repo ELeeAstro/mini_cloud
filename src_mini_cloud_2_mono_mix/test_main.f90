@@ -268,7 +268,7 @@ program test_mini_cloud_2
 
     case(3)
 
-      !! L-T transition dwarf case (TiO2, Al2O3, Fe + MgSiO3) 
+      !! L-T transition dwarf case (TiO2, Al2O3, Fe + Mg2SiO4/MgSiO3) 
 
       nsp = 4
 
@@ -310,7 +310,7 @@ program test_mini_cloud_2
       grav = (10.0_dp**(4.5_dp))/100.0_dp
 
       !! Find T-p profile - assume semi-grey atmosphere and use Eddington approximation
-      T_eff = 1500.0_dp!1300.0_dp ! [K]
+      T_eff = 1300.0_dp!1300.0_dp ! [K]
       k_ir = 1e-2_dp ! [cm^2 g-1]
       do i = 1, nlay
         tau = (k_ir * (pl(i) * 10.0_dp))/(grav*100.0_dp)
@@ -388,7 +388,7 @@ program test_mini_cloud_2
             &  nsp, q_0(i), q_1(i,:), vf(i))
 
             !! Calculate the opacity at the wavelength grid
-          !call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+          call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
         !$omp end parallel do
 
@@ -470,7 +470,7 @@ contains
     implicit none
     integer, intent(in) :: t, nlay
     double precision, intent(in) :: time
-    integer, save :: u1, u2
+    integer, save :: u1, u2, u3, u4
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
@@ -478,14 +478,20 @@ contains
       write(u1,*) nsp
       write(u1,*) rho_d(:)
       write(u1,*) mol_w_sp(:)
-      open(newunit=u2,file='results_2_mono_mix/opac.txt',action='readwrite')
+      open(newunit=u2,file='results_2_mono_mix/opac_k.txt',action='readwrite')
       write(u2,*) wl(:)
+      open(newunit=u3,file='results_2_mono_mix/opac_a.txt',action='readwrite')
+      write(u3,*) wl(:)
+      open(newunit=u4,file='results_2_mono_mix/opac_g.txt',action='readwrite')
+      write(u4,*) wl(:)            
       first_call = .False.
     end if
 
     do i = 1, nlay
       write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), vf(i)
-      write(u2,*) t, time, k_ext(i,:), ssa(i,:), g(i,:)
+      write(u2,*) t, time, pl(i), k_ext(i,:)
+      write(u3,*) t, time, pl(i), ssa(i,:)
+      write(u4,*) t, time, pl(i), g(i,:)
     end do
 
   end subroutine output
