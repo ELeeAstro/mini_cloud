@@ -104,7 +104,7 @@ module vert_adv_exp_McCormack_mod
         qc(:nlay-1,n) = q(:nlay-1,n) - sig(:nlay-1)*c(:nlay-1)*(q(2:nlay,n) - q(:nlay-1,n))
         q(2:nlay,n) = 0.5_dp * (q(2:nlay,n) + qc(2:nlay,n) - c(2:nlay)*(qc(2:nlay,n) - qc(:nlay-1,n)))
 
-        q(:,n) = max(q(:,n),1e-30_dp)
+        q(:,n) = max(q(:,n),1e-99_dp)
 
       end do
 
@@ -117,7 +117,7 @@ module vert_adv_exp_McCormack_mod
     end do
 
     do n = 1, nq
-      q_in(:,n) = q(:,n)/nd(:)
+      q_in(:,n) = max(q(:,n)/nd(:),1e-30_dp)
     end do
     
   end subroutine vert_adv_exp_McCormack

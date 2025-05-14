@@ -14,6 +14,7 @@ program test_mini_cloud_2
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
   real(dp), parameter :: R = 8.31446261815324e7_dp
   real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
 
   integer :: example, n_it
   real(dp) :: t_step, time
@@ -114,7 +115,7 @@ program test_mini_cloud_2
         rho(1) = (pl(1)*10.0_dp*mu(1)*amu)/(kb * Tl(1)) ! Mass density [g cm-3]
 
         !! Call mini-cloud and perform integrations for a single layer
-        call mini_cloud_2_exp(Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1))
+        call mini_cloud_2_exp(1, Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1))
 
         !! Calculate settling velocity for this layer
         call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), vf_q(1,:))
@@ -229,6 +230,12 @@ program test_mini_cloud_2
       !! Assume constant gravity [m s-2]
       grav = (10.0_dp**(4.25_dp))/100.0_dp
 
+      !! Number density [cm-3] of layer
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
+
+      !! Mass density of layer
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
+      
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
       sp_bg = (/'H2','He'/)
@@ -239,9 +246,6 @@ program test_mini_cloud_2
       sp = 'KCl'
       rho_d = 1.99_dp
       mol_w_sp = 74.5513_dp
-
-      V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
-      m_seed = V_seed * rho_d
 
       allocate(q_v(nlay), q_0(nlay), q_1(nlay), q0(3), q(nlay,3))
       allocate(r_c(nlay), m_c(nlay), vf_q(nlay,2), r_c_old(nlay), del(nlay))
@@ -254,7 +258,8 @@ program test_mini_cloud_2
       q0(2) = 1e-30_dp
       q0(3) = 1e-30_dp
 
-      q_v(nlay) = q0(1)
+      m_seed = V_seed * rho_d
+
 
       time = 0.0_dp
       n = 0
@@ -264,10 +269,11 @@ program test_mini_cloud_2
    
       do n = 1, n_it
 
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_exp(Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
+          call mini_cloud_2_exp(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf_q(i,:))
@@ -275,6 +281,7 @@ program test_mini_cloud_2
           !! Calculate the opacity at the wavelength grid
          !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
+        !$omp end parallel do
 
         q(:,1) = q_v(:)
         q(:,2) = q_0(:)
@@ -287,12 +294,6 @@ program test_mini_cloud_2
         q_v(:) = q(:,1)
         q_0(:) = q(:,2)
         q_1(:) = q(:,3)
-
-        !! Number density [cm-3] of layer
-        nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
-
-        !! Mass density of layer
-        rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
 
         !! Mean mass of particle [g]
         m_c(:) = max((q_1(:)*rho)/(q_0(:)*nd_atm),m_seed)
@@ -316,13 +317,15 @@ program test_mini_cloud_2
         end do
         r_c_old(:) = r_c(:)
 
+        !! increment time
+        time = time + t_step
+
+        print*, n, time, maxval(del(:)/t_step)
+
         if ((end .eqv. .True.) .and. (n > int(1e7))) then
           print*, 'exit: ', n, n_it, end
-          print*, del(:)
-          print*, del(:)/t_step
           exit
         end if
-
 
       end do
 

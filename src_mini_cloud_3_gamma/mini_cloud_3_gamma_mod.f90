@@ -244,7 +244,7 @@ module mini_cloud_3_gamma_mod
     real(dp) :: f_nuc_hom, f_seed_evap
     real(dp) :: f_coal0, f_coag0, f_coal2, f_coag2
     real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
-    real(dp) :: p_v, n_v, fx,  nu_n
+    real(dp) :: p_v, n_v, fx,  nu_n, N_c, rho_c, Z_c, rho_v
 
     real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
@@ -256,23 +256,23 @@ module mini_cloud_3_gamma_mod
     y(:) = max(y(:),1e-30_dp)
 
     !! Convert y to real physical numbers to calculate f
-    y(1) = y(1)*nd_atm ! Convert to real number density
-    y(2) = y(2)*rho   ! Convert to real mass density
-    y(3) = y(3)*rho**2   ! Convert to real mass density
-    y(4) = y(4)*rho   ! Convert to real mass density
+    N_c = y(1)*nd_atm ! Convert to real number density
+    rho_c = y(2)*rho   ! Convert to real mass density
+    Z_c = y(3)*rho**2   ! Convert to real mass density
+    rho_v = y(4)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
-    p_v = y(4) * Rd_v * T     !! Pressure of vapour
+    p_v = rho_v * Rd_v * T     !! Pressure of vapour
     n_v = p_v/(kb*T)        !! Number density of vapour
 
     !! Mean mass of particle
-    m_c = max(y(2)/y(1), m_seed)
+    m_c = max(rho_c/N_c, m_seed)
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
 
     !! Calculate lambda and nu gamma distribution parameters
-    sig2 = max(y(3)/y(1) - (y(2)/y(1))**2,m_seed**2)
+    sig2 = max(Z_c/N_c - (rho_c/N_c)**2,m_seed**2)
     nu = max(m_c**2/sig2,0.01_dp)
     nu = min(nu,100.0_dp)
     lam = m_c/nu
@@ -311,13 +311,13 @@ module mini_cloud_3_gamma_mod
     sat = p_v/p_vap
 
     !! Calculate condensation rate
-    call calc_cond(n_eq, y, r_c, Kn_m, Kn_m2, n_v, sat, nu, f_cond1, f_cond2)
+    call calc_cond(r_c, Kn, Kn_m, Kn_m2, n_v, sat, nu, f_cond1, f_cond2)
 
     !! Calculate homogenous nucleation rate
-    call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
+    call calc_hom_nuc(sat, n_v, f_nuc_hom)
 
     !! Calculate seed particle evaporation rate
-    call calc_seed_evap(n_eq, y, m_c, f_cond1, f_seed_evap)
+    call calc_seed_evap(N_c, m_c, f_cond1, f_seed_evap)
 
     !! Calculate the coagulation rate
     call calc_coag(m_c, r_c, nu, Kn, f_coag0, f_coag2)
@@ -326,9 +326,9 @@ module mini_cloud_3_gamma_mod
     call calc_coal(r_c, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*y(1)**2
-    f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond1*y(1)
-    f(3) = m_seed**2*(f_nuc_hom  + f_seed_evap) + 2.0_dp*f_cond2*y(2) + (f_coag2 + f_coal2)*y(2)**2
+    f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*N_c**2
+    f(2) = m_seed*(f_nuc_hom  + f_seed_evap) + f_cond1*N_c
+    f(3) = m_seed**2*(f_nuc_hom  + f_seed_evap) + 2.0_dp*f_cond2*rho_c + (f_coag2 + f_coal2)*rho_c**2
     f(4) = -f(2)
 
     !! Convert f to ratios
@@ -337,21 +337,13 @@ module mini_cloud_3_gamma_mod
     f(3) = f(3)/rho**2
     f(4) = f(4)/rho
       
-    !! Convert y back to ratios
-    y(1) = y(1)/nd_atm
-    y(2) = y(2)/rho
-    y(3) = y(3)/rho**2
-    y(4) = y(4)/rho
-
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(n_eq, y, r_c, Kn_m, Kn_m2, n_v, sat, nu, dmdt1, dmdt2)
+  subroutine calc_cond(r_c, Kn, Kn_m, Kn_m2, n_v, sat, nu, dmdt1, dmdt2)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_c, Kn_m, Kn_m2, n_v, sat, nu
+    real(dp), intent(in) :: r_c, Kn, Kn_m, Kn_m2, n_v, sat, nu
 
     real(dp), intent(out) :: dmdt1, dmdt2
 
@@ -379,8 +371,8 @@ module mini_cloud_3_gamma_mod
     dmdt_high2 = c_facg1 * nu2th * exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1)
 
     !! Critical Knudsen number
-    Kn_crit_m = (mfp*dmdt_high1)/(dmdt_low1*r_c)
-    Kn_crit_m2 = (mfp*dmdt_high2)/(dmdt_low2*r_c)
+    Kn_crit_m = Kn*(dmdt_high1/dmdt_low1)
+    Kn_crit_m2 = Kn*(dmdt_high2/dmdt_low2)
 
     !! Kn' (Woitke & Helling 2003)
     Knd_m = Kn_m/Kn_crit_m
@@ -397,11 +389,9 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_cond
 
   !! Classical nucleation theory (CNT)
-  subroutine calc_hom_nuc(n_eq, y, sat, n_v, J_hom)
+  subroutine calc_hom_nuc(sat, n_v, J_hom)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y 
     real(dp), intent(in) :: sat, n_v
 
     real(dp), intent(out) :: J_hom
@@ -444,6 +434,10 @@ module mini_cloud_3_gamma_mod
       !! Finally calculate J_star [cm-3 s-1] ! Note underfloat limiter here
       J_hom = n_v * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
 
+      if (J_hom < 1e-10_dp) then
+        J_hom = 0.0_dp
+      end if
+      
     else 
       !! Unsaturated, zero nucleation
       J_hom = 0.0_dp
@@ -452,11 +446,10 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_hom_nuc
 
   !! Seed particle evaporation
-  subroutine calc_seed_evap(n_eq, y, m_c, f_cond, J_evap)
+  subroutine calc_seed_evap(N_c, m_c, f_cond, J_evap)
     implicit none
 
-    integer, intent(in) :: n_eq
-    real(dp), dimension(n_eq), intent(in) :: y
+    real(dp), intent(in) :: N_c
     real(dp), intent(in) :: m_c, f_cond
 
     real(dp), intent(out) :: J_evap
@@ -475,7 +468,7 @@ module mini_cloud_3_gamma_mod
       if (m_c <= (1.001_dp * m_seed)) then
         tau_evap = 0.1_dp !m_c/abs(f_cond)
         !! Seed particle evaporation rate [cm-3 s-1]
-        J_evap = -y(1)/tau_evap
+        J_evap = -N_c/tau_evap
       else
         !! There is still some mantle to evaporate from
         J_evap = 0.0_dp

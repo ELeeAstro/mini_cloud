@@ -36,7 +36,7 @@ contains
     implicit none
 
     integer, intent(in) :: n_dust, n_wl
-    character(len=11), dimension(n_dust), intent(in) :: sp
+    character(len=20), dimension(n_dust), intent(in) :: sp
     real(dp), intent(in) :: T_in, mu_in, P_in
     real(dp), intent(in) :: q_0, q_1, rho_d
     real(dp), dimension(n_wl), intent(in) :: wl
@@ -201,7 +201,7 @@ contains
 
     integer, intent(in) :: n_dust, n_wl
     real(dp), dimension(n_wl), intent(in) :: wl
-    character(len=11), dimension(n_dust), intent(in) :: sp
+    character(len=20), dimension(n_dust), intent(in) :: sp
 
     integer :: n
 

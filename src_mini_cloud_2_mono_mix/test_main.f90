@@ -46,7 +46,7 @@ program test_mini_cloud_2
   t_step = 500.0_dp
 
   !! Number of iterations
-  n_it = 10000!2000000
+  n_it = 10000!10000!2000000
 
   !! Start time
   time = 6840.0_dp
@@ -144,6 +144,12 @@ program test_mini_cloud_2
       !! Assume constant gravity [m s-2]
       grav = (10.0_dp**(3.25_dp))/100.0_dp
 
+      !! Number density [cm-3] of layer
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
+
+      !! Mass density of layer
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
+
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
       sp_bg = (/'H2','He'/)
@@ -181,7 +187,7 @@ program test_mini_cloud_2
       do n = 1, n_it
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
-        do i = 1, nlay
+        do i = 1, nlay-1
 
           !! Call mini-cloud and perform integrations for a single layer
           call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, & 
@@ -207,13 +213,6 @@ program test_mini_cloud_2
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
         q_1(:,:) = q(:,nsp+2:nsp+2+nsp-1)
-
-        !! Number density [cm-3] of layer
-        nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
-
-        !! Mass density of layer
-        rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
-
 
         do i = 1, nlay
           rho_c_tot = sum(q_1(i,:))*rho(i)
@@ -287,7 +286,7 @@ program test_mini_cloud_2
       allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay))
 
       !! Find pressure level grid (pa) - logspaced between p_top and p_bot
-      p_top = 1e-2_dp * 1e5_dp
+      p_top = 1e-3_dp * 1e5_dp
       p_bot = 1000.0_dp * 1e5_dp
 
       p_top = log10(p_top)
@@ -308,13 +307,19 @@ program test_mini_cloud_2
       grav = (10.0_dp**(4.5_dp))/100.0_dp
 
       !! Find T-p profile - assume semi-grey atmosphere and use Eddington approximation
-      T_eff = 1300.0_dp ! [K]
+      T_eff = 1500.0_dp!1300.0_dp ! [K]
       k_ir = 1e-2_dp ! [cm^2 g-1]
       do i = 1, nlay
         tau = (k_ir * (pl(i) * 10.0_dp))/(grav*100.0_dp)
         Tl(i) = 3.0_dp/4.0_dp * T_eff**4 * (2.0_dp/3.0_dp + tau)
         Tl(i) = Tl(i)**(1.0_dp/4.0_dp)
       end do 
+
+      !! Number density [cm-3] of layer
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
+
+      !! Mass density of layer
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
 
       !! Assume constant Kzz [cm2 s-1]
       Kzz(:) = 1e8_dp
@@ -333,10 +338,10 @@ program test_mini_cloud_2
 
       !! Assumed condensate species
       allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp), mol_w_v(nsp))
-      sp = (/'TiO2   ', 'Mg2SiO4', 'Fe     ', 'Al2O3  '/)
-      rho_d = (/4.23_dp, 3.21_dp, 7.874_dp, 3.986_dp/)
-      mol_w_sp = (/79.8658_dp, 140.693_dp, 55.8450_dp, 101.961_dp/)
-      mol_w_v = (/79.8658_dp, 24.305_dp, 55.8450_dp, 26.98153860_dp/)
+      sp = (/'TiO2   ', 'Al2O3  ', 'Fe     ', 'Mg2SiO4'/)
+      rho_d = (/4.23_dp, 3.986_dp, 7.874_dp, 3.21_dp/)
+      mol_w_sp = (/79.8658_dp, 101.961_dp, 55.8450_dp, 140.693_dp/)
+      mol_w_v = (/79.8658_dp, 26.98153860_dp, 55.8450_dp, 24.305_dp/)
 
       !! Seed particle mass (assume rho_d at first index)
       m_seed = V_seed * rho_d(1)
@@ -345,23 +350,19 @@ program test_mini_cloud_2
       allocate(r_c(nlay), m_c(nlay), vf(nlay), r_c_old(nlay), del(nlay))
 
       !! Set everything to zero first
-      q_v(:,:) = 1e-30_dp
-      q_0(:) = 1e-30_dp
-      q_1(:,:) = 1e-30_dp
+      do j = 1, nsp
+        q_v(:,j) = 1e-30_dp
+        q_0(:) = 1e-30_dp
+        q_1(:,j) = 1e-30_dp
+      end do
 
       !! Lower mass mixing ratio boundary conditions for vapour + cloud (VMR taken from Asplund et al. 2001)
       !! Assume cloud = zero boundary condition (all evaporated)
       q0(1) = 9.33e-8_dp * mol_w_v(1)/mu(nlay)
-      q0(2) = 3.55e-5_dp * mol_w_v(2)/mu(nlay)
+      q0(2) = 2.69e-6_dp * mol_w_v(2)/mu(nlay)
       q0(3) = 2.88e-5_dp * mol_w_v(3)/mu(nlay)
-      q0(4) = 2.69e-6_dp * mol_w_v(4)/mu(nlay)
+      q0(4) = 3.55e-5_dp * mol_w_v(4)/mu(nlay)
       q0(5:) = 1e-30_dp
-
-      !! Initial vapour ratios at lower atmosphere
-      q_v(nlay,1) = q0(1)
-      q_v(nlay,2) = q0(2)
-      q_v(nlay,3) = q0(3)
-      q_v(nlay,4) = q0(4)      
 
       time = 0.0_dp
       n = 0
@@ -372,17 +373,18 @@ program test_mini_cloud_2
       do n = 1, n_it
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
-        do i = 1, nlay
+        do i = 1, nlay-1
 
           !! Call mini-cloud and perform integrations for a single layer
           call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, & 
             & nsp, q_v(i,:), q_0(i), q_1(i,:))
 
+
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
             &  nsp, q_0(i), q_1(i,:), vf(i))
 
-          !! Calculate the opacity at the wavelength grid
+            !! Calculate the opacity at the wavelength grid
           !call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
         !$omp end parallel do
@@ -390,7 +392,7 @@ program test_mini_cloud_2
         !! Combine everything q into a single 2D array for advection and diffusion
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
-        q(:,nsp+2:nsp+2+nsp-1) = q_1(:,:)
+        q(:,nsp+2:) = q_1(:,:)
 
         call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:), q0(nsp+1:))
 
@@ -399,13 +401,7 @@ program test_mini_cloud_2
         !! Return values to individual arrays
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
-        q_1(:,:) = q(:,nsp+2:nsp+2+nsp-1)
-
-        !! Number density [cm-3] of layer
-        nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
-
-        !! Mass density of layer
-        rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
+        q_1(:,:) = q(:,nsp+2:)
 
         do i = 1, nlay
           !! Total condensed mass

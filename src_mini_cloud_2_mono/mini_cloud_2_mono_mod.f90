@@ -31,14 +31,15 @@ module mini_cloud_2_mono_mod
   real(dp) :: rho_d, mol_w_sp
   real(dp) :: r0, V0, m0, d0 ! Unit mass and volume
   real(dp), parameter :: r_seed = 1e-7_dp
-  real(dp) :: V_seed, m_seed
-  real(dp) :: Kn_crit
-  real(dp) :: alp = 1.0_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+  real(dp) ::  m_seed
+  real(dp), parameter :: alp = 1.0_dp
 
   real(dp) :: mfp, eta, nu, cT
 
-  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, Rd_v, p_vap, vth, sig, D)
-  !$omp threadprivate(rho_d, mol_w_sp, r0, V0, m0, d0, V_seed, m_seed, Kn_crit)
+  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, Rd_v)
+  !$omp threadprivate(p_vap, vth, sig, D)
+  !$omp threadprivate(r0, V0, m0, d0, m_seed)
   !$omp threadprivate(mfp, eta, nu, cT)
 
   !! Diameter, LJ potential and molecular weight for background gases
@@ -145,7 +146,6 @@ module mini_cloud_2_mono_mod
     m0 = mol_w_sp * amu
     V0 = m0 / rho_d
     r0 = ((3.0_dp*V0)/(4.0_dp*pi))**(third)
-    V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
     m_seed = V_seed * rho_d
     d0 = 2.0_dp * r0
 
@@ -160,9 +160,6 @@ module mini_cloud_2_mono_mod
 
     !! Surface tension of material
     sig = surface_tension(sp, T)
-
-    !! Critical Knudsen number
-    Kn_crit = (mfp * alp * vth)/D
 
     ! -----------------------------------------
     ! ***  parameters for the DLSODE solver  ***
@@ -181,7 +178,7 @@ module mini_cloud_2_mono_mod
     allocate(rwork(rworkdim), iwork(iworkdim))
 
     itol = 1
-    rtol = 1.0e-2_dp           ! Relative tolerances for each scalar
+    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
     atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
@@ -334,7 +331,7 @@ module mini_cloud_2_mono_mod
 
     real(dp), intent(out) :: dmdt
 
-    real(dp) :: dmdt_low, dmdt_high, Knd, fx
+    real(dp) :: dmdt_low, dmdt_high, Knd, fx, Kn_crit
 
     !! Free molecular flow regime (Kn >> 1) [g s-1]
     dmdt_high = 4.0_dp * pi * r_c**2 * vth * m0 * n_v * alp * (1.0_dp - 1.0_dp/sat)
@@ -342,6 +339,9 @@ module mini_cloud_2_mono_mod
     !! Diffusive limited regime (Kn << 1) [g s-1]
     dmdt_low = 4.0_dp * pi * r_c * D * m0 * n_v * (1.0_dp - 1.0_dp/sat)
 
+    !! Critical Knudsen number
+    Kn_crit = Kn * (dmdt_high/dmdt_low)
+    
     !! Kn' (Woitke & Helling 2003)
     Knd = Kn/Kn_crit
 

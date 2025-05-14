@@ -14,11 +14,13 @@ program test_mini_cloud_2
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
   real(dp), parameter :: R = 8.31446261815324e7_dp
   real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
+
 
   integer :: example, n_it
   real(dp) :: t_step, time
 
-  integer :: nlay, nlev, i, n, u, k
+  integer :: nlay, nlev, i, n, u
   character(len=20) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho
@@ -32,12 +34,8 @@ program test_mini_cloud_2
 
   integer :: nlines, io, idx, idx1
   real(dp) :: p_bot, p_top
-  real(dp), allocatable, dimension(:) :: T_f, p_f, Kzz_f
-  real(dp) :: V_seed, m_seed
-
-  integer :: nm
-  real(dp), allocatable, dimension(:) :: alte, q_a
-  real(dp) :: t0
+  real(dp), allocatable, dimension(:) :: T_f, p_f
+  real(dp) :: m_seed
 
   logical :: end
 
@@ -103,7 +101,6 @@ program test_mini_cloud_2
       !! Change vapur VMR to mass density ratio
       q_v(1) = q_v(1) * mol_w_sp/mu(1)
 
-      V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
       m_seed = V_seed * rho_d
 
       do n = 1, n_it
@@ -233,6 +230,12 @@ program test_mini_cloud_2
       !! Assume constant gravity [m s-2]
       grav = (10.0_dp**(3.25_dp))/100.0_dp
 
+      !! Number density [cm-3] of layer
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
+
+      !! Mass density of layer
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
+
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
       sp_bg = (/'H2','He'/)
@@ -255,7 +258,7 @@ program test_mini_cloud_2
       q0(2) = 1e-30_dp
       q0(3) = 1e-30_dp
 
-      q_v(nlay) = q0(1)
+      m_seed = V_seed * rho_d
 
       time = 0.0_dp
       n = 0
@@ -290,12 +293,6 @@ program test_mini_cloud_2
         q_0(:) = q(:,2)
         q_1(:) = q(:,3)
 
-        !! Number density [cm-3] of layer
-        nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
-
-        !! Mass density of layer
-        rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
-
         !! Mean mass of particle [g]
         m_c(:) = max((q_1(:)*rho)/(q_0(:)*nd_atm),m_seed)
 
@@ -308,7 +305,7 @@ program test_mini_cloud_2
           del(i) = abs(r_c_old(i) - r_c(i))/r_c_old(i)
           if ((del(i) > 1e-4_dp) .or.  (del(i)/t_step > 1e-4_dp)) then
             end = .False.
-            !exit
+            exit
           end if
         end do
         r_c_old(:) = r_c(:)
@@ -316,11 +313,11 @@ program test_mini_cloud_2
         !! increment time
         time = time + t_step
 
-        print*, n, time, maxval(del(:))
+        print*, n, time, maxval(del(:)/t_step)
 
         if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
-          !exit
+          exit
         end if
 
       end do

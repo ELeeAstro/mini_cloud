@@ -39,6 +39,8 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: m_seed, Kn_crit, alp_c
     real(dp) :: r0, V0, m0, d0, r_seed, nu_key, mol_w_v, m_v
 
+    real(dp) :: v2c
+
     integer :: inuc
     real(dp) :: sat, Nf, alp_nuc
 
@@ -173,7 +175,7 @@ module mini_cloud_2_mono_mix_mod
     allocate(rwork(rworkdim), iwork(iworkdim))
 
     itol = 1
-    rtol = 1.0e-2_dp           ! Relative tolerances for each scalar
+    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
     atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
 
     rwork(:) = 0.0_dp
@@ -194,7 +196,7 @@ module mini_cloud_2_mono_mix_mod
     !! Give tracer values to y
     y(1) = q_0
     y(2:2+ndust-1) = q_1(:)
-    y(2+ndust:2+ndust+ndust-1) = q_v 
+    y(2+ndust:) = q_v(:)
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
@@ -214,11 +216,11 @@ module mini_cloud_2_mono_mix_mod
 
       ncall = ncall + 1
 
-      if (mod(ncall,10) == 0) then
-        istate = 1
-      else  if (istate == -1) then
-        istate = 2
-      else if (istate < -1) then
+      !if (mod(ncall,10) == 0) then
+        !istate = 1
+      !else  if (istate == -1) then
+        !istate = 2
+      if (istate < 0) then
         print*, 'dlsode: ', istate, ilay, t_now
         exit
       end if
@@ -231,7 +233,7 @@ module mini_cloud_2_mono_mix_mod
     !! Give y values to tracers
     q_0 = y(1)
     q_1(:) = y(2:2+ndust-1)
-    q_v(:) = y(2+ndust:2+ndust+ndust-1)
+    q_v(:) = y(2+ndust:)
 
     deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, cld)
 
@@ -265,7 +267,7 @@ module mini_cloud_2_mono_mix_mod
     !! Convert y to real physical numbers to calculate f
     N_c = y(1)*nd_atm ! Convert to real number density
     rho_c(:) = y(2:2+ndust-1)*rho   ! Convert to real mass density
-    rho_v(:) = y(2+ndust:2+ndust+ndust-1)*rho   ! Convert to real mass density
+    rho_v(:) = y(2+ndust:)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
     p_v(:) = rho_v(:) * cld(:)%Rd_v * T     !! Pressure of vapour
@@ -330,11 +332,33 @@ module mini_cloud_2_mono_mix_mod
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag + f_coal)*N_c**2
     f(2:2+ndust-1) = cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) + f_cond(:)*N_c
-    f(2+ndust:2+ndust+ndust-1) = -f(2:2+ndust-1)
+    f(2+ndust:) = -cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) - cld(:)%v2c*f_cond(:)*N_c
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm
     f(2:) = f(2:)/rho
+
+    ! Check if condensation from vapour is viable
+    do j = 1, ndust
+      if (rho_v(j)/rho <= 1e-28_dp) then
+        if (f(2+j-1) > 0.0_dp) then
+          f(2+j-1) = 0.0_dp
+          f(2+ndust+j-1) = 0.0_dp
+         !print*, j,'in'
+        end if
+      end if
+    end do
+
+    ! Check if evaporation from condensate is viable
+    do j = 1, ndust
+      if (rho_c(j)/rho <= 1e-28_dp) then
+        if (f(2+ndust+j-1) > 0.0_dp) then
+          f(2+j-1) = 0.0_dp
+          f(2+ndust+j-1) = 0.0_dp
+         !print*, j,'in'
+        end if
+      end if
+    end do
 
   end subroutine RHS_mom
 
@@ -355,11 +379,11 @@ module mini_cloud_2_mono_mix_mod
 
       !! Diffusive limited regime (Kn << 1) [g s-1]
       dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) &
-        & *  (1.0_dp - 1.0_dp/cld(j)%sat) / cld(j)%nu_key
+        & *  (1.0_dp - 1.0_dp/cld(j)%sat)
 
       !! Free molecular flow regime (Kn >> 1) [g s-1]
       dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp_c & 
-        & * (1.0_dp - 1.0_dp/cld(j)%sat) / cld(j)%nu_key
+        & * (1.0_dp - 1.0_dp/cld(j)%sat)
 
       !! If evaporation, weight rate by current condensed volume ratio (Woitke et al. 2020)
       if (cld(j)%sat < 1.0_dp) then
@@ -367,7 +391,8 @@ module mini_cloud_2_mono_mix_mod
         dmdt_low = dmdt_low * V_mix(j) 
       end if
 
-      Kn_crit = (mfp*dmdt_high)/(dmdt_low*r_c)
+      !! Critical Knudsen number
+      Kn_crit = Kn * (dmdt_high/dmdt_low)
 
       !! Kn' (Woitke & Helling 2003)
       Knd = Kn/Kn_crit
@@ -550,6 +575,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp), intent(in) :: T
 
     real(dp) :: TC
+    real(dp) :: met = 0.0_dp
 
     ! Return vapour pressure in dyne
     select case(sp)
@@ -574,15 +600,19 @@ module mini_cloud_2_mono_mix_mod
       p_vap_sp = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
         & + 5.72078e-7_dp*T**2 - 7.41840e-11_dp*T**3)
     case('Al2O3')
+      ! Wakeford et al. (2017) - taken from CARMA
+      p_vap_sp = 10.0_dp**(17.7_dp - 45892.6_dp/T - 1.66_dp*met) * bar
       ! Kozasa et al. (1987)
-      p_vap_sp = exp(-73503.0_dp/T + 22.005_dp) * atm
+      !p_vap_sp = exp(-73503.0_dp/T + 22.005_dp) * atm
     case('Fe')
+      ! Visscher et al. (2010) - taken from CARMA
+      p_vap_sp = 10.0_dp**(7.23_dp - 20995.0_dp/T) * bar
       ! Elspeth note: Changed to Ackerman & Marley et al. (2001) expression
-      if (T > 1800.0_dp) then
-        p_vap_sp = exp(9.86_dp - 37120.0_dp/T) * bar
-      else
-        p_vap_sp = exp(15.71_dp - 47664.0_dp/T) * bar
-      end if
+      ! if (T > 1800.0_dp) then
+      !   p_vap_sp = exp(9.86_dp - 37120.0_dp/T) * bar
+      ! else
+      !   p_vap_sp = exp(15.71_dp - 47664.0_dp/T) * bar
+      ! end if
     case('FeS')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-5.69922e4_dp/T + 3.86753e1_dp - 4.68301e-3_dp*T &
@@ -592,8 +622,10 @@ module mini_cloud_2_mono_mix_mod
       p_vap_sp = exp(-6.30018e4_dp/T + 3.66364e1_dp - 2.42990e-3_dp*T &
         & + 3.18636e-7_dp*T**2)
     case('Mg2SiO4')
-      ! Kozasa et al. (1989)
-      p_vap_sp = exp(-62279.0_dp/T + 20.944_dp) * atm
+      ! Visscher et al. (2010)/Visscher notes - taken from CARMA
+      p_vap_sp = 10.0_dp**(14.88_dp - 32488.0_dp/T - 1.4_dp*met - 0.2_dp*log10(1e-6_dp*p)) * bar
+      ! Kozasa et al. (1989) - Seems to be too high
+      !p_vap_sp = p*10.0**(8.25_dp -  27250.0_dp/T - log10(p/1e6_dp) + 3.58_dp)
     case('MgSiO3','MgSiO3_amorph')
       ! Ackerman & Marley (2001)
       p_vap_sp = exp(-58663.0_dp/T + 25.37_dp) * bar
@@ -797,7 +829,7 @@ module mini_cloud_2_mono_mix_mod
       stop
     end select
 
-    surface_tension = max(1.0_dp, sig)
+    surface_tension = max(10.0_dp, sig)
 
       ! Pradhan et al. (2009):
       !Si : 732 - 0.086*(T - 1685.0)
@@ -948,8 +980,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%alp_nuc = 1.0_dp
 
         ! Key reaction: C -> C[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('TiC')
 
@@ -959,8 +991,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: Ti + C -> TiC[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 47.8670_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('SiC')
 
@@ -970,8 +1002,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: SiO + C -> SiC[s] + O
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 44.08490_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('CaTiO3')
 
@@ -981,8 +1013,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: Ca + TiO + 2 H2O -> CaTiO3[s] + 2 H2
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 40.0780_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('Al2O3')
 
@@ -992,8 +1024,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: 2 Al + 3 H2O -> Al2O3[s] + 3 H2
-        cld(j)%nu_key = 2.0_dp
         cld(j)%mol_w_v = 26.98153860_dp
+        cld(j)%v2c = 2.0_dp*cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('TiO2')
 
@@ -1005,8 +1037,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%alp_nuc = 1.0_dp
 
         ! Key reaction: TiO2 -> TiO2[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('VO')
 
@@ -1016,8 +1048,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
          
         ! Key reaction: VO -> VO[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('Fe')
 
@@ -1027,8 +1059,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: Fe -> Fe[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('FeO')
 
@@ -1038,8 +1070,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: Fe + H2O -> FeO[s] + H2
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 55.845_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('Mg2SiO4')
 
@@ -1049,8 +1081,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: 2 Mg + SiO + 3 H2O -> Mg2SiO4[s] + 3 H2
-        cld(j)%nu_key = 2.0_dp
         cld(j)%mol_w_v = 24.305_dp
+        cld(j)%v2c = 2.0_dp*cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('MgSiO3')
 
@@ -1062,6 +1094,7 @@ module mini_cloud_2_mono_mix_mod
         ! Key reaction: Mg + SiO + 2 H2O -> MgSiO3[s] + H2
         cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 24.305_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('SiO2')
 
@@ -1071,8 +1104,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: SiO + H2O -> SiO2[s] + H2O
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 44.085_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('SiO')
 
@@ -1084,8 +1117,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%alp_nuc = 1.0_dp
 
         ! Key reaction: SiO -> SiO[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('Cr')
 
@@ -1095,8 +1128,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: Cr -> Cr[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('MnS')
 
@@ -1106,8 +1139,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: Mn + H2S -> MnS[s] + H2
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 54.938045_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('Na2S')
 
@@ -1117,8 +1150,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: 2 Na + H2S -> Na2S[s] + H2
-        cld(j)%nu_key = 2.0_dp
         cld(j)%mol_w_v = 22.98976928_dp
+        cld(j)%v2c = 2.0_dp*cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('ZnS')
 
@@ -1128,8 +1161,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: Zn + H2S -> ZnS[s] + H2
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v =  65.38_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('KCl')
 
@@ -1141,8 +1174,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%alp_nuc = 1.0_dp
 
         ! Key reaction: KCl -> KCl[s]
-        cld(j)%nu_key = 1.0_dp 
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('NaCl')
 
@@ -1154,8 +1187,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%alp_nuc = 1.0_dp
 
         ! Key reaction: NaCl -> NaCl[s]
-        cld(j)%nu_key = 1.0_dp 
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('NH4Cl')
 
@@ -1165,8 +1198,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: NH3 + HCl -> NH4C[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 36.4609_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('H2O')
 
@@ -1176,8 +1209,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: H2O -> H2O[l/s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('NH3')
 
@@ -1187,8 +1220,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: NH3 -> NH3[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('CH4')
 
@@ -1198,8 +1231,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: CH4 -> CH4[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case ('NH4SH')
 
@@ -1209,8 +1242,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: NH3 + H2S -> NH4SH[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 34.08_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('H2S')
 
@@ -1220,8 +1253,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: H2S -> H2S[s]
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case default
         print*, 'Cloud species not found: ',   trim(cld(j)%sp)
@@ -1233,7 +1266,11 @@ module mini_cloud_2_mono_mix_mod
       cld(j)%m0 = cld(j)%mol_w_sp * amu
       cld(j)%V0 = cld(j)%m0 / cld(j)%rho_d
       cld(j)%r0 = ((3.0_dp*cld(j)%V0)/(4.0_dp*pi))**(third)
-      cld(j)%m_seed = V_seed * cld(j)%rho_d
+      if (cld(j)%inuc == 0) then
+        cld(j)%m_seed = 0.0_dp
+      else
+        cld(j)%m_seed = V_seed * cld(j)%rho_d
+      end if
       cld(j)%d0 = 2.0_dp * cld(j)%r0
 
       !! Find the constant values for the cloud species

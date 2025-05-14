@@ -315,7 +315,7 @@ module mini_cloud_3_lognormal_mod
     sat = p_v/p_vap
 
     !! Calculate condensation rate
-    call calc_cond(n_eq, y, r_med, Kn_m, Kn_m2, n_v, sat, lnsig2, f_cond1, f_cond2)
+    call calc_cond(n_eq, y, r_med, Kn, Kn_m, Kn_m2, n_v, sat, lnsig2, f_cond1, f_cond2)
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(n_eq, y, sat, n_v, f_nuc_hom)
@@ -350,12 +350,12 @@ module mini_cloud_3_lognormal_mod
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(n_eq, y, r_med, Kn_m, Kn_m2, n_v, sat, lnsig2, dmdt1, dmdt2)
+  subroutine calc_cond(n_eq, y, r_med, Kn, Kn_m, Kn_m2, n_v, sat, lnsig2, dmdt1, dmdt2)
     implicit none
 
     integer, intent(in) :: n_eq
     real(dp), dimension(n_eq), intent(in) :: y 
-    real(dp), intent(in) :: r_med, Kn_m, Kn_m2, n_v, sat, lnsig2
+    real(dp), intent(in) :: r_med, Kn, Kn_m, Kn_m2, n_v, sat, lnsig2
 
     real(dp), intent(out) :: dmdt1, dmdt2
 
@@ -375,8 +375,8 @@ module mini_cloud_3_lognormal_mod
     dmdt_high2 = c_facg1 * exp(8.0_dp/9.0_dp * lnsig2)
 
     !! Critical Knudsen number
-    Kn_crit_m = (mfp*dmdt_high1)/(dmdt_low1*r_med)
-    Kn_crit_m2 = (mfp*dmdt_high2)/(dmdt_low2*r_med)
+    Kn_crit_m = Kn * (dmdt_high1/dmdt_low1)
+    Kn_crit_m2 = Kn * (dmdt_high2/dmdt_low2)
 
     !! Kn' (Woitke & Helling 2003)
     Knd_m = Kn_m/Kn_crit_m
