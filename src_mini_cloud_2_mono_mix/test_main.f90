@@ -22,7 +22,7 @@ program test_mini_cloud_2
   integer :: nlay, nlev, i, n, u, k
   character(len=20), allocatable, dimension(:) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
-  real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp
+  real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v
   real(dp), allocatable, dimension(:) :: q_0, vf, r_c, m_c, q0, r_c_old, del
   real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1
   real(dp) :: grav
@@ -332,10 +332,11 @@ program test_mini_cloud_2
       VMR(:,2) = 0.15_dp
 
       !! Assumed condensate species
-      allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp))
+      allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp), mol_w_v(nsp))
       sp = (/'TiO2   ', 'Mg2SiO4', 'Fe     ', 'Al2O3  '/)
       rho_d = (/4.23_dp, 3.21_dp, 7.874_dp, 3.986_dp/)
       mol_w_sp = (/79.8658_dp, 140.693_dp, 55.8450_dp, 101.961_dp/)
+      mol_w_v = (/79.8658_dp, 24.305_dp, 55.8450_dp, 26.98153860_dp/)
 
       !! Seed particle mass (assume rho_d at first index)
       m_seed = V_seed * rho_d(1)
@@ -350,10 +351,10 @@ program test_mini_cloud_2
 
       !! Lower mass mixing ratio boundary conditions for vapour + cloud (VMR taken from Asplund et al. 2001)
       !! Assume cloud = zero boundary condition (all evaporated)
-      q0(1) = 9.33e-8_dp * mol_w_sp(1)/mu(nlay)
-      q0(2) = 3.55e-5_dp * mol_w_sp(2)/mu(nlay)
-      q0(3) = 2.88e-5_dp * mol_w_sp(3)/mu(nlay)
-      q0(4) = 2.69e-6_dp * mol_w_sp(4)/mu(nlay)
+      q0(1) = 9.33e-8_dp * mol_w_v(1)/mu(nlay)
+      q0(2) = 3.55e-5_dp * mol_w_v(2)/mu(nlay)
+      q0(3) = 2.88e-5_dp * mol_w_v(3)/mu(nlay)
+      q0(4) = 2.69e-6_dp * mol_w_v(4)/mu(nlay)
       q0(5:) = 1e-30_dp
 
       !! Initial vapour ratios at lower atmosphere

@@ -15,6 +15,7 @@ fname = 'tracers.txt'
 ndust = 4
 rho_d = [4.23, 3.21, 7.874, 3.986]
 mol_w_sp = [79.8658, 140.693, 55.8450, 101.961]
+sp = ['TiO2','Al2O3','Fe','Mg2SiO4']
 
 Rd_v = [R/mol_w_sp[0],R/mol_w_sp[1],R/mol_w_sp[2],R/mol_w_sp[3]]
 
@@ -140,10 +141,10 @@ fig = plt.figure()
 
 col = sns.color_palette('colorblind')
 
-plt.plot(q_v[:,0],pl,c=col[0],label=r'$q_{\rm v}$')
-plt.plot(q_v[:,1],pl,c=col[1])
-plt.plot(q_v[:,2],pl,c=col[2])
-plt.plot(q_v[:,3],pl,c=col[3])
+plt.plot(q_v[:,0],pl,c=col[0],label=sp[0]+r' $q_{\rm v}$')
+plt.plot(q_v[:,1],pl,c=col[1],label=sp[1])
+plt.plot(q_v[:,2],pl,c=col[2],label=sp[2])
+plt.plot(q_v[:,3],pl,c=col[3],label=sp[3])
 
 plt.plot(q_1[:,0],pl,c=col[0],label=r'$q_{1}$',ls='dashed')
 plt.plot(q_1[:,1],pl,c=col[1],ls='dashed')

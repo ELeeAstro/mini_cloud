@@ -1245,7 +1245,7 @@ module mini_cloud_2_mono_mix_mod
       !! Thermal velocity of vapour
       cld(j)%vth = sqrt((kb*T)/(2.0_dp*pi*cld(j)%mol_w_v*amu))
 
-      !! Gaseous diffusion constant of vapour - need to look at d0 here!!
+      !! Gaseous diffusion constant of vapour - d0 estimated here!!
       cld(j)%D = 5.0_dp/(16.0_dp*Avo*cld(j)%d0**2*rho) * &
         & sqrt((R_gas*T*mu)/(2.0_dp*pi) * (cld(j)%mol_w_v + mu)/cld(j)%mol_w_v)
 
