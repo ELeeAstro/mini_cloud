@@ -91,7 +91,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file
@@ -142,7 +142,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(3.25_dp))/100.0_dp
+      grav = (10.0_dp**(4.25_dp))/100.0_dp
 
       !! Number density [cm-3] of layer
       nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
@@ -157,10 +157,11 @@ program test_mini_cloud_2
       VMR(:,2) = 0.15_dp
 
       !! Assumed condensate species
-      allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp))
+      allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp), mol_w_v(nsp))
       sp = (/'KCl', 'ZnS'/)
       rho_d = (/1.99_dp, 3.9_dp/)
       mol_w_sp = (/74.5513_dp, 97.4450_dp/)
+      mol_w_v = (/74.5513_dp, 97.4450_dp/)
 
       m_seed = V_seed * rho_d(1)
 
@@ -171,23 +172,20 @@ program test_mini_cloud_2
       q_0(:) = 1e-30_dp
       q_1(:,:) = 1e-30_dp
 
-      q0(1) = 1.17e-7_dp * mol_w_sp(1)/mu(nlay)
-      q0(2)  = 3.63e-8_dp * mol_w_sp(2)/mu(nlay)
+      q0(1) = 1.17e-7_dp * mol_w_v(1)/mu(nlay)
+      q0(2) = 3.63e-8_dp * mol_w_v(2)/mu(nlay)
       q0(3:) = 1e-30_dp
-
-      q_v(nlay,1) = q0(1)
-      q_v(nlay,2) = q0(2)
 
       time = 0.0_dp
       n = 0
 
-      r_c_old(:) = r_seed * 1e-4_dp
+      r_c_old(:) = r_seed * 1e4_dp
 
    
       do n = 1, n_it
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
-        do i = 1, nlay-1
+        do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
           call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, VMR(i,:), t_step, sp, sp_bg, & 
@@ -204,7 +202,7 @@ program test_mini_cloud_2
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
-        q(:,nsp+2:nsp+2+nsp-1) = q_1(:,:)
+        q(:,nsp+2:) = q_1(:,:)
 
         call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:), q0(nsp+1:))
 
@@ -212,7 +210,7 @@ program test_mini_cloud_2
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
-        q_1(:,:) = q(:,nsp+2:nsp+2+nsp-1)
+        q_1(:,:) = q(:,nsp+2:)
 
         do i = 1, nlay
           rho_c_tot = sum(q_1(i,:))*rho(i)
@@ -246,10 +244,13 @@ program test_mini_cloud_2
         end do
         r_c_old(:) = r_c(:)
 
+        !! increment time
+        time = time + t_step
+
+        print*, n, time, maxval(del(:)/t_step)
+
         if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
-          print*, del(:)
-          print*, del(:)/t_step
           exit
         end if
 
@@ -370,7 +371,7 @@ program test_mini_cloud_2
       time = 0.0_dp
       n = 0
 
-      r_c_old(:) = r_seed * 1e-4_dp
+      r_c_old(:) = r_seed * 1e4_dp
 
 
       do n = 1, n_it

@@ -1,12 +1,12 @@
 import numpy as np
 import matplotlib.pylab as plt
 import seaborn as sns
+
 R = 8.31446261815324e7
 bar = 1e6
 kb = 1.380649e-16
 amu = 1.66053906660e-24
 r_seed = 1e-7
-rho_d = 1.99
 
 fname = 'tracers.txt'
 
@@ -63,6 +63,38 @@ q_s[:,0] = q_s[:,0]/rho[:]
 q_s[:,1] = np.exp(-4.75507888e4/Tl[:] + 3.66993865e1 - 2.49490016e-3*Tl[:] + 7.29116854e-7*Tl[:]**2 - 1.12734453e-10*Tl[:]**3)/(Rd_v[1] * Tl[:])
 q_s[:,1] = q_s[:,1]/rho[:]
 
+V_mix = np.zeros((nlay,ndust))
+for j in range(nlay):
+    V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
+
+m_mix = np.zeros((nlay,ndust))
+for j in range(nlay):
+    m_mix[j,:] = rho_c[j,:]/sum(rho_c[j,:])
+
+fig = plt.figure()
+
+col = sns.color_palette('colorblind')
+
+for j in range(ndust):
+  plt.plot(m_mix[:,j],pl,c=col[j])
+
+plt.yscale('log')
+plt.xscale('log')
+
+plt.gca().invert_yaxis()
+
+fig = plt.figure()
+
+col = sns.color_palette('colorblind')
+
+for j in range(ndust):
+  plt.plot(V_mix[:,j],pl,c=col[j])
+
+plt.yscale('log')
+plt.xscale('log')
+
+plt.gca().invert_yaxis()
+
 fig = plt.figure()
 
 col = sns.color_palette('colorblind')
@@ -102,11 +134,14 @@ col = sns.color_palette('colorblind')
 
 plt.plot(q_v[:,0],pl,c=col[0],label=r'q_{\rm v}')
 plt.plot(q_v[:,1],pl,c=col[1],label=r'q_{\rm v}')
-plt.plot(q_0,pl,c=col[3],label=r'q_{0}')
+
 plt.plot(q_1[:,0],pl,c=col[0],label=r'q_{1}',ls='dashed')
 plt.plot(q_1[:,1],pl,c=col[1],label=r'q_{1}',ls='dashed')
+
 plt.plot(q_s[:,0],pl,c=col[0],label=r'q_{s}',ls='dotted')
 plt.plot(q_s[:,1],pl,c=col[1],label=r'q_{s}',ls='dotted')
+
+plt.plot(q_0,pl,c=col[4],label=r'$q_{0}$',ls='dashdot')
 
 plt.yscale('log')
 plt.xscale('log')
