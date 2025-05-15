@@ -639,7 +639,7 @@ module mini_cloud_2_mono_mix_mod
       ! Kozasa et al. (1989) - Seems to be too high
       !p_vap_sp = p*10.0**(8.25_dp -  27250.0_dp/T - log10(p/1e6_dp) + 3.58_dp)
     case('MgSiO3','MgSiO3_amorph')
-      ! Vissher - taken from VIRGA
+      ! Visscher - taken from VIRGA
       p_vap_sp = 10.0_dp**(13.43_dp - 28665.0_dp/T - met) * bar
       ! Ackerman & Marley (2001)
       !p_vap_sp = exp(-58663.0_dp/T + 25.37_dp) * bar
@@ -650,7 +650,7 @@ module mini_cloud_2_mono_mix_mod
     case('SiO2','SiO2_amorph')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-7.28086e4_dp/T + 3.65312e1_dp - 2.56109e-4_dp*T &
-      & - 5.24980e-7_dp*T**2 + 1.53343E-10_dp*T**3) 
+        & - 5.24980e-7_dp*T**2 + 1.53343E-10_dp*T**3) 
     case('SiO')
       ! Gail et al. (2013)
       p_vap_sp = exp(-49520.0_dp/T + 32.52_dp)
@@ -680,60 +680,6 @@ module mini_cloud_2_mono_mix_mod
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e3_dp*T & 
         & + 5.30965e-7_dp*T**2 -2.59584e-12_dp*T**3)
-    case('NH4Cl')
-      p_vap_sp = 10.0_dp**(7.0220_dp - 4302.0_dp/T) * bar
-    case('H2O')
-      TC = T - 273.15_dp
-      ! Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
-      if (TC < 0.0_dp) then
-        ! f = 0.99882_dp * exp(0.00000008_dp * p/pa)
-        p_vap_sp = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa
-      else
-        ! f = 1.00071_dp * exp(0.000000045_dp * p/pa
-        p_vap_sp = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa
-      end if
-      ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
-      !if (T > 1048.0_dp) then
-      !  p_vap_sp = 6.0e8_dp
-      !else if (T < 273.16_dp) then
-      !  p_vap_sp = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
-      !else
-      !  p_vap_sp = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
-      !end if
-    case('NH3')
-      ! Ackerman & Marley (2001) NH3 ice vapour pressure expression from Weast (1971)
-      p_vap_sp = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
-    case('CH4')
-      ! Lodders & Fegley (1998) - directly taken from VIRGA
-      if (T < 90.68_dp) then
-        C = -16.043_dp/8.3143_dp * (2.213_dp - 2.650_dp)
-        B = -16.043_dp/8.3143_dp * (611.10_dp + (2.213_dp - 2.650_dp) * 90.68_dp )
-        A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
-      else
-        C = -16.043_dp/8.3143_dp * (2.213_dp - 3.370_dp)
-        B = -16.043_dp/8.3143_dp * (552.36_dp + (2.213_dp - 3.370_dp) * 90.68_dp)
-        A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
-      end if
-      p_vap_sp = A * T**C * exp(B/T) * bar
-
-      !--- Prydz, R.; Goodwin, R.D., J. Chem. Thermodyn., 1972, 4,1 ---
-      !if (T < 0.5_dp) then ! Limiter for very very very cold T
-      !  p_vap_sp = 10.0_dp**(3.9895_dp - 443.028_dp/(0.5_dp-0.49_dp)) * bar       
-      !else
-      !  p_vap_sp = 10.0_dp**(3.9895_dp - 443.028_dp/(T-0.49_dp)) * bar
-      !end if
-    case('NH4SH')
-      !--- E.Lee's fit to Walker & Lumsden (1897) ---
-      p_vap_sp = 10.0_dp**(7.8974_dp - 2409.4_dp/T) * bar
-    case('H2S')
-      !--- Stull (1947) ---
-      if (T < 30.0_dp) then ! Limiter for very cold T
-        p_vap_sp = 10.0_dp**(4.43681_dp - 829.439_dp/(30.0_dp-25.412_dp)) * bar
-      else if (T < 212.8_dp) then
-        p_vap_sp = 10.0_dp**(4.43681_dp - 829.439_dp/(T-25.412_dp)) * bar
-      else
-        p_vap_sp = 10.0_dp**(4.52887_dp - 958.587_dp/(T-0.539_dp)) * bar
-      end if
     case('S2')
       !--- Zahnle et al. (2016) ---
       if (T < 413.0_dp) then
@@ -747,18 +693,80 @@ module mini_cloud_2_mono_mix_mod
         p_vap_sp = exp(20.0_dp - 11800.0_dp/T) * bar
       else
         p_vap_sp = exp(9.6_dp - 7510.0_dp/T) * bar
+      end if        
+    case('NH4Cl')
+      ! Unknown - I think I fit this?
+      p_vap_sp = 10.0_dp**(7.0220_dp - 4302.0_dp/T) * bar
+    case('H2O')
+      TC = T - 273.15_dp
+      ! Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
+      if (TC < 0.0_dp) then
+        f = 0.99882_dp * exp(0.00000008_dp * p/pa)
+        p_vap_sp = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa * f
+      else
+        f = 1.00071_dp * exp(0.000000045_dp * p/pa)
+        p_vap_sp = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa * f
       end if
-    case('CO')
-      ! Yaws
-      p_vap_sp = 10.0_dp**(51.8145e0_dp - 7.8824e2_dp/T - 2.2734e1_dp*log10(T) &
-        & + 5.1225e-2_dp*T + 4.6603e-11_dp*T**2) * mmHg
-    case('CO2')
-      ! Yaws
-      p_vap_sp = 10.0_dp**(35.0187e0_dp - 1.5119e3_dp/T - 1.1335e1_dp*log10(T) &
-        & + 9.3383e-3_dp*T + 7.7626e-10_dp*T**2) * mmHg
+      ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
+      !if (T > 1048.0_dp) then
+      !  p_vap_sp = 6.0e8_dp
+      !else if (T < 273.16_dp) then
+      !  p_vap_sp = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
+      !else
+      !  p_vap_sp = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
+      !end if
+    case('NH3')
+      ! Blakley et al. (2024) - experimental to low T and pressure
+      p_vap_sp = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
+      ! Ackerman & Marley (2001) NH3 ice vapour pressure expression fit from Weast (1971) data
+      !p_vap_sp = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
+    case('CH4')
+      ! Frey & Schmitt (2009)
+      p_vap_sp = exp(1.051e1_dp - 1.110e3_dp/T - 4.341e3_dp/T**2 + 1.035e5_dp/T**3 - 7.910e5_dp/T**4) * bar
+      ! Lodders & Fegley (1998) - directly taken from VIRGA
+      ! if (T < 90.68_dp) then
+      !   C = -16.043_dp/8.3143_dp * (2.213_dp - 2.650_dp)
+      !   B = -16.043_dp/8.3143_dp * (611.10_dp + (2.213_dp - 2.650_dp) * 90.68_dp)
+      !   A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
+      ! else
+      !   C = -16.043_dp/8.3143_dp * (2.213_dp - 3.370_dp)
+      !   B = -16.043_dp/8.3143_dp * (552.36_dp + (2.213_dp - 3.370_dp) * 90.68_dp)
+      !   A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
+      ! end if
+      ! p_vap_sp = A * T**C * exp(B/T) * bar
+
+    case('NH4SH')
+      !--- E.Lee's fit to Walker & Lumsden (1897) ---
+      p_vap_sp = 10.0_dp**(7.8974_dp - 2409.4_dp/T) * bar
+    case('H2S')
+      ! Frey & Schmitt (2009)
+      p_vap_sp = exp(12.98_dp - 2.707e3_dp/T) * bar
     case('H2SO4')
       ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-1.01294e4_dp/T + 3.55465e1_dp - 8.34848e-3_dp*T)
+      p_vap_sp = exp(-1.01294e4_dp/T + 3.55465e1_dp - 8.34848e-3_dp*T)      
+    case('CO')
+      ! Frey & Schmitt (2009)
+      if (T < 61.55_dp) then
+        p_vap_sp = exp(1.043e1_dp - 7.213e2_dp/T - 1.074e4_dp/T**2 + 2.341e5_dp/T**3 - 2.392e6_dp/T**4 + 9.478e6_dp/T**5) * bar
+      else
+        p_vap_sp = exp(1.025e1_dp - 7.482e2_dp/T - 5.843e3_dp/T**2 + 3.939e4_dp/T**3) * bar
+      end if
+      ! Yaws
+      !p_vap_sp = 10.0_dp**(51.8145e0_dp - 7.8824e2_dp/T - 2.2734e1_dp*log10(T) &
+      !  & + 5.1225e-2_dp*T + 4.6603e-11_dp*T**2) * mmHg
+    case('CO2')
+      ! Frey & Schmitt (2009)
+      if (T < 194.7_dp) then
+        p_vap_sp = exp(1.476e1_dp - 2.571e3_dp/T - 7.781e4_dp/T**2 + 4.325e6_dp/T**3 - 1.207e8_dp/T**4 + 1.350e9_dp/T**5) * bar
+      else
+        p_vap_sp = exp(1.861e1_dp - 4.154e3_dp/T + 1.041e5_dp/T**2) * bar
+      end if      
+      ! Yaws
+      !p_vap_sp = 10.0_dp**(35.0187e0_dp - 1.5119e3_dp/T - 1.1335e1_dp*log10(T) &
+      !  & + 9.3383e-3_dp*T + 7.7626e-10_dp*T**2) * mmHg
+    case('O2')
+      ! Blakley et al. (2024) - experimental to low T and pressure (beta O2)
+      p_vap_sp = exp(15.29_dp - 1166.2_dp/T - 0.75587_dp*log(T) + 0.14188_dp*T - 1.8665e-3_dp*T**2 + 7.582e-6_dp *T**3) * bar
     case default
       print*, 'Vapour pressure species not found: ', trim(sp), 'STOP'
       stop
@@ -850,7 +858,7 @@ module mini_cloud_2_mono_mix_mod
     case('NH4SH')
       sig = 50.0_dp
     case('CH4')
-      ! USCG (1984)
+      ! USCG (1984) - can be updated to more accurate expression
       sig = 14.0_dp
     case('H2S')
       ! Nehb and Vydra (2006)
@@ -1314,7 +1322,7 @@ module mini_cloud_2_mono_mix_mod
       case('CH4')
 
         cld(j)%mol_w_sp = 16.043_dp
-        cld(j)%rho_d = 0.656_dp
+        cld(j)%rho_d = 0.425_dp
         cld(j)%alp_c = 1.0_dp
         cld(j)%inuc = 0
 
@@ -1375,6 +1383,17 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: H2S -> H2S[s]
+        cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
+
+      case('O2')
+
+        cld(j)%mol_w_sp = 31.9988_dp
+        cld(j)%rho_d = 1.141_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: O2 -> (beta)O2[s]
         cld(j)%mol_w_v = cld(j)%mol_w_sp
         cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
