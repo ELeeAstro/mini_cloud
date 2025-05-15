@@ -37,7 +37,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: rho_d, mol_w_sp, Rd_v
     real(dp) :: p_vap, vth, sig, D
     real(dp) :: m_seed, Kn_crit, alp_c
-    real(dp) :: r0, V0, m0, d0, r_seed, nu_key, mol_w_v, m_v
+    real(dp) :: r0, V0, m0, d0, r_seed, mol_w_v, m_v
 
     real(dp) :: v2c
 
@@ -584,7 +584,7 @@ module mini_cloud_2_mono_mix_mod
     character(len=20), intent(in) :: sp
     real(dp), intent(in) :: T
 
-    real(dp) :: TC
+    real(dp) :: TC, A, B, C, f
 
     ! Return vapour pressure in dyne
     select case(sp)
@@ -683,25 +683,45 @@ module mini_cloud_2_mono_mix_mod
     case('NH4Cl')
       p_vap_sp = 10.0_dp**(7.0220_dp - 4302.0_dp/T) * bar
     case('H2O')
-      ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
       TC = T - 273.15_dp
-      if (T > 1048.0_dp) then
-        p_vap_sp = 6.0e8_dp
-      else if (T < 273.16_dp) then
-        p_vap_sp = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
+      ! Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
+      if (TC < 0.0_dp) then
+        ! f = 0.99882_dp * exp(0.00000008_dp * p/pa)
+        p_vap_sp = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa
       else
-        p_vap_sp = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
+        ! f = 1.00071_dp * exp(0.000000045_dp * p/pa
+        p_vap_sp = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa
       end if
+      ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
+      !if (T > 1048.0_dp) then
+      !  p_vap_sp = 6.0e8_dp
+      !else if (T < 273.16_dp) then
+      !  p_vap_sp = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
+      !else
+      !  p_vap_sp = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
+      !end if
     case('NH3')
       ! Ackerman & Marley (2001) NH3 ice vapour pressure expression from Weast (1971)
       p_vap_sp = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
     case('CH4')
-      !--- Prydz, R.; Goodwin, R.D., J. Chem. Thermodyn., 1972, 4,1 ---
-      if (T < 0.5_dp) then ! Limiter for very very very cold T
-        p_vap_sp = 10.0_dp**(3.9895_dp - 443.028_dp/(0.5_dp-0.49_dp)) * bar       
+      ! Lodders & Fegley (1998) - directly taken from VIRGA
+      if (T < 90.68_dp) then
+        C = -16.043_dp/8.3143_dp * (2.213_dp - 2.650_dp)
+        B = -16.043_dp/8.3143_dp * (611.10_dp + (2.213_dp - 2.650_dp) * 90.68_dp )
+        A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
       else
-        p_vap_sp = 10.0_dp**(3.9895_dp - 443.028_dp/(T-0.49_dp)) * bar
+        C = -16.043_dp/8.3143_dp * (2.213_dp - 3.370_dp)
+        B = -16.043_dp/8.3143_dp * (552.36_dp + (2.213_dp - 3.370_dp) * 90.68_dp)
+        A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
       end if
+      p_vap_sp = A * T**C * exp(B/T) * bar
+
+      !--- Prydz, R.; Goodwin, R.D., J. Chem. Thermodyn., 1972, 4,1 ---
+      !if (T < 0.5_dp) then ! Limiter for very very very cold T
+      !  p_vap_sp = 10.0_dp**(3.9895_dp - 443.028_dp/(0.5_dp-0.49_dp)) * bar       
+      !else
+      !  p_vap_sp = 10.0_dp**(3.9895_dp - 443.028_dp/(T-0.49_dp)) * bar
+      !end if
     case('NH4SH')
       !--- E.Lee's fit to Walker & Lumsden (1897) ---
       p_vap_sp = 10.0_dp**(7.8974_dp - 2409.4_dp/T) * bar
@@ -1004,9 +1024,9 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%alp_c = 1.0_dp
         cld(j)%inuc = 0
 
-        ! Key reaction: Ti + C -> TiC[s]
+        ! Key reaction: 2 Ti + C2H2 -> 2 TiC[s] + H2
         cld(j)%mol_w_v = 47.8670_dp
-        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
+        cld(j)%v2c = (2.0_dp*cld(j)%mol_w_v)/(2.0_dp*cld(j)%mol_w_sp)
 
       case('SiC')
 
@@ -1015,8 +1035,8 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%alp_c = 1.0_dp
         cld(j)%inuc = 0
 
-        ! Key reaction: SiO + C -> SiC[s] + O
-        cld(j)%mol_w_v = 44.08490_dp
+        ! Key reaction: Si2C -> SiC[s] + Si
+        cld(j)%mol_w_v = 68.1817_dp
         cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
       case('CaTiO3')
@@ -1087,6 +1107,28 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%mol_w_v = 55.845_dp
         cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
+      case('Fe2O3')
+
+        cld(j)%mol_w_sp = 159.6882_dp
+        cld(j)%rho_d = 5.25_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: 2 Fe + 3 H2O -> Fe2O3[s] + 3 H2
+        cld(j)%mol_w_v = 55.845_dp
+        cld(j)%v2c = 2.0_dp*cld(j)%mol_w_v/cld(j)%mol_w_sp
+
+      case('FeS')
+
+        cld(j)%mol_w_sp = 87.91_dp
+        cld(j)%rho_d = 4.84_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: Fe + H2S -> FeS[s] + H2
+        cld(j)%mol_w_v = 55.845_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
+
       case('Mg2SiO4')
 
         cld(j)%mol_w_sp = 140.693_dp
@@ -1106,9 +1148,30 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%inuc = 0
 
         ! Key reaction: Mg + SiO + 2 H2O -> MgSiO3[s] + H2
-        cld(j)%nu_key = 1.0_dp
         cld(j)%mol_w_v = 24.305_dp
         cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
+
+      case('MgO')
+
+        cld(j)%mol_w_sp = 40.3044_dp
+        cld(j)%rho_d = 3.6_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: Mg + H2O -> MgO[s] + H2
+        cld(j)%mol_w_v = 24.305_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp   
+
+      case('MgS')
+
+        cld(j)%mol_w_sp = 56.37_dp
+        cld(j)%rho_d = 2.84_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: Mg + H2S -> MgS[s] + H2
+        cld(j)%mol_w_v = 24.305_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp   
 
       case('SiO2')
 
@@ -1127,12 +1190,23 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%rho_d = 2.18_dp
         cld(j)%alp_c = 1.0_dp
         cld(j)%inuc = 1
-        cld(j)%Nf = 1.0_dp
+        cld(j)%Nf = 0.0_dp
         cld(j)%alp_nuc = 1.0_dp
 
         ! Key reaction: SiO -> SiO[s]
         cld(j)%mol_w_v = cld(j)%mol_w_sp
         cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
+
+      case('SiS')
+
+        cld(j)%mol_w_sp = 60.1505_dp
+        cld(j)%rho_d = 2.18_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: SiS -> SiS[s]
+        cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp   
 
       case('Cr')
 
@@ -1248,9 +1322,43 @@ module mini_cloud_2_mono_mix_mod
         cld(j)%mol_w_v = cld(j)%mol_w_sp
         cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
 
+      case('CO')
+
+        cld(j)%mol_w_sp = 28.0101_dp
+        cld(j)%rho_d = 1.14_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: CO -> CO[s]
+        cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
+
+      case('CO2')
+
+        cld(j)%mol_w_sp = 44.0095_dp
+        cld(j)%rho_d = 1.98_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: CO2 -> CO2[s]
+        cld(j)%mol_w_v = cld(j)%mol_w_sp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
+
+
+      case('H2SO4')
+
+        cld(j)%mol_w_sp = 98.0785_dp
+        cld(j)%rho_d = 1.8302_dp
+        cld(j)%alp_c = 1.0_dp
+        cld(j)%inuc = 0
+
+        ! Key reaction: SO3 + H2O -> H2SO4[l]
+        cld(j)%mol_w_v = 80.0632_dp
+        cld(j)%v2c = cld(j)%mol_w_v/cld(j)%mol_w_sp
+
       case ('NH4SH')
 
-        cld(j)%mol_w_sp = 51.111_dp
+        cld(j)%mol_w_sp = 51.1114_dp
         cld(j)%rho_d = 1.17_dp
         cld(j)%alp_c = 1.0_dp
         cld(j)%inuc = 0

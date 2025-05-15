@@ -273,7 +273,7 @@ program test_mini_cloud_2
 
       nsp = 4
 
-      nlay = 200
+      nlay = 300
       nlev = nlay + 1
 
       n_wl = 11
@@ -287,7 +287,7 @@ program test_mini_cloud_2
       allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay))
 
       !! Find pressure level grid (pa) - logspaced between p_top and p_bot
-      p_top = 1e-3_dp * 1e5_dp
+      p_top = 1e-8_dp * 1e5_dp
       p_bot = 1000.0_dp * 1e5_dp
 
       p_top = log10(p_top)
