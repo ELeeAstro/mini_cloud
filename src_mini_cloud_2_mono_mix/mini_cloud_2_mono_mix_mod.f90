@@ -1007,23 +1007,24 @@ module mini_cloud_2_mono_mix_mod
       !! Find the constant values for the cloud species
       !! that are specific for the layer
 
-      !! Saturation vapour pressure
+      !! Saturation vapour pressure [dyne]
       cld(j)%p_vap = p_vap_sp(cld(j)%sp, T)
 
-      !! Thermal velocity of vapour
+      !! Thermal velocity of vapour [cm s-1]
       cld(j)%vth = sqrt((kb*T)/(2.0_dp*pi*cld(j)%mol_w_v*amu))
 
-      !! Gaseous diffusion constant of vapour - d0 estimated here!!
+      !! Gaseous diffusion constant of vapour [cm2 s-1] 
+      !! - note d0 estimated!
       cld(j)%D = 5.0_dp/(16.0_dp*Avo*cld(j)%d0**2*rho) * &
         & sqrt((R_gas*T*mu)/(2.0_dp*pi) * (cld(j)%mol_w_v + mu)/cld(j)%mol_w_v)
 
-      !! Surface tension of species
+      !! Surface tension of species [erg cm-2]
       cld(j)%sig = sig_sp(cld(j)%sp, T)
 
       !! Specific gas constant of vapour [erg g-1 K-1]
       cld(j)%Rd_v = R_gas/cld(j)%mol_w_v
 
-      !! Latent heat of species
+      !! Latent heat of species [erg g-1]
       cld(j)%lh = l_heat_sp(cld(j)%sp, T, cld(j)%mol_w_sp)
 
     end do

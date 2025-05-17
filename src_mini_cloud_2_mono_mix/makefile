@@ -8,7 +8,7 @@ F90LINKER = $(F90)
 FFLAGS = -O3 -pipe -fopenmp #Default release flags
 
 # Debugging flags
-DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
+DEBUG_FLAGS = -O0 -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
 
 # Source files (mix of .f and .f90 files)
 SRCS_F90 = \
