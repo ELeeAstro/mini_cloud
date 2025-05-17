@@ -28,8 +28,8 @@ module vert_adv_exp_McCormack_mod
     real(dp), dimension(nlay,nq) :: q
 
     integer :: k
-    real(dp) :: h1, h2, grav
-    real(dp), dimension(nlev) :: alte, lpe, vf_e, Te, nde, pe
+    real(dp) :: grav
+    real(dp), dimension(nlev) :: alte, vf_e, pe
     real(dp), dimension(nlay) :: delz, delz_mid, pl, nd
 
     real(dp), dimension(nlay,nq) :: qc
@@ -93,11 +93,11 @@ module vert_adv_exp_McCormack_mod
       do n = 1, nq
 
         !! Find the minmod limiter
-        !call minmod(nlay,q(:,n),delz_mid,sig)
-        !call superbee(nlay,q(:,n),delz_mid,sig)
-        !call vanleer(nlay,q(:,n),delz_mid,sig)
-        !call mc(nlay,q(:,n),delz_mid,sig)
-        call koren(nlay,q(:,n),delz_mid,sig)
+        call minmod(nlay, q(:,n), delz_mid(:), sig)
+        !call superbee(nlay, q(:,n), delz_mid(:), sig)
+        !call vanleer(nlay, q(:,n), delz_mid(:), sig)
+        !call mc(nlay, q(:,n), delz_mid(:), sig)
+        !call koren(nlay, q(:,n), delz_mid(:), sig)
 
         !! Perform McCormack step
         qc(:,n) = q(:,n)
@@ -122,96 +122,124 @@ module vert_adv_exp_McCormack_mod
     
   end subroutine vert_adv_exp_McCormack
 
-  subroutine minmod(nlay,q,dz,sig)
+  subroutine minmod(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
-
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: de_minus, de_plus
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: r, de_minus, de_plus
+  
     sig(1) = 0.0_dp
-    do i = 2, nlay-1
-      de_minus = (q(i) - q(i-1)) / dz(i)
-      de_plus = (q(i+1) - q(i)) / dz(i)
-      if ((de_minus > 0.0_dp) .and. (de_plus > 0.0_dp)) then
-        sig(i) = min(de_minus, de_plus)
-      else if ((de_minus < 0.0_dp) .and. (de_plus < 0.0_dp)) then
-        sig(i) = max(de_minus, de_plus)
+    do i = 2, nlay - 1
+      de_minus = (q(i) - q(i-1)) / dz(i-1)
+      de_plus  = (q(i+1) - q(i)) / dz(i)
+      if (abs(de_plus) > eps) then
+        r = de_minus / (de_plus + eps)
       else
+        r = 0.0_dp
+      end if
+      if (r <= 0.0_dp) then
         sig(i) = 0.0_dp
+      else
+        sig(i) = min(1.0_dp, r)
       end if
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine minmod
 
-  subroutine superbee(nlay,q,dz,sig)
+  subroutine superbee(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
-
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay), intent(in) :: dz 
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: r
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: r, dq_minus, dq_plus
+    
     sig(1) = 0.0_dp
-    do i = 2, nlay-1
-      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
-      sig(i) = max(0.0_dp, min(2*r, 1.0_dp), min(r, 2.0_dp))
+    do i = 2, nlay - 1
+      dq_minus = (q(i) - q(i-1)) / dz(i-1)
+      dq_plus  = (q(i+1) - q(i)) / dz(i)
+      if (abs(dq_plus) > eps) then
+        r = dq_minus / (dq_plus + eps)
+      else
+        r = 0.0_dp
+      end if
+      sig(i) = max(0.0_dp, min(2.0_dp*r, 1.0_dp), min(r, 2.0_dp))
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine superbee
 
-  subroutine vanleer(nlay,q,dz,sig)
+  subroutine vanleer(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: r
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: dq_minus, dq_plus, r
+  
     sig(1) = 0.0_dp
-    do i = 2, nlay-1
-      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+    do i = 2, nlay - 1
+      dq_minus = (q(i) - q(i-1)) / dz(i-1)
+      dq_plus  = (q(i+1) - q(i)) / dz(i)
+      if (abs(dq_plus) > eps) then
+        r = dq_minus / (dq_plus + eps)
+      else
+        r = 0.0_dp
+      end if
       sig(i) = (r + abs(r)) / (1.0_dp + abs(r))
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine vanleer
 
-  subroutine mc(nlay,q,dz,sig)
+  subroutine mc(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
     real(dp), dimension(nlay), intent(in) :: q, dz
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: r
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: dq_minus, dq_plus, r
+  
     sig(1) = 0.0_dp
-    do i = 2, nlay-1
-      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+    do i = 2, nlay - 1
+      dq_minus = (q(i) - q(i - 1)) / dz(i - 1)
+      dq_plus  = (q(i + 1) - q(i)) / dz(i)
+  
+      if (abs(dq_plus) > eps) then
+        r = dq_minus / (dq_plus + eps)
+      else
+        r = 0.0_dp
+      end if
+  
       sig(i) = max(0.0_dp, min((1.0_dp + r) / 2.0_dp, 2.0_dp, r))
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine mc
-
-  subroutine koren(nlay,q,dz,sig)
+  
+  subroutine koren(nlay,q,sig)
     implicit none
 
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(in) :: q
     real(dp), dimension(nlay), intent(out) :: sig
 
     integer :: i

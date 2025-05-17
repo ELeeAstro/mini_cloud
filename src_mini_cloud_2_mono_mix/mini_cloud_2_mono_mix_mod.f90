@@ -33,16 +33,20 @@ module mini_cloud_2_mono_mix_mod
   !! Cloud properties container
   type cld_sp
 
+    integer :: idx
+
     character(len=20) :: sp
     real(dp) :: rho_d, mol_w_sp, Rd_v
-    real(dp) :: p_vap, vth, sig, D
-    real(dp) :: m_seed, Kn_crit, alp_c
-    real(dp) :: r0, V0, m0, d0, r_seed, mol_w_v, m_v
+    real(dp) :: r0, V0, m0, d0, r_seed, m_seed
 
-    real(dp) :: v2c
+    real(dp) :: sat, p_vap, vth, sig, D, alp_c, Kn_crit
+
+    real(dp) :: mol_w_v, m_v, v2c
 
     integer :: inuc
-    real(dp) :: sat, Nf, alp_nuc
+    real(dp) :: Nf, alp_nuc
+
+    real(dp) :: lh
 
   end type cld_sp
 
@@ -76,7 +80,7 @@ module mini_cloud_2_mono_mix_mod
 
   public :: mini_cloud_2_mono_mix, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
-    & p_vap_sp, surface_tension, eta_construct
+    & p_vap_sp, sig_sp, l_heat_sp, eta_a_mix
 
   contains
 
@@ -110,7 +114,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: rtol, atol
 
     !! Work variables
-    integer :: n_bg, j
+    integer :: n_bg
     real(dp), allocatable, dimension(:) :: VMR_bg
 
     ndust = n_in
@@ -150,7 +154,7 @@ module mini_cloud_2_mono_mix_mod
     Rd = R_gas/mu
 
     !! Calculate dynamical viscosity for this layer
-    call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
+    call eta_a_mix(n_bg, sp_bg, VMR_bg, T, eta)
 
     !! Mixture kinematic viscosity
     nu = eta/rho
@@ -159,7 +163,7 @@ module mini_cloud_2_mono_mix_mod
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
     !! Get the basic cloud species properties
-    call cloud_sp(ndust, sp_in, T, rho, mu, mfp)
+    call cloud_sp(ndust, sp_in, T, rho, mu)
 
     ! -----------------------------------------
     ! ***  parameters for the DLSODE solver  ***
@@ -324,7 +328,7 @@ module mini_cloud_2_mono_mix_mod
     call calc_hom_nuc(ndust, n_v(:), f_nuc_hom)
 
     !! Calculate seed particle evaporation rate
-    call calc_seed_evap(ndust, N_c, m_c, f_cond, f_seed_evap)
+    call calc_seed_evap(ndust, N_c, m_c, f_seed_evap)
 
     !! Calculate the coagulation rate
     call calc_coag(m_c, r_c, beta, f_coag)
@@ -482,11 +486,10 @@ module mini_cloud_2_mono_mix_mod
   end subroutine calc_hom_nuc
 
   !! Seed particle evaporation
-  subroutine calc_seed_evap(ndust, N_c, m_c, f_cond, J_evap)
+  subroutine calc_seed_evap(ndust, N_c, m_c, J_evap)
     implicit none
 
     integer, intent(in) :: ndust
-    real(dp), dimension(ndust), intent(in) :: f_cond
     real(dp), intent(in) :: N_c, m_c
 
     real(dp), dimension(ndust), intent(out) :: J_evap
@@ -577,425 +580,12 @@ module mini_cloud_2_mono_mix_mod
 
   end subroutine calc_coal
 
-  !! Vapour pressure for each species
-  real(dp) function p_vap_sp(sp, T)
-    implicit none
-
-    character(len=20), intent(in) :: sp
-    real(dp), intent(in) :: T
-
-    real(dp) :: TC, A, B, C, f
-
-    ! Return vapour pressure in dyne
-    select case(sp)
-    case('C')
-      ! Gail & Sedlmayr (2013) - I think...
-      p_vap_sp = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
-    case('TiC')
-      ! Kimura et al. (2023)
-      p_vap_sp = 10.0_dp**(-33600.0_dp/T + 7.652_dp) * atm
-    case('SiC')
-      ! Elspeth 5 polynomial JANAF-NIST fit
-      p_vap_sp =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
-        & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
-    case('CaTiO3')
-      ! Wakeford et al. (2017) -  taken from VIRGA
-      p_vap_sp = 10.0_dp**(-72160.0_dp/T + 30.24_dp - log10(p/1e6_dp) - 2.0_dp*met) * bar
-      ! Kozasa et al. (1987)
-      !p_vap_sp = exp(-79568.2_dp/T + 42.0204_dp) * atm
-    case('TiO2')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-7.70443e4_dp/T +  4.03144e1_dp - 2.59140e-3_dp*T &
-        &  + 6.02422e-7_dp*T**2 - 6.86899e-11_dp*T**3)
-    case('VO')
-      ! NIST 5 param fit
-      p_vap_sp = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
-        & + 5.72078e-7_dp*T**2 - 7.41840e-11_dp*T**3)
-    case('Al2O3')
-      ! Wakeford et al. (2017) - taken from CARMA
-      p_vap_sp = 10.0_dp**(17.7_dp - 45892.6_dp/T - 1.66_dp*met) * bar
-      ! Kozasa et al. (1987)
-      !p_vap_sp = exp(-73503.0_dp/T + 22.005_dp) * atm
-    case('Fe')
-      ! Visscher et al. (2010) - taken from CARMA
-      p_vap_sp = 10.0_dp**(7.23_dp - 20995.0_dp/T) * bar
-      ! Elspeth note: Changed to Ackerman & Marley et al. (2001) expression
-      ! if (T > 1800.0_dp) then
-      !   p_vap_sp = exp(9.86_dp - 37120.0_dp/T) * bar
-      ! else
-      !   p_vap_sp = exp(15.71_dp - 47664.0_dp/T) * bar
-      ! end if
-    case('FeS')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-5.69922e4_dp/T + 3.86753e1_dp - 4.68301e-3_dp*T &
-        & + 1.03559e-6_dp*T**2 - 8.42872e-11_dp*T**3)
-    case('FeO')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-6.30018e4_dp/T + 3.66364e1_dp - 2.42990e-3_dp*T &
-        & + 3.18636e-7_dp*T**2)
-    case('Mg2SiO4')
-      ! Visscher et al. (2010)/Visscher notes - taken from CARMA
-      p_vap_sp = 10.0_dp**(14.88_dp - 32488.0_dp/T - 1.4_dp*met - 0.2_dp*log10(p/1e6_dp)) * bar
-      ! Kozasa et al. (1989) - Seems to be too high
-      !p_vap_sp = p*10.0**(8.25_dp -  27250.0_dp/T - log10(p/1e6_dp) + 3.58_dp)
-    case('MgSiO3','MgSiO3_amorph')
-      ! Visscher - taken from VIRGA
-      p_vap_sp = 10.0_dp**(13.43_dp - 28665.0_dp/T - met) * bar
-      ! Ackerman & Marley (2001)
-      !p_vap_sp = exp(-58663.0_dp/T + 25.37_dp) * bar
-    case('MgO')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
-        &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
-    case('SiO2','SiO2_amorph')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-7.28086e4_dp/T + 3.65312e1_dp - 2.56109e-4_dp*T &
-        & - 5.24980e-7_dp*T**2 + 1.53343E-10_dp*T**3) 
-    case('SiO')
-      ! Gail et al. (2013)
-      p_vap_sp = exp(-49520.0_dp/T + 32.52_dp)
-    case('Cr')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-4.78455e+4_dp/T + 3.22423e1_dp - 5.28710e-4_dp*T & 
-        &  - 6.17347e-8_dp*T**2 + 2.88469e-12_dp*T**3)
-     case('MnS')
-      ! Morley et al. (2012)
-      p_vap_sp = 10.0_dp**(11.532_dp - 23810.0_dp/T - met) * bar
-    case('Na2S')
-      ! Morley et al. (2012)
-      p_vap_sp =  10.0_dp**(8.550_dp - 13889.0_dp/T - 0.5_dp*met) * bar
-    case('ZnS')
-      ! Elspeth 5 polynomial Barin data fit
-      p_vap_sp = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
-        &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)
-      ! Morley et al. (2012)
-      !p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T - met) * bar        
-    case('KCl')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
-        & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
-      ! Morley et al. (2012)
-      !p_vap_sp =  10.0_dp**(7.611_dp - 11382.0_dp/T) * bar
-    case('NaCl')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e3_dp*T & 
-        & + 5.30965e-7_dp*T**2 -2.59584e-12_dp*T**3)
-    case('S2')
-      !--- Zahnle et al. (2016) ---
-      if (T < 413.0_dp) then
-        p_vap_sp = exp(27.0_dp - 18500.0_dp/T) * bar
-      else
-        p_vap_sp = exp(16.1_dp - 14000.0_dp/T) * bar
-      end if
-    case('S8')
-      !--- Zahnle et al. (2016) ---
-      if (T < 413.0_dp) then
-        p_vap_sp = exp(20.0_dp - 11800.0_dp/T) * bar
-      else
-        p_vap_sp = exp(9.6_dp - 7510.0_dp/T) * bar
-      end if        
-    case('NH4Cl')
-      ! Unknown - I think I fit this?
-      p_vap_sp = 10.0_dp**(7.0220_dp - 4302.0_dp/T) * bar
-    case('H2O')
-      TC = T - 273.15_dp
-      ! Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
-      if (TC < 0.0_dp) then
-        f = 0.99882_dp * exp(0.00000008_dp * p/pa)
-        p_vap_sp = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa * f
-      else
-        f = 1.00071_dp * exp(0.000000045_dp * p/pa)
-        p_vap_sp = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa * f
-      end if
-      ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
-      !if (T > 1048.0_dp) then
-      !  p_vap_sp = 6.0e8_dp
-      !else if (T < 273.16_dp) then
-      !  p_vap_sp = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
-      !else
-      !  p_vap_sp = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
-      !end if
-    case('NH3')
-      ! Blakley et al. (2024) - experimental to low T and pressure
-      p_vap_sp = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
-      ! Ackerman & Marley (2001) NH3 ice vapour pressure expression fit from Weast (1971) data
-      !p_vap_sp = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
-    case('CH4')
-      ! Frey & Schmitt (2009)
-      p_vap_sp = exp(1.051e1_dp - 1.110e3_dp/T - 4.341e3_dp/T**2 + 1.035e5_dp/T**3 - 7.910e5_dp/T**4) * bar
-      ! Lodders & Fegley (1998) - directly taken from VIRGA
-      ! if (T < 90.68_dp) then
-      !   C = -16.043_dp/8.3143_dp * (2.213_dp - 2.650_dp)
-      !   B = -16.043_dp/8.3143_dp * (611.10_dp + (2.213_dp - 2.650_dp) * 90.68_dp)
-      !   A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
-      ! else
-      !   C = -16.043_dp/8.3143_dp * (2.213_dp - 3.370_dp)
-      !   B = -16.043_dp/8.3143_dp * (552.36_dp + (2.213_dp - 3.370_dp) * 90.68_dp)
-      !   A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
-      ! end if
-      ! p_vap_sp = A * T**C * exp(B/T) * bar
-
-    case('NH4SH')
-      !--- E.Lee's fit to Walker & Lumsden (1897) ---
-      p_vap_sp = 10.0_dp**(7.8974_dp - 2409.4_dp/T) * bar
-    case('H2S')
-      ! Frey & Schmitt (2009)
-      p_vap_sp = exp(12.98_dp - 2.707e3_dp/T) * bar
-    case('H2SO4')
-      ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-1.01294e4_dp/T + 3.55465e1_dp - 8.34848e-3_dp*T)      
-    case('CO')
-      ! Frey & Schmitt (2009)
-      if (T < 61.55_dp) then
-        p_vap_sp = exp(1.043e1_dp - 7.213e2_dp/T - 1.074e4_dp/T**2 + 2.341e5_dp/T**3 - 2.392e6_dp/T**4 + 9.478e6_dp/T**5) * bar
-      else
-        p_vap_sp = exp(1.025e1_dp - 7.482e2_dp/T - 5.843e3_dp/T**2 + 3.939e4_dp/T**3) * bar
-      end if
-      ! Yaws
-      !p_vap_sp = 10.0_dp**(51.8145e0_dp - 7.8824e2_dp/T - 2.2734e1_dp*log10(T) &
-      !  & + 5.1225e-2_dp*T + 4.6603e-11_dp*T**2) * mmHg
-    case('CO2')
-      ! Frey & Schmitt (2009)
-      if (T < 194.7_dp) then
-        p_vap_sp = exp(1.476e1_dp - 2.571e3_dp/T - 7.781e4_dp/T**2 + 4.325e6_dp/T**3 - 1.207e8_dp/T**4 + 1.350e9_dp/T**5) * bar
-      else
-        p_vap_sp = exp(1.861e1_dp - 4.154e3_dp/T + 1.041e5_dp/T**2) * bar
-      end if      
-      ! Yaws
-      !p_vap_sp = 10.0_dp**(35.0187e0_dp - 1.5119e3_dp/T - 1.1335e1_dp*log10(T) &
-      !  & + 9.3383e-3_dp*T + 7.7626e-10_dp*T**2) * mmHg
-    case('O2')
-      ! Blakley et al. (2024) - experimental to low T and pressure (beta O2)
-      p_vap_sp = exp(15.29_dp - 1166.2_dp/T - 0.75587_dp*log(T) + 0.14188_dp*T - 1.8665e-3_dp*T**2 + 7.582e-6_dp *T**3) * bar
-    case default
-      print*, 'Vapour pressure species not found: ', trim(sp), 'STOP'
-      stop
-    end select
-
-  end function p_vap_sp
-
-  !! Surface tension for each species
-  real(dp) function surface_tension(sp, T)
-    implicit none
-
-    character(len=20), intent(in) :: sp
-    real(dp), intent(in) :: T
-
-    real(dp) :: TC, sig
-
-    TC = T - 273.15_dp
-
-    ! Return surface tension in erg cm-2
-    select case (sp)
-    case('C')
-      ! Tabak et al. (1995)
-      sig = 1400.0_dp
-    case('TiC')
-      ! Chigai et al. (1999)
-      sig = 1242.0_dp
-    case ('SiC')
-      ! Nozawa et al. (2003)
-      sig = 1800.0_dp
-    case('CaTiO3')
-      ! Kozasa et al. (1987)
-      sig = 494.0_dp      
-    case('TiO2')
-      ! Sindel et al. (2022)
-      sig = 589.79_dp - 0.0708_dp * T
-    case('Fe')
-      ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
-      sig = 1862.0_dp - 0.39_dp * (TC - 1530.0_dp)
-      ! Pradhan et al. (2009)
-      !sig = 2858.0_dp - 0.51_dp * T
-    case('Fe2O3')
-      sig = 410.0_dp
-    case('FeO')
-      ! Janz 1988
-      sig = 585.0_dp
-    case('Al2O3')
-      ! Pradhan et al. (2009)
-      sig = 1024.0_dp - 0.177_dp * T
-      ! Kozasa et al. (1989)
-      !sig = 690.0_dp
-    case('MgSiO3')
-      ! Janz 1988
-      sig = 197.3_dp + 0.098_dp * T
-    case('Mg2SiO4')
-      ! Kozasa et al. (1989)
-      sig = 436.0_dp
-    case('SiO')
-      ! Gail and Sedlmayr (1986)
-      sig = 500.0_dp
-    case('SiO2')
-      ! Pradhan et al. (2009)
-      !sig = 243.2_dp - 0.013_dp * T
-      ! Janz 1988
-      sig = 243.2_dp + 0.031_dp * T
-    case('Cr')
-      ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
-      sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)      
-    case('MnS')
-      sig = 2326.0_dp
-    case('Na2S')
-      sig = 1033.0_dp
-    case('KCl')
-      ! Janz 1988
-      !sig = 175.57_dp - 0.07321_dp * T
-      sig = 160.4_dp - 0.07_dp*T
-    case('NaCl')
-      ! Janz 1988
-      sig = 191.16_dp - 0.07188_dp * T
-    case('ZnS')
-      sig = 860.0_dp
-    case('H2O')
-      ! Hale and Plummer (1974)
-      sig = 141.0_dp - 0.15_dp*TC
-    case('NH3')
-      ! Weast et al. (1988)
-      sig = 23.4_dp
-    case('NH4Cl')
-      sig = 56.0_dp
-    case('NH4SH')
-      sig = 50.0_dp
-    case('CH4')
-      ! USCG (1984) - can be updated to more accurate expression
-      sig = 14.0_dp
-    case('H2S')
-      ! Nehb and Vydra (2006)
-      sig = 58.1_dp
-    case('S2','S8')
-      ! Fanelli 1950
-      sig = 60.8_dp
-    case default
-      print*, 'Species surface tension not found: ', trim(sp), 'STOP'
-      stop
-    end select
-
-    surface_tension = max(10.0_dp, sig)
-
-      ! Pradhan et al. (2009):
-      !Si : 732 - 0.086*(T - 1685.0)
-      !MgO : 1170 - 0.636*T
-      !CaO : 791 - 0.0935*T
-
-  end function surface_tension
-
-  !! eta for background gas
-  subroutine eta_construct(n_bg, sp_bg, VMR_bg, T, eta_out)
-    implicit none
-
-    integer, intent(in) :: n_bg
-    character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), dimension(n_bg), intent(in) :: VMR_bg
-    real(dp), intent(in) :: T
-
-    real(dp), intent(out) :: eta_out
-    
-    integer :: i, j
-    real(dp) :: bot, Eij, part
-    real(dp), dimension(n_bg) :: y
-
-    !! Construct the background gas arrays for eta (dynamical viscosity) calculation
-    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
-
-    do i = 1, n_bg
-      select case(sp_bg(i))
-
-      case('OH')
-        d_g(i) = d_OH
-        LJ_g(i) = LJ_OH
-        molg_g(i) = molg_OH
-      case('H2')
-        d_g(i) = d_H2
-        LJ_g(i) = LJ_H2
-        molg_g(i) = molg_H2
-      case('H2O')
-        d_g(i) = d_H2O
-        LJ_g(i) = LJ_H2O
-        molg_g(i) = molg_H2O
-      case('H')
-        d_g(i) = d_H
-        LJ_g(i) = LJ_H
-        molg_g(i) = molg_H
-      case('CO')
-        d_g(i) = d_CO
-        LJ_g(i) = LJ_CO
-        molg_g(i) = molg_CO
-      case('CO2')
-        d_g(i) = d_CO2
-        LJ_g(i) = LJ_CO2
-        molg_g(i) = molg_CO2
-      case('O')
-        d_g(i) = d_O
-        LJ_g(i) = LJ_O
-        molg_g(i) = molg_O
-      case('CH4')
-        d_g(i) = d_CH4
-        LJ_g(i) = LJ_CH4
-        molg_g(i) = molg_CH4
-      case('C2H2')
-        d_g(i) = d_C2H2
-        LJ_g(i) = LJ_C2H2
-        molg_g(i) = molg_C2H2
-      case('NH3')
-        d_g(i) = d_NH3
-        LJ_g(i) = LJ_NH3
-        molg_g(i) = molg_NH3
-      case('N2')
-        d_g(i) = d_N2
-        LJ_g(i) = LJ_N2
-        molg_g(i) = molg_N2 
-      case('HCN')
-        d_g(i) = d_HCN
-        LJ_g(i) = LJ_HCN
-        molg_g(i) = molg_HCN
-      case('He')
-        d_g(i) = d_He
-        LJ_g(i) = LJ_He
-        molg_g(i) = molg_He
-      case default
-        print*, 'Background gas species data not found: ', trim(sp_bg(i)), 'STOP'
-        stop
-      end select
-
-    end do
-
-    !! Davidson (1993) mixing rule
-    
-    !! First calculate each species eta
-    do i = 1, n_bg
-      eta_g(i) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(i)*amu)*kb*T)/(pi*d_g(i)**2)) &
-        & * ((((kb*T)/LJ_g(i))**(0.16_dp))/1.22_dp)
-    end do
-
-    !! Calculate y values
-    bot = 0.0_dp
-    do i = 1, n_bg
-      bot = bot + VMR_bg(i) * sqrt(molg_g(i))
-    end do
-    y(:) = (VMR_bg(:) * sqrt(molg_g(:)))/bot
-
-    !! Calculate fluidity following Davidson equation
-    eta_out = 0.0_dp
-    do i = 1, n_bg
-      do j = 1, n_bg
-        Eij = ((2.0_dp*sqrt(molg_g(i)*molg_g(j)))/(molg_g(i) + molg_g(j)))**0.375
-        part = (y(i)*y(j))/(sqrt(eta_g(i)*eta_g(j))) * Eij
-        eta_out = eta_out + part
-      end do
-    end do
-
-    !! Viscosity is inverse fluidity
-    eta_out = 1.0_dp/eta_out
-
-  end subroutine eta_construct
-
-  subroutine cloud_sp(ndust, sp_in, T, rho, mu, mfp)
+  subroutine cloud_sp(ndust, sp_in, T, rho, mu)
     implicit none
 
     integer, intent(in) :: ndust
     character(len=20), dimension(ndust), intent(in) :: sp_in
-    real(dp), intent(in) :: T, rho, mu, mfp
+    real(dp), intent(in) :: T, rho, mu
 
     integer :: j
 
@@ -1006,7 +596,7 @@ module mini_cloud_2_mono_mix_mod
     do j = 1, ndust
 
       !! First get the constant values from a select case
-
+      cld(j)%idx = j
       cld(j)%sp = sp_in(j)
 
       !! Calculate the basic cloud properties
@@ -1427,16 +1017,524 @@ module mini_cloud_2_mono_mix_mod
       cld(j)%D = 5.0_dp/(16.0_dp*Avo*cld(j)%d0**2*rho) * &
         & sqrt((R_gas*T*mu)/(2.0_dp*pi) * (cld(j)%mol_w_v + mu)/cld(j)%mol_w_v)
 
-      !! Surface tension of material
-      cld(j)%sig = surface_tension(cld(j)%sp, T)
+      !! Surface tension of species
+      cld(j)%sig = sig_sp(cld(j)%sp, T)
 
       !! Specific gas constant of vapour [erg g-1 K-1]
       cld(j)%Rd_v = R_gas/cld(j)%mol_w_v
+
+      !! Latent heat of species
+      cld(j)%lh = l_heat_sp(cld(j)%sp, T, cld(j)%mol_w_sp)
 
     end do
 
 
   end subroutine cloud_sp
+
+  !! Vapour pressure for each species
+  function p_vap_sp(sp, T) result(p_vap)
+    implicit none
+
+    character(len=20), intent(in) :: sp
+    real(dp), intent(in) :: T
+
+    real(dp) :: TC, f
+    !real(dp) :: A, B, C
+    real(dp) :: p_vap
+
+    ! Return vapour pressure in dyne
+    select case(sp)
+    case('C')
+      ! Gail & Sedlmayr (2013) - I think...
+      p_vap = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
+    case('TiC')
+      ! Kimura et al. (2023)
+      p_vap = 10.0_dp**(-33600.0_dp/T + 7.652_dp) * atm
+    case('SiC')
+      ! Elspeth 5 polynomial JANAF-NIST fit
+      p_vap =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
+        & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
+    case('CaTiO3')
+      ! Wakeford et al. (2017) -  taken from VIRGA
+      p_vap = 10.0_dp**(-72160.0_dp/T + 30.24_dp - log10(p/1e6_dp) - 2.0_dp*met) * bar
+      ! Kozasa et al. (1987)
+      !p_vap = exp(-79568.2_dp/T + 42.0204_dp) * atm
+    case('TiO2')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-7.70443e4_dp/T +  4.03144e1_dp - 2.59140e-3_dp*T &
+        &  + 6.02422e-7_dp*T**2 - 6.86899e-11_dp*T**3)
+    case('VO')
+      ! NIST 5 param fit
+      p_vap = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
+        & + 5.72078e-7_dp*T**2 - 7.41840e-11_dp*T**3)
+    case('Al2O3')
+      ! Wakeford et al. (2017) - taken from CARMA
+      p_vap = 10.0_dp**(17.7_dp - 45892.6_dp/T - 1.66_dp*met) * bar
+      ! Kozasa et al. (1987)
+      !p_vap = exp(-73503.0_dp/T + 22.005_dp) * atm
+    case('Fe')
+      ! Visscher et al. (2010) - taken from CARMA
+      p_vap = 10.0_dp**(7.23_dp - 20995.0_dp/T) * bar
+      ! Elspeth note: Changed to Ackerman & Marley et al. (2001) expression
+      ! if (T > 1800.0_dp) then
+      !   p_vap = exp(9.86_dp - 37120.0_dp/T) * bar
+      ! else
+      !   p_vap = exp(15.71_dp - 47664.0_dp/T) * bar
+      ! end if
+    case('FeS')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-5.69922e4_dp/T + 3.86753e1_dp - 4.68301e-3_dp*T &
+        & + 1.03559e-6_dp*T**2 - 8.42872e-11_dp*T**3)
+    case('FeO')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-6.30018e4_dp/T + 3.66364e1_dp - 2.42990e-3_dp*T &
+        & + 3.18636e-7_dp*T**2)
+    case('Mg2SiO4')
+      ! Visscher et al. (2010)/Visscher notes - taken from CARMA
+      p_vap = 10.0_dp**(14.88_dp - 32488.0_dp/T - 1.4_dp*met - 0.2_dp*log10(p/1e6_dp)) * bar
+      ! Kozasa et al. (1989) - Seems to be too high
+      !p_vap = p*10.0**(8.25_dp -  27250.0_dp/T - log10(p/1e6_dp) + 3.58_dp)
+    case('MgSiO3','MgSiO3_amorph')
+      ! Visscher - taken from VIRGA
+      p_vap = 10.0_dp**(13.43_dp - 28665.0_dp/T - met) * bar
+      ! Ackerman & Marley (2001)
+      !p_vap = exp(-58663.0_dp/T + 25.37_dp) * bar
+    case('MgO')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
+        &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
+    case('SiO2','SiO2_amorph')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-7.28086e4_dp/T + 3.65312e1_dp - 2.56109e-4_dp*T &
+        & - 5.24980e-7_dp*T**2 + 1.53343E-10_dp*T**3) 
+    case('SiO')
+      ! Gail et al. (2013)
+      p_vap = exp(-49520.0_dp/T + 32.52_dp)
+    case('Cr')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-4.78455e+4_dp/T + 3.22423e1_dp - 5.28710e-4_dp*T & 
+        &  - 6.17347e-8_dp*T**2 + 2.88469e-12_dp*T**3)
+     case('MnS')
+      ! Morley et al. (2012)
+      p_vap = 10.0_dp**(11.532_dp - 23810.0_dp/T - met) * bar
+    case('Na2S')
+      ! Morley et al. (2012)
+      p_vap =  10.0_dp**(8.550_dp - 13889.0_dp/T - 0.5_dp*met) * bar
+    case('ZnS')
+      ! Elspeth 5 polynomial Barin data fit
+      p_vap = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
+        &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)
+      ! Morley et al. (2012)
+      !p_vap = 10.0_dp**(12.812_dp - 15873.0_dp/T - met) * bar        
+    case('KCl')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
+        & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
+      ! Morley et al. (2012)
+      !p_vap =  10.0_dp**(7.611_dp - 11382.0_dp/T) * bar
+    case('NaCl')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e3_dp*T & 
+        & + 5.30965e-7_dp*T**2 -2.59584e-12_dp*T**3)
+    case('S2')
+      !--- Zahnle et al. (2016) ---
+      if (T < 413.0_dp) then
+        p_vap = exp(27.0_dp - 18500.0_dp/T) * bar
+      else
+        p_vap = exp(16.1_dp - 14000.0_dp/T) * bar
+      end if
+    case('S8')
+      !--- Zahnle et al. (2016) ---
+      if (T < 413.0_dp) then
+        p_vap = exp(20.0_dp - 11800.0_dp/T) * bar
+      else
+        p_vap = exp(9.6_dp - 7510.0_dp/T) * bar
+      end if        
+    case('NH4Cl')
+      ! Unknown - I think I fit this?
+      p_vap = 10.0_dp**(7.0220_dp - 4302.0_dp/T) * bar
+    case('H2O')
+      TC = T - 273.15_dp
+      ! Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
+      if (TC < 0.0_dp) then
+        f = 0.99882_dp * exp(0.00000008_dp * p/pa)
+        p_vap = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa * f
+      else
+        f = 1.00071_dp * exp(0.000000045_dp * p/pa)
+        p_vap = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa * f
+      end if
+      ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
+      !if (T > 1048.0_dp) then
+      !  p_vap = 6.0e8_dp
+      !else if (T < 273.16_dp) then
+      !  p_vap = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
+      !else
+      !  p_vap = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
+      !end if
+    case('NH3')
+      ! Blakley et al. (2024) - experimental to low T and pressure
+      p_vap = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
+      ! Ackerman & Marley (2001) NH3 ice vapour pressure expression fit from Weast (1971) data
+      !p_vap = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
+    case('CH4')
+      ! Frey & Schmitt (2009)
+      p_vap = exp(1.051e1_dp - 1.110e3_dp/T - 4.341e3_dp/T**2 + 1.035e5_dp/T**3 - 7.910e5_dp/T**4) * bar
+      ! Lodders & Fegley (1998) - directly taken from VIRGA
+      ! if (T < 90.68_dp) then
+      !   C = -16.043_dp/8.3143_dp * (2.213_dp - 2.650_dp)
+      !   B = -16.043_dp/8.3143_dp * (611.10_dp + (2.213_dp - 2.650_dp) * 90.68_dp)
+      !   A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
+      ! else
+      !   C = -16.043_dp/8.3143_dp * (2.213_dp - 3.370_dp)
+      !   B = -16.043_dp/8.3143_dp * (552.36_dp + (2.213_dp - 3.370_dp) * 90.68_dp)
+      !   A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
+      ! end if
+      ! p_vap = A * T**C * exp(B/T) * bar
+
+    case('NH4SH')
+      !--- E.Lee's fit to Walker & Lumsden (1897) ---
+      p_vap = 10.0_dp**(7.8974_dp - 2409.4_dp/T) * bar
+    case('H2S')
+      ! Frey & Schmitt (2009)
+      p_vap = exp(12.98_dp - 2.707e3_dp/T) * bar
+    case('H2SO4')
+      ! GGChem 5 polynomial NIST fit
+      p_vap = exp(-1.01294e4_dp/T + 3.55465e1_dp - 8.34848e-3_dp*T)      
+    case('CO')
+      ! Frey & Schmitt (2009)
+      if (T < 61.55_dp) then
+        p_vap = exp(1.043e1_dp - 7.213e2_dp/T - 1.074e4_dp/T**2 + 2.341e5_dp/T**3 - 2.392e6_dp/T**4 + 9.478e6_dp/T**5) * bar
+      else
+        p_vap = exp(1.025e1_dp - 7.482e2_dp/T - 5.843e3_dp/T**2 + 3.939e4_dp/T**3) * bar
+      end if
+      ! Yaws
+      !p_vap = 10.0_dp**(51.8145e0_dp - 7.8824e2_dp/T - 2.2734e1_dp*log10(T) &
+      !  & + 5.1225e-2_dp*T + 4.6603e-11_dp*T**2) * mmHg
+    case('CO2')
+      ! Frey & Schmitt (2009)
+      if (T < 194.7_dp) then
+        p_vap = exp(1.476e1_dp - 2.571e3_dp/T - 7.781e4_dp/T**2 + 4.325e6_dp/T**3 - 1.207e8_dp/T**4 + 1.350e9_dp/T**5) * bar
+      else
+        p_vap = exp(1.861e1_dp - 4.154e3_dp/T + 1.041e5_dp/T**2) * bar
+      end if      
+      ! Yaws
+      !p_vap = 10.0_dp**(35.0187e0_dp - 1.5119e3_dp/T - 1.1335e1_dp*log10(T) &
+      !  & + 9.3383e-3_dp*T + 7.7626e-10_dp*T**2) * mmHg
+    case('O2')
+      ! Blakley et al. (2024) - experimental to low T and pressure (beta O2)
+      p_vap = exp(15.29_dp - 1166.2_dp/T - 0.75587_dp*log(T) + 0.14188_dp*T - 1.8665e-3_dp*T**2 + 7.582e-6_dp *T**3) * bar
+    case default
+      print*, 'Vapour pressure species not found: ', trim(sp)
+      print*, 'STOP'
+      stop
+    end select
+
+  end function p_vap_sp
+
+  !! Surface tension for each species
+  function sig_sp(sp, T) result(sig)
+    implicit none
+
+    character(len=20), intent(in) :: sp
+    real(dp), intent(in) :: T
+
+    real(dp) :: TC, sig
+
+    TC = T - 273.15_dp
+
+    ! Return surface tension in erg cm-2
+    select case (sp)
+    case('C')
+      ! Tabak et al. (1995)
+      sig = 1400.0_dp
+    case('TiC')
+      ! Chigai et al. (1999)
+      sig = 1242.0_dp
+    case ('SiC')
+      ! Nozawa et al. (2003)
+      sig = 1800.0_dp
+    case('CaTiO3')
+      ! Kozasa et al. (1987)
+      sig = 494.0_dp      
+    case('TiO2')
+      ! Sindel et al. (2022)
+      sig = 589.79_dp - 0.0708_dp * T
+    case('Fe')
+      ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
+      sig = 1862.0_dp - 0.39_dp * (TC - 1530.0_dp)
+      ! Pradhan et al. (2009)
+      !sig = 2858.0_dp - 0.51_dp * T
+    case('Fe2O3')
+      sig = 410.0_dp
+    case('FeO')
+      ! Janz 1988
+      sig = 585.0_dp
+    case('Al2O3')
+      ! Pradhan et al. (2009)
+      sig = 1024.0_dp - 0.177_dp * T
+      ! Kozasa et al. (1989)
+      !sig = 690.0_dp
+    case('MgSiO3')
+      ! Janz 1988
+      sig = 197.3_dp + 0.098_dp * T
+    case('Mg2SiO4')
+      ! Kozasa et al. (1989)
+      sig = 436.0_dp
+    case('SiO')
+      ! Gail and Sedlmayr (1986)
+      sig = 500.0_dp
+    case('SiO2')
+      ! Pradhan et al. (2009)
+      !sig = 243.2_dp - 0.013_dp * T
+      ! Janz 1988
+      sig = 243.2_dp + 0.031_dp * T
+    case('Cr')
+      ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
+      sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)      
+    case('MnS')
+      sig = 2326.0_dp
+    case('Na2S')
+      sig = 1033.0_dp
+    case('KCl')
+      ! Janz 1988
+      !sig = 175.57_dp - 0.07321_dp * T
+      sig = 160.4_dp - 0.07_dp*T
+    case('NaCl')
+      ! Janz 1988
+      sig = 191.16_dp - 0.07188_dp * T
+    case('ZnS')
+      sig = 860.0_dp
+    case('H2O')
+      ! Hale and Plummer (1974)
+      sig = 141.0_dp - 0.15_dp*TC
+    case('NH3')
+      ! Weast et al. (1988)
+      sig = 23.4_dp
+    case('NH4Cl')
+      sig = 56.0_dp
+    case('NH4SH')
+      sig = 50.0_dp
+    case('CH4')
+      ! USCG (1984) - can be updated to more accurate expression
+      sig = 14.0_dp
+    case('H2S')
+      ! Nehb and Vydra (2006)
+      sig = 58.1_dp
+    case('S2','S8')
+      ! Fanelli 1950
+      sig = 60.8_dp
+    case default
+      print*, 'Species surface tension not found: ', trim(sp)
+      print*, 'STOP'
+      stop
+    end select
+
+    sig = max(10.0_dp, sig)
+
+      ! Pradhan et al. (2009):
+      !Si : 732 - 0.086*(T - 1685.0)
+      !MgO : 1170 - 0.636*T
+      !CaO : 791 - 0.0935*T
+
+  end function sig_sp
+
+  !! latent heat for each species
+  function l_heat_sp(sp, T, mol_w) result(L_heat)
+    implicit none
+
+    character(len=20), intent(in) :: sp
+    real(dp), intent(in) :: T, mol_w
+
+    real(dp) :: L_heat
+
+
+    ! Return latent heat in erg g-1
+    ! Get value from vapour pressure expression (or special function)
+    select case(trim(sp))
+    case('C')
+      L_heat = 41523.0_dp * log(10.0_dp) * R_gas / mol_w
+    case('TiC')
+      L_heat = 33600.0_dp * log(10.0_dp) * R_gas / mol_w
+    case('SiC')
+      L_heat = 9.51431385e4_dp * R_gas / mol_w
+    case('CaTiO3')
+      L_heat = 79568.2_dp * R_gas / mol_w
+    case('Al2O3')
+      L_heat = 73503.0_dp * R_gas / mol_w
+    case('TiO2')
+      L_heat = 7.70443e4_dp * R_gas / mol_w
+    case('VO')
+      L_heat = 6.74603e4_dp * R_gas / mol_w
+    case('Fe')
+      L_heat = 37120.0_dp * R_gas / mol_w
+    case('FeS')
+      L_heat = 5.69922e4_dp * R_gas / mol_w
+    case('FeO')
+      L_heat = 6.30018e4_dp * R_gas / mol_w
+    case('MgS')
+      L_heat = 5.92010440e4_dp * R_gas / mol_w
+    case('Mg2SiO4')
+      L_heat = 62279.0_dp * R_gas / mol_w
+    case('MgSiO3','MgSiO3_amorph')
+      L_heat = 58663.0_dp * R_gas / mol_w
+    case('MgO')
+      L_heat = 7.91838e4_dp * R_gas / mol_w
+    case('SiO2','SiO2_amorph')
+      L_heat = 7.28086e4_dp * R_gas / mol_w
+    case('SiO')
+      L_heat = 49520.0_dp * R_gas / mol_w
+    case('Cr')
+      L_heat = 4.78455e4_dp * R_gas / mol_w
+    case('MnS')
+      L_heat = 23810.0_dp * log(10.0_dp) * R_gas / mol_w
+    case('Na2S')
+      L_heat = 13889.0_dp * log(10.0_dp) * R_gas / mol_w
+    case('ZnS')
+      L_heat = 4.75507888e4_dp * R_gas / mol_w
+    case('KCl')
+      L_heat = 2.69250e4_dp * R_gas / mol_w
+    case('NaCl')
+      L_heat = 2.79146e4_dp * R_gas / mol_w
+    case('NH4Cl')
+      L_heat = 4302.0_dp * log(10.0_dp) * R_gas / mol_w
+    case('H2O')
+      L_heat = 2257.0e7_dp
+    case('NH3')
+      L_heat = 1371.0e7_dp
+    case('CH4')
+      L_heat = 480.6e7_dp
+    case('NH4SH')
+      L_heat = 2409.4_dp * log(10.0_dp) * R_gas / mol_w
+    case('H2S')
+      L_heat = 958.587_dp * log(10.0_dp) * R_gas / mol_w
+    case('S2')
+      L_heat = 14000.0_dp * R_gas / mol_w
+    case('S8')
+      L_heat = 7510.0_dp * R_gas / mol_w
+    case('CO')
+      L_heat = 7.8824e2_dp * log(10.0_dp) * R_gas / mol_w
+    case('CO2')
+      L_heat = 1.5119e3_dp * log(10.0_dp) * R_gas / mol_w
+    case('H2SO4')
+      L_heat = 1.01294e4_dp * R_gas / mol_w
+    case default
+      print*, 'Latent heat: dust species not found: ', trim(sp)
+      print*, 'STOP'
+      stop
+    end select
+
+  end function l_heat_sp
+
+  !! eta for background gas
+  subroutine eta_a_mix(n_bg, sp_bg, VMR_bg, T, eta_out)
+    implicit none
+
+    integer, intent(in) :: n_bg
+    character(len=20), dimension(:), intent(in) :: sp_bg
+    real(dp), dimension(n_bg), intent(in) :: VMR_bg
+    real(dp), intent(in) :: T
+
+    real(dp), intent(out) :: eta_out
+    
+    integer :: i, j
+    real(dp) :: bot, Eij, part
+    real(dp), dimension(n_bg) :: y
+
+    !! Construct the background gas arrays for eta (dynamical viscosity) calculation
+    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
+
+    do i = 1, n_bg
+      select case(sp_bg(i))
+
+      case('OH')
+        d_g(i) = d_OH
+        LJ_g(i) = LJ_OH
+        molg_g(i) = molg_OH
+      case('H2')
+        d_g(i) = d_H2
+        LJ_g(i) = LJ_H2
+        molg_g(i) = molg_H2
+      case('H2O')
+        d_g(i) = d_H2O
+        LJ_g(i) = LJ_H2O
+        molg_g(i) = molg_H2O
+      case('H')
+        d_g(i) = d_H
+        LJ_g(i) = LJ_H
+        molg_g(i) = molg_H
+      case('CO')
+        d_g(i) = d_CO
+        LJ_g(i) = LJ_CO
+        molg_g(i) = molg_CO
+      case('CO2')
+        d_g(i) = d_CO2
+        LJ_g(i) = LJ_CO2
+        molg_g(i) = molg_CO2
+      case('O')
+        d_g(i) = d_O
+        LJ_g(i) = LJ_O
+        molg_g(i) = molg_O
+      case('CH4')
+        d_g(i) = d_CH4
+        LJ_g(i) = LJ_CH4
+        molg_g(i) = molg_CH4
+      case('C2H2')
+        d_g(i) = d_C2H2
+        LJ_g(i) = LJ_C2H2
+        molg_g(i) = molg_C2H2
+      case('NH3')
+        d_g(i) = d_NH3
+        LJ_g(i) = LJ_NH3
+        molg_g(i) = molg_NH3
+      case('N2')
+        d_g(i) = d_N2
+        LJ_g(i) = LJ_N2
+        molg_g(i) = molg_N2 
+      case('HCN')
+        d_g(i) = d_HCN
+        LJ_g(i) = LJ_HCN
+        molg_g(i) = molg_HCN
+      case('He')
+        d_g(i) = d_He
+        LJ_g(i) = LJ_He
+        molg_g(i) = molg_He
+      case default
+        print*, 'Background gas species data not found: ', trim(sp_bg(i))
+        print*, 'STOP'
+        stop
+      end select
+
+    end do
+
+    !! Davidson (1993) mixing rule
+    
+    !! First calculate each species eta
+    do i = 1, n_bg
+      eta_g(i) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(i)*amu)*kb*T)/(pi*d_g(i)**2)) &
+        & * ((((kb*T)/LJ_g(i))**(0.16_dp))/1.22_dp)
+    end do
+
+    !! Calculate y values
+    bot = 0.0_dp
+    do i = 1, n_bg
+      bot = bot + VMR_bg(i) * sqrt(molg_g(i))
+    end do
+    y(:) = (VMR_bg(:) * sqrt(molg_g(:)))/bot
+
+    !! Calculate fluidity following Davidson equation
+    eta_out = 0.0_dp
+    do i = 1, n_bg
+      do j = 1, n_bg
+        Eij = ((2.0_dp*sqrt(molg_g(i)*molg_g(j)))/(molg_g(i) + molg_g(j)))**0.375
+        part = (y(i)*y(j))/(sqrt(eta_g(i)*eta_g(j))) * Eij
+        eta_out = eta_out + part
+      end do
+    end do
+
+    !! Viscosity is inverse fluidity
+    eta_out = 1.0_dp/eta_out
+
+  end subroutine eta_a_mix
 
   !! Dummy jacobian subroutine required for dlsode
   subroutine jac_dum (NEQ, X, Y, ML, MU, PD, NROWPD)

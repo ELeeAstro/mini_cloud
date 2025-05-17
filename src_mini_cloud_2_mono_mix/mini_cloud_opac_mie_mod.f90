@@ -14,8 +14,8 @@ module mini_cloud_opac_mie_mod
 
   type nk_table
 
-    character(len=11) :: name
-    character(len=50) :: fname
+    character(len=20) :: name
+    character(len=100) :: fname
 
     real(dp), allocatable, dimension(:) :: n, k
 

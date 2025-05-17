@@ -12,14 +12,13 @@ program test_mini_cloud_2
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
   real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
-  real(dp), parameter :: R = 8.31446261815324e7_dp
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
 
   integer :: example, n_it
   real(dp) :: t_step, time
 
-  integer :: nlay, nlev, i, n, u, k
+  integer :: nlay, nlev, i, n, u
   character(len=20), allocatable, dimension(:) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v
@@ -33,12 +32,11 @@ program test_mini_cloud_2
 
   integer :: nlines, io, idx, idx1
   real(dp) :: p_bot, p_top
-  real(dp), allocatable, dimension(:) :: T_f, p_f, Kzz_f
+  real(dp), allocatable, dimension(:) :: T_f, p_f
   real(dp) :: m_seed, Nc, rho_c_tot, rho_d_mean
 
-  integer :: nm, j, nsp
-  real(dp), allocatable, dimension(:) :: alte, q_a
-  real(dp) :: t0, T_eff, k_ir, tau
+  integer :: j, nsp
+  real(dp) :: T_eff, k_ir, tau
 
   logical :: end
 
@@ -184,8 +182,12 @@ program test_mini_cloud_2
    
       do n = 1, n_it
 
+         print*,'b'
+
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
+
+          print*, i
 
           !! Call mini-cloud and perform integrations for a single layer
           call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, VMR(i,:), t_step, sp, sp_bg, & 
@@ -204,9 +206,11 @@ program test_mini_cloud_2
         q(:,nsp+1) = q_0(:)
         q(:,nsp+2:) = q_1(:,:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:), q0(nsp+1:))
+        print*,'a'
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
+        !call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:), q0(nsp+1:))
+
+        !call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
