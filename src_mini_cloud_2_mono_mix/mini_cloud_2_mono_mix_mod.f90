@@ -25,7 +25,7 @@ module mini_cloud_2_mono_mix_mod
 
   !! Global atmospheric variables
   real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
-  real(dp) :: mfp, eta, nu, cT, met
+  real(dp) :: mfp_a, eta_a, nu_a, cT, met, kap_a
 
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
@@ -55,7 +55,7 @@ module mini_cloud_2_mono_mix_mod
   !! Cloud properties array
   type(cld_sp), dimension(:), allocatable :: cld
 
-  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, mfp, eta, nu, cT, met, cld, ndust)
+  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, mfp_a, eta_a, kap_a, nu_a, cT, met, cld, ndust)
 
 
   !! Diameter, LJ potential and molecular weight for background gases
@@ -80,7 +80,7 @@ module mini_cloud_2_mono_mix_mod
 
   public :: mini_cloud_2_mono_mix, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
-    & p_vap_sp, sig_sp, l_heat_sp, eta_a_mix
+    & p_vap_sp, sig_sp, l_heat_sp, eta_a_mix, kappa_a_mix
 
   contains
 
@@ -154,13 +154,16 @@ module mini_cloud_2_mono_mix_mod
     Rd = R_gas/mu
 
     !! Calculate dynamical viscosity for this layer
-    call eta_a_mix(n_bg, sp_bg, VMR_bg, T, eta)
+    call eta_a_mix(n_bg, sp_bg, VMR_bg, T, eta_a)
 
     !! Mixture kinematic viscosity
-    nu = eta/rho
+    nu_a = eta_a/rho
 
     !! Calculate mean free path for this layer
-    mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
+    mfp_a = (2.0_dp*eta_a/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
+
+    !! Calculate the background thermal conductivity for this layer
+    call kappa_a_mix(n_bg, sp_bg, VMR_bg, T, kap_a)
 
     !! Get the basic cloud species properties
     call cloud_sp(ndust, sp_in, T, rho, mu)
@@ -298,16 +301,16 @@ module mini_cloud_2_mono_mix_mod
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
 
     !! Knudsen number
-    Kn = mfp/r_c
+    Kn = mfp_a/r_c
 
     !! Cunningham slip factor (Kim et al. 2005)
     Kn_b = min(Kn, 100.0_dp)
     beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
     !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta) & 
+    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta_a) & 
      & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+     & + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta_a**2))**(0.4_dp))**(-1.25_dp)
 
     !! Settling velocity (Epstein regime)
     vf_e = (sqrt(pi)*grav*rho_d_m*r_c)/(2.0_dp*cT*rho)
@@ -539,7 +542,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: Knd
 
     !! Particle diffusion rate
-    D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
+    D_r = (kb*T*beta)/(6.0_dp*pi*eta_a*r_c)
 
     !! Thermal velocity limit rate
     V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
@@ -547,7 +550,7 @@ module mini_cloud_2_mono_mix_mod
     !! Moran (2022) method using diffusive Knudsen number
     Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
     phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
-    f_coag = (-4.0_dp*kb*T*beta)/(3.0_dp*eta) * phi
+    f_coag = (-4.0_dp*kb*T*beta)/(3.0_dp*eta_a) * phi
 
   end subroutine calc_coag
 
@@ -1425,6 +1428,139 @@ module mini_cloud_2_mono_mix_mod
     end select
 
   end function l_heat_sp
+
+  subroutine kappa_a_mix(n_bg, sp_bg, VMR_bg, T, kappa_out)
+    implicit none
+
+    integer, intent(in) :: n_bg
+    character(len=20), dimension(:), intent(in) :: sp_bg
+    real(dp), dimension(n_bg), intent(in) :: VMR_bg
+    real(dp), intent(in) :: T
+
+    real(dp), intent(out) :: kappa_out
+
+    integer :: i, j, n 
+    real(dp) :: top, bot
+    real(dp) :: kappa_sum, phi_ij_top, phi_ij_bot, phi_ij
+    real(dp) :: Tr
+
+    !! H2 coefficents from Assael et al. (2011)
+    real(dp), parameter :: Tcr_H2 = 33.145_dp
+    real(dp), dimension(7), parameter :: &
+      & A1 = (/-3.40976e-1_dp, 4.5882e0_dp, -1.4508e0_dp, &
+      & 3.26394e-1_dp, 3.16939e-3_dp, 1.90592e-4_dp, -1.13900e-6_dp/)
+    real(dp), dimension(4), parameter :: &
+      & A2 = (/1.38497e2_dp,-2.21878e1_dp, 4.57151_dp, 1.0_dp/)
+
+    real(dp), allocatable, dimension(:) :: lam_g
+
+    allocate(lam_g(n_bg))
+
+    do n = 1, n_bg
+      select case(sp_bg(n))
+
+      case('H')
+
+        !! Pavlov (2017,2019)
+        lam_g(n) = 263.5_dp*T**0.751_dp * (1.0_dp - 6.689e-5_dp*T + 3.350e-8_dp*T**2)
+
+      case('O')
+
+        !! Pavlov (2017,2019)
+        lam_g(n) = 46.70_dp*T**0.77_dp * (1.0_dp - 2.228e-5_dp*T + 5.545e-8_dp*T**2)
+
+      case('H2')
+
+        top = 0.0_dp
+        do i = 1, 7
+          top = top + A1(i) * (T/Tcr_H2)**(i-1)
+        end do
+
+        bot = 0.0_dp
+        do i = 1, 4
+          bot = bot + A2(i) * (T/Tcr_H2)**(i-1)
+        end do
+
+        !! Convert to erg s-1 cm-1 K-1
+        lam_g(n) = top/bot * 1e7_dp * 1e-2_dp
+
+      case('He')
+
+        !! Pavlov (2017,2019)
+        lam_g(n) = -688.0_dp + 591.4_dp*sqrt(T) + 23.64_dp*T &
+          & - 0.2095_dp*T**1.5 + 1.0979e-3_dp*T**2
+
+      case('N2')
+
+        !! Sotiriadou, Assael, Huber (2025)
+        Tr = T/126.192_dp
+        lam_g(n) = (-50.4059_dp + 1457.09_dp*Tr - 2580.5_dp*Tr**2 + 3616.59_dp*Tr**3 - 695.367_dp*Tr**4 &
+          & + 129.796_dp*Tr**5 + 4.03114_dp*Tr**6) & 
+          & / (99.3852_dp - 151.972_dp*Tr + 229.102_dp*Tr**2 - 22.9451_dp*Tr**3 + 6.0789_dp*Tr**4 + Tr**5)
+
+        !! Convert to erg s-1 cm-1 K-1
+        lam_g(n) = lam_g(n) * 1e4_dp * 1e-2_dp   
+
+        !! Pavlov (2017,2019)
+        !lam_g(n) = -3520.0_dp + 720.5_dp*sqrt(T) - 41.93*T & 
+        !  & + 1.613_dp*T**1.5 - 0.02685_dp*T**2 + 1.665e-4*T**2.5
+
+      case('O2')
+
+        !! Pavlov (2017,2019)
+        lam_g(n) = -3169.0_dp + 735.7_dp*sqrt(T) - 53.83*T & 
+          & + 2.583_dp*T**1.5 - 0.05325_dp*T**2 + 4.083e-4*T**2.5
+
+      case('NH3')
+
+        !! Monogenidou, Assael & Huber (2018)
+        Tr = T/405.56_dp
+        lam_g(n) = (86.9294_dp - 170.5502_dp*Tr +  608.0287_dp*Tr**2 - 100.9764_dp*Tr**3 +  85.1986_dp*T**4) &
+          & / (4.68994_dp + 9.21307_dp*Tr - 1.53637_dp*Tr**2 + Tr**3)
+
+          !! Convert to erg s-1 cm-1 K-1
+        lam_g(n) = lam_g(n) * 1e4_dp * 1e-2_dp
+
+      case('CO2')
+        !! Huber et al. (2016)
+        Tr = T/304.1282_dp
+        lam_g(n) = sqrt(Tr)/(1.51874307e-2_dp + 2.80674040e-2_dp/Tr + 2.28564190e-2_dp/Tr**2 - 7.41624210e-3_dp/Tr**3) 
+
+        !! Convert to erg s-1 cm-1 K-1
+        lam_g(n) = lam_g(n) * 1e4_dp * 1e-2_dp
+
+      case default
+        !! No data for background gas, set to zero
+        lam_g(n) = 0.0_dp
+      end select
+
+    end do
+
+    !! Mix gases using the Wilke (1950) viscosity/conductivity mixing rule
+    !! Now we loop twice over to find the mixture value using the Wilke (1950) mixing rule
+    kappa_out = 0.0_dp
+    do i = 1, n_bg
+      kappa_sum = 0.0_dp
+      if (VMR_bg(i) < 1e-20_dp) then
+        cycle
+      end if
+      do j = 1, n_bg
+        if (VMR_bg(j) < 1e-20_dp) then
+          cycle
+        end if
+        phi_ij_top = (1.0_dp + sqrt(eta_g(i)/eta_g(j)) * (molg_g(j)/molg_g(i))**(0.25_dp))**2
+        phi_ij_bot = (4.0_dp/sqrt(2.0_dp)) * sqrt(1.0_dp + (molg_g(i)/molg_g(j)))
+        phi_ij = phi_ij_top  / phi_ij_bot
+        kappa_sum = kappa_sum + VMR_bg(j) * phi_ij
+      end do
+      kappa_out = kappa_out + (VMR_bg(i) * lam_g(i)) / kappa_sum
+    end do
+
+    print*, kappa_out
+
+    deallocate(lam_g)
+
+  end subroutine kappa_a_mix
 
   !! eta for background gas
   subroutine eta_a_mix(n_bg, sp_bg, VMR_bg, T, eta_out)
