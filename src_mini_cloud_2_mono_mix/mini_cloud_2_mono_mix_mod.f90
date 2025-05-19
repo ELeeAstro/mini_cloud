@@ -1578,7 +1578,7 @@ module mini_cloud_2_mono_mix_mod
     kappa_out = 0.0_dp
     do i = 1, n_bg
       kappa_sum = 0.0_dp
-      if (VMR_bg(i) < 1e-20_dp) then
+      if ((VMR_bg(i) < 1e-20_dp) .or. (lam_g(i) < 1e-20_dp)) then
         cycle
       end if
       do j = 1, n_bg
