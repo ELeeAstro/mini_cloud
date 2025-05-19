@@ -1445,7 +1445,6 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: Tr
 
     !! H2 coefficents from Assael et al. (2011)
-    real(dp), parameter :: Tcr_H2 = 33.145_dp
     real(dp), dimension(7), parameter :: &
       & A1 = (/-3.40976e-1_dp, 4.5882e0_dp, -1.4508e0_dp, &
       & 3.26394e-1_dp, 3.16939e-3_dp, 1.90592e-4_dp, -1.13900e-6_dp/)
@@ -1471,14 +1470,16 @@ module mini_cloud_2_mono_mix_mod
 
       case('H2')
 
+        !! Assael et al. (2011)
+
         top = 0.0_dp
         do i = 1, 7
-          top = top + A1(i) * (T/Tcr_H2)**(i-1)
+          top = top + A1(i) * (T/33.145_dp)**(i-1)
         end do
 
         bot = 0.0_dp
         do i = 1, 4
-          bot = bot + A2(i) * (T/Tcr_H2)**(i-1)
+          bot = bot + A2(i) * (T/33.145_dp)**(i-1)
         end do
 
         !! Convert to erg s-1 cm-1 K-1
@@ -1489,6 +1490,16 @@ module mini_cloud_2_mono_mix_mod
         !! Pavlov (2017,2019)
         lam_g(n) = -688.0_dp + 591.4_dp*sqrt(T) + 23.64_dp*T &
           & - 0.2095_dp*T**1.5 + 1.0979e-3_dp*T**2
+
+      case('H2O')
+
+        !! Sengers et al. (1984) - low pressure limits
+        Tr = T/647.27_dp
+        lam_g(n) = sqrt(Tr)/(2.02223_dp + 14.11166_dp/Tr + 5.25597_dp/Tr**2 - 2.01870_dp/Tr**3)
+
+        !! Convert to erg s-1 cm-1 K-1
+        lam_g(n) = lam_g(n) * 1e7_dp * 1e-2_dp
+
 
       case('N2')
 
@@ -1522,9 +1533,35 @@ module mini_cloud_2_mono_mix_mod
         lam_g(n) = lam_g(n) * 1e4_dp * 1e-2_dp
 
       case('CO2')
+
         !! Huber et al. (2016)
         Tr = T/304.1282_dp
         lam_g(n) = sqrt(Tr)/(1.51874307e-2_dp + 2.80674040e-2_dp/Tr + 2.28564190e-2_dp/Tr**2 - 7.41624210e-3_dp/Tr**3) 
+
+        !! Convert to erg s-1 cm-1 K-1
+        lam_g(n) = lam_g(n) * 1e4_dp * 1e-2_dp
+
+      case('CO')
+
+        !! Huber & Harvey (2011) - CRC handbook constant at 300 K
+        lam_g(n) = 25.0_dp 
+
+        !! Convert to erg s-1 cm-1 K-1
+        lam_g(n) = lam_g(n) * 1e4_dp * 1e-2_dp
+ 
+
+      case('CH4')
+
+        !! Huber & Harvey (2011) - CRC handbook constant at 300 K
+        lam_g(n) = 34.4_dp 
+
+        !! Convert to erg s-1 cm-1 K-1
+        lam_g(n) = lam_g(n) * 1e4_dp * 1e-2_dp
+
+      case('C2H2')
+
+        !! Huber & Harvey (2011) - CRC handbook constant at 300 K
+        lam_g(n) = 21.4_dp 
 
         !! Convert to erg s-1 cm-1 K-1
         lam_g(n) = lam_g(n) * 1e4_dp * 1e-2_dp
