@@ -1047,7 +1047,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: p_vap
 
     ! Return vapour pressure in dyne
-    select case(sp)
+    select case(trim(sp))
     case('C')
       ! Gail & Sedlmayr (2013) - I think...
       p_vap = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
@@ -1247,7 +1247,7 @@ module mini_cloud_2_mono_mix_mod
     TC = T - 273.15_dp
 
     ! Return surface tension in erg cm-2
-    select case (sp)
+    select case(trim(sp))
     case('C')
       ! Tabak et al. (1995)
       sig = 1400.0_dp
@@ -1362,15 +1362,15 @@ module mini_cloud_2_mono_mix_mod
     case('SiC')
       L_heat = 9.51431385e4_dp * R_gas / mol_w
     case('CaTiO3')
-      L_heat = 79568.2_dp * R_gas / mol_w
+      L_heat = 72160.0_dp * log(10.0_dp) * R_gas / mol_w
     case('Al2O3')
-      L_heat = 73503.0_dp * R_gas / mol_w
+      L_heat = 45892.6_dp * log(10.0_dp) * R_gas / mol_w
     case('TiO2')
       L_heat = 7.70443e4_dp * R_gas / mol_w
     case('VO')
       L_heat = 6.74603e4_dp * R_gas / mol_w
     case('Fe')
-      L_heat = 37120.0_dp * R_gas / mol_w
+      L_heat = 20995.0_dp * log(10.0_dp) * R_gas / mol_w
     case('FeS')
       L_heat = 5.69922e4_dp * R_gas / mol_w
     case('FeO')
@@ -1378,9 +1378,9 @@ module mini_cloud_2_mono_mix_mod
     case('MgS')
       L_heat = 5.92010440e4_dp * R_gas / mol_w
     case('Mg2SiO4')
-      L_heat = 62279.0_dp * R_gas / mol_w
+      L_heat = 32488.0_dp * log(10.0_dp) * R_gas / mol_w
     case('MgSiO3','MgSiO3_amorph')
-      L_heat = 58663.0_dp * R_gas / mol_w
+      L_heat = 28665.0_dp * log(10.0_dp) * R_gas / mol_w
     case('MgO')
       L_heat = 7.91838e4_dp * R_gas / mol_w
     case('SiO2','SiO2_amorph')
@@ -1410,17 +1410,19 @@ module mini_cloud_2_mono_mix_mod
     case('NH4SH')
       L_heat = 2409.4_dp * log(10.0_dp) * R_gas / mol_w
     case('H2S')
-      L_heat = 958.587_dp * log(10.0_dp) * R_gas / mol_w
+      L_heat = 2.707e3_dp * R_gas / mol_w
     case('S2')
       L_heat = 14000.0_dp * R_gas / mol_w
     case('S8')
       L_heat = 7510.0_dp * R_gas / mol_w
     case('CO')
-      L_heat = 7.8824e2_dp * log(10.0_dp) * R_gas / mol_w
+      L_heat = 7.213e2_dp * R_gas / mol_w
     case('CO2')
-      L_heat = 1.5119e3_dp * log(10.0_dp) * R_gas / mol_w
+      L_heat = 2.571e3_dp * R_gas / mol_w
     case('H2SO4')
       L_heat = 1.01294e4_dp * R_gas / mol_w
+    case('O2')
+      L_heat = 1166.2_dp * R_gas / mol_w
     case default
       print*, 'Latent heat: dust species not found: ', trim(sp)
       print*, 'STOP'
@@ -1456,7 +1458,7 @@ module mini_cloud_2_mono_mix_mod
     allocate(lam_g(n_bg))
 
     do n = 1, n_bg
-      select case(sp_bg(n))
+      select case(trim(sp_bg(n)))
 
       case('H')
 
@@ -1593,8 +1595,6 @@ module mini_cloud_2_mono_mix_mod
       kappa_out = kappa_out + (VMR_bg(i) * lam_g(i)) / kappa_sum
     end do
 
-    print*, kappa_out
-
     deallocate(lam_g)
 
   end subroutine kappa_a_mix
@@ -1618,7 +1618,7 @@ module mini_cloud_2_mono_mix_mod
     allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
 
     do i = 1, n_bg
-      select case(sp_bg(i))
+      select case(trim(sp_bg(i)))
 
       case('OH')
         d_g(i) = d_OH
