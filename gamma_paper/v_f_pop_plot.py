@@ -50,14 +50,14 @@ plt.plot(nu, vf_h_1, c=col[1],ls='dashed')
 plt.plot(nu, vf_l_2, c=col[0],ls='dashdot')
 plt.plot(nu, vf_h_2, c=col[1],ls='dashdot')
 
-plt.vlines(1.0, 0, 5, colors='black', ls='dotted')
-plt.text(1.1, 0.5, r'Exponential' "\n" r'distribution', c='black')
+plt.vlines(1.0, 0.1, 10, colors='black', ls='dotted')
+plt.text(1.1, 0.2, r'Exponential' "\n" r'distribution', c='black')
 
 plt.hlines(1.0, 0.1, 10, colors='black', ls='dotted')
 
 
 plt.legend()
-#plt.ylim(0.1, 10)
+plt.ylim(0.1, 10)
 plt.xlim(1e-1, 10)
 plt.xscale('log')
 plt.yscale('log')
