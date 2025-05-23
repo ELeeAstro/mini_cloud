@@ -24,7 +24,7 @@ module mini_cloud_2_mono_mix_mod
   real(dp), parameter :: mmHg = 1333.22387415_dp  ! mmHg to dyne
 
   !! Global atmospheric variables
-  real(dp) :: T, mu, nd_atm, rho, p, grav, Rd
+  real(dp) :: T, mu, nd_atm, rho, p, grav, Rd, cp
   real(dp) :: mfp_a, eta_a, nu_a, cT, met, kap_a
 
   real(dp), parameter :: r_seed = 1e-7_dp
@@ -44,7 +44,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: mol_w_v, m_v, v2c
 
     integer :: inuc
-    real(dp) :: Nf, alp_nuc
+    real(dp) :: Nf, alp_nuc, g
 
     real(dp) :: lh
 
@@ -55,7 +55,7 @@ module mini_cloud_2_mono_mix_mod
   !! Cloud properties array
   type(cld_sp), dimension(:), allocatable :: cld
 
-  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, Rd, mfp_a, eta_a, kap_a, nu_a, cT, met, cld, ndust)
+  !$omp threadprivate(T, mu, nd_atm, rho, p, grav, cp, Rd, mfp_a, eta_a, kap_a, nu_a, cT, met, cld, ndust)
 
 
   !! Diameter, LJ potential and molecular weight for background gases
@@ -84,20 +84,21 @@ module mini_cloud_2_mono_mix_mod
 
   contains
 
-  subroutine mini_cloud_2_mono_mix(ilay, T_in, P_in, grav_in, mu_in, met_in, bg_VMR_in, t_end, sp_in, sp_bg, &
-    & n_in, q_v, q_0, q_1)
+  subroutine mini_cloud_2_mono_mix(ilay, T_in, P_in, grav_in, mu_in, met_in, cp_in, bg_VMR_in, t_end, sp_in, sp_bg, &
+    & n_in, q_v, q_0, q_1, dTdt)
     implicit none
 
     ! Input variables
     integer, intent(in) :: n_in, ilay
     character(len=20), dimension(n_in), intent(in) :: sp_in
     character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end, met_in
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end, met_in, cp_in
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
     ! Input/Output tracer values
     real(dp), intent(inout) :: q_0
     real(dp), dimension(n_in), intent(inout) :: q_v, q_1
+    real(dp), intent(out) :: dTdt
 
     integer :: ncall
 
@@ -116,6 +117,8 @@ module mini_cloud_2_mono_mix_mod
     !! Work variables
     integer :: n_bg
     real(dp), allocatable, dimension(:) :: VMR_bg
+    real(dp), dimension(n_in) :: q_1_old
+    real(dp) :: Q_latent
 
     ndust = n_in
 
@@ -137,6 +140,9 @@ module mini_cloud_2_mono_mix_mod
 
     !! Approx log10 metallicity of atmosphere
     met = met_in
+
+    !! Change heat capacity of atmosphere to cgs [erg g-1 K-1]
+    cp = cp_in * 1e7_dp * 1e-3_dp
 
     !! Change gravity to cgs [cm s-2]
     grav = grav_in * 100.0_dp
@@ -208,6 +214,9 @@ module mini_cloud_2_mono_mix_mod
     y(2:2+ndust-1) = q_1(:)
     y(2+ndust:) = q_v(:)
 
+    !! Save initial value for q_1
+    q_1_old(:) = q_1(:)
+
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
 
@@ -244,6 +253,10 @@ module mini_cloud_2_mono_mix_mod
     q_0 = y(1)
     q_1(:) = y(2:2+ndust-1)
     q_v(:) = y(2+ndust:)
+
+    !! We can now calculate the temperature tendency from the change in condensed mass of each material
+    Q_latent = sum(cld(:)%lh * (q_1_old(:) - q_1(:)))
+    dTdt = -Q_latent/(cp*t_end)
 
     deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, cld)
 
@@ -1029,6 +1042,10 @@ module mini_cloud_2_mono_mix_mod
 
       !! Latent heat of species [erg g-1]
       cld(j)%lh = l_heat_sp(cld(j)%sp, T, cld(j)%mol_w_sp)
+
+      !! Calculate g factor for condensation
+      !cld(j)%g = (cld(j)%D*cld(j)%lh*cld(j)%m0)/(kap_a*T) * (cld(j)%lh/(cld(j)%Rd_v*T) - 1.0_dp) + cld(j)%Rd_v*T
+      !cld(j)%g = 1.0_dp/cld(j)%g
 
     end do
 

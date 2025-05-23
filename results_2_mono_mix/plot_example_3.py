@@ -35,6 +35,7 @@ q_v = data[:,8:12]
 q_0 = data[:,12]
 q_1 = data[:,13:17]
 vf = data[:,17]
+dTdt = data[:,18]
 
 nlay = len(pl)
 
@@ -89,6 +90,16 @@ for j in range(nlay):
 m_mix = np.zeros((nlay,ndust))
 for j in range(nlay):
     m_mix[j,:] = rho_c[j,:]/sum(rho_c[j,:])
+
+fig = plt.figure()
+
+col = sns.color_palette('colorblind')
+
+plt.plot(dTdt,pl,c=col[0])
+
+plt.yscale('log')
+
+plt.gca().invert_yaxis()
 
 fig = plt.figure()
 

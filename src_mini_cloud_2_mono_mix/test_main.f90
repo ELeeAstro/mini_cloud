@@ -21,7 +21,7 @@ program test_mini_cloud_2
   integer :: nlay, nlev, i, n, u
   character(len=20), allocatable, dimension(:) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
-  real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v
+  real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v, cp, dTdt
   real(dp), allocatable, dimension(:) :: q_0, vf, r_c, m_c, q0, r_c_old, del
   real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1
   real(dp) :: grav, met
@@ -71,7 +71,7 @@ program test_mini_cloud_2
       wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
       !! Allocate all variables, set constant values
-      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay))
+      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay), cp(nlay), dTdt(nlay))
 
       !! Find pressure level grid - logspaced between p_top and p_bot
       p_top = 3e-3_dp * 1e5_dp
@@ -186,8 +186,8 @@ program test_mini_cloud_2
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, VMR(i,:), t_step, sp, sp_bg, & 
-            & nsp, q_v(i,:), q_0(i), q_1(i,:))
+          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), dTdt(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
@@ -282,7 +282,7 @@ program test_mini_cloud_2
       wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
 
       !! Allocate all variables, set constant values
-      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay))
+      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay), cp(nlay), dTdt(nlay))
 
       !! Find pressure level grid (pa) - logspaced between p_top and p_bot
       p_top = 1e-8_dp * 1e5_dp
@@ -325,6 +325,11 @@ program test_mini_cloud_2
 
       !! Assume constant Kzz [cm2 s-1]
       Kzz(:) = 1e8_dp
+
+      !! Heat capacity of atmosphere [J kg-1 K-1]
+      cp(:) = 1.3e4_dp
+
+      dTdt(:) = 0.0_dp
 
       !! Print T-p-Kzz profile
       print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
@@ -378,9 +383,8 @@ program test_mini_cloud_2
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, VMR(i,:), t_step, sp, sp_bg, & 
-            & nsp, q_v(i,:), q_0(i), q_1(i,:))
-
+          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), dTdt(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
@@ -487,7 +491,7 @@ contains
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), vf(i)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), vf(i), dTdt(i)
       write(u2,*) t, time, pl(i), k_ext(i,:)
       write(u3,*) t, time, pl(i), ssa(i,:)
       write(u4,*) t, time, pl(i), g(i,:)
