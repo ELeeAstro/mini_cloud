@@ -243,10 +243,14 @@ module mini_cloud_3_gamma_mod
     real(dp) :: f_cond1, f_cond2
     real(dp) :: f_nuc_hom, f_seed_evap
     real(dp) :: f_coal0, f_coag0, f_coal2, f_coag2
-    real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
-    real(dp) :: p_v, n_v, fx,  nu_n, N_c, rho_c, Z_c, rho_v
+    real(dp) :: m_c, r_c, r_n, sat, vf_s, vf_e
+    real(dp), dimension(2) :: vf
+    real(dp) :: p_v, n_v, fx, nu_n, N_c, rho_c, Z_c, rho_v
 
+    real(dp) :: Rey, Ep, St, gam_fac, lgnu, lgnu1, lgnu2
     real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
+
+    real(dp), parameter :: A = 1.639_dp
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -268,44 +272,74 @@ module mini_cloud_3_gamma_mod
     !! Mean mass of particle
     m_c = max(rho_c/N_c, m_seed)
 
-    !! Mass weighted mean radius of particle
-    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
-
     !! Calculate lambda and nu gamma distribution parameters
     sig2 = max(Z_c/N_c - (rho_c/N_c)**2,m_seed**2)
     nu = max(m_c**2/sig2,0.01_dp)
     nu = min(nu,100.0_dp)
     lam = m_c/nu
 
+    lgnu  = log_gamma(nu)
+    lgnu1 = log_gamma(nu + 1.0_dp)
+    lgnu2 = log_gamma(nu + 2.0_dp)
+
+    !! Mass and number weighted mean radius of particle
+    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
+    r_n = max(r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu), r_seed)
+
+
     !! Knudsen number
     Kn = mfp/r_c
+    Kn_b = min(Kn, 100.0_dp)
 
     !! Population averaged Knudsen number for n, m and m^2
     nu_n = max(nu,0.3334_dp)
     Kn_n = Kn * nu_n**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu_n - 1.0_dp/3.0_dp) - log_gamma(nu_n))
     Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
-      & exp(log_gamma(nu + 2.0_dp/3.0_dp) - log_gamma(nu + 1.0_dp))
+      & exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1)
     Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
-      & exp(log_gamma(nu + 5.0_dp/3.0_dp) - log_gamma(nu + 2.0_dp))
+      & exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu2)
 
-    !! Cunningham slip factor (Kim et al. 2005)
-    Kn_b = min(Kn_m, 100.0_dp)
-    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
+    !! Now find moment dependent settling velocities
+    St = (2.0_dp * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) 
+    Ep = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+
+    !! Zeroth moment
     !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
-     & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) & 
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
+    vf_s = St * gam_fac * Rey
 
     !! Settling velocity (Epstein regime)
-    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+    gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
+    vf_e = Ep * gam_fac
 
     !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_n)))
 
     !! Interpolation for settling velocity
-    vf = fx*vf_s + (1.0_dp - fx)*vf_e
+    vf(1) = fx*vf_s + (1.0_dp - fx)*vf_e
+    vf(1) = max(vf(1),1e-30_dp)
+
+    !! First moment
+    !! Settling velocity (Stokes regime)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) & 
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
+    vf_s = St * gam_fac * Rey
+
+    !! Settling velocity (Epstein regime)
+    gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
+    vf_e = Ep * gam_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m)))
+
+    !! Interpolation for settling velocity
+    vf(2) = fx*vf_s + (1.0_dp - fx)*vf_e
+    vf(2) = max(vf(2),1e-30_dp)
 
     !! Find supersaturation ratio
     sat = p_v/p_vap
@@ -323,7 +357,7 @@ module mini_cloud_3_gamma_mod
     call calc_coag(m_c, r_c, nu, Kn, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
+    call calc_coal(r_c, r_n, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + (f_coag0 + f_coal0)*N_c**2
@@ -570,21 +604,21 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
+  subroutine calc_coal(r_c, r_n, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_c, vf, nu, Kn_n, Kn_m
+    real(dp), intent(in) :: r_c, r_n, nu, Kn_n, Kn_m
+    real(dp), dimension(2), intent(in) :: vf
 
     real(dp), intent(out) :: f_coal0, f_coal2
 
-    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, r_n, E_c, K0
+    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, K0
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
-    d_vf = eps * vf
+    d_vf = eps * vf(1)
 
     lgnu  = log_gamma(nu)
-    lgnu1 = log_gamma(nu + 1.0_dp)
 
     !! Calculate E for number density change
     if (Kn_n >= 1.0_dp) then
@@ -592,33 +626,40 @@ module mini_cloud_3_gamma_mod
       E = 1.0_dp
     else
       !! Calculate Stokes number
-      r_n = max(r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu), r_seed)
-      Stk = (vf * d_vf)/(grav * r_n)
+      Stk = (vf(1) * d_vf)/(grav * r_n)
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
-    end if
-
-   !! Calculate E for mass change
-    if (Kn_m >= 1.0_dp) then
-      !! E = 1 when Kn > 1
-      E_c = 1.0_dp
-    else
-      !! Calculate Stokes number
-      Stk = (vf * d_vf)/(grav * r_c)
-      E_c = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
     nu_fac_0 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) &
       & + exp(2.0_dp * log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp * lgnu))
+
+    K0 = 2.0_dp * pi * r_c**2 * d_vf
+
+    !! Coalesence flux (Zeroth moment) [cm3 s-1]
+    f_coal0 = -0.5_dp * K0 * E * nu_fac_0
+
+    !! Estimate differential velocity
+    d_vf = eps * vf(2)
+
+    lgnu1 = log_gamma(nu + 1.0_dp)
+
+   !! Calculate E for mass change
+    if (Kn_m >= 1.0_dp) then
+      !! E = 1 when Kn > 1
+      E = 1.0_dp
+    else
+      !! Calculate Stokes number
+      Stk = (vf(2) * d_vf)/(grav * r_c)
+      E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
+    end if
 
     nu_fac_2 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) &
       & + exp(2.0_dp * log_gamma(nu + 4.0_dp/3.0_dp) - 2.0_dp * lgnu1))
 
     K0 = 2.0_dp * pi * r_c**2 * d_vf
 
-    !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal0 = -0.5_dp * K0 * E * nu_fac_0
     !! Coalesence flux (Second moment) [cm3 s-1]
-    f_coal2 = K0 * E_c * nu_fac_2
+    f_coal2 = K0 * E * nu_fac_2
 
   end subroutine calc_coal
 

@@ -289,7 +289,7 @@ program test_mini_cloud_2
         !$omp end parallel do
 
         q(:,1) = q_v(:)
-        q(:,2) = q_0(:)
+        q(:,2) = q_0(:) * nd_atm(:) / rho(:)
         q(:,3) = q_1(:)
         q(:,4) = q_2(:)
 
@@ -298,7 +298,7 @@ program test_mini_cloud_2
         call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 4, q(:,:), q0(:))
 
         q_v(:) = q(:,1)
-        q_0(:) = q(:,2)
+        q_0(:) = max(q(:,2) * rho(:) / nd_atm(:), 1e-30_dp)
         q_1(:) = q(:,3)
         q_2(:) = q(:,4)
 

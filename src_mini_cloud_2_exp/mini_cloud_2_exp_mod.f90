@@ -62,6 +62,7 @@ module mini_cloud_2_exp_mod
   real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), g12 = gamma(1.0_dp/2.0_dp)
   real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp), g76 = gamma(7.0_dp/6.0_dp)
   real(dp), parameter :: g13 = gamma(1.0_dp/3.0_dp)
+  real(dp), parameter :: g73 = gamma(7.0_dp/3.0_dp), g83 = gamma(8.0_dp/3.0_dp)
 
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
@@ -253,9 +254,12 @@ module mini_cloud_2_exp_mod
 
     real(dp) :: f_nuc_hom, f_cond, f_seed_evap
     real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, beta, sat, vf_s, vf_e, vf
-    real(dp) :: Kn, Kn_n, Kn_m, Kn_b
+    real(dp) :: m_c, r_c, r_n, beta, sat, vf_s, vf_e
+    real(dp) :: vf
+    real(dp) :: Kn, Kn_n, Kn_m, Kn_b, Rey, Ep, St, gam_fac
     real(dp) :: p_v, n_v, fx, N_c, rho_c, rho_v
+
+    real(dp), parameter :: A = 1.639_dp
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -278,6 +282,7 @@ module mini_cloud_2_exp_mod
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
+    r_n = r_c * g43
 
     !! Average particle  and population averaged Knudsen numbers
     Kn = mfp/r_c
@@ -285,22 +290,27 @@ module mini_cloud_2_exp_mod
     Kn_m = Kn * g53
 
     Kn_b = min(Kn_m, 100.0_dp)
-    !! Cunningham slip factor (Kim et al. 2005)
-    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
 
+    !! Now find moment dependent settling velocities
+    St = (2.0_dp * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) 
+    Ep = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+
+    !! Zeroth moment
     !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
-     & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    gam_fac = g53 + A*Kn_b*g43
+    vf_s = St * gam_fac * Rey
 
     !! Settling velocity (Epstein regime)
-    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+    gam_fac = g43
+    vf_e = Ep * gam_fac
 
     !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_n)))
 
     !! Interpolation for settling velocity
     vf = fx*vf_s + (1.0_dp - fx)*vf_e
+    vf = max(vf, 1e-30_dp)
 
     !! Find supersaturation ratio
     sat = p_v/p_vap
@@ -318,7 +328,7 @@ module mini_cloud_2_exp_mod
     call calc_coag(m_c, r_c, Kn, f_coag)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, Kn_n, vf, f_coal)
+    call calc_coal(r_c, r_n, Kn_n, vf, f_coal)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom + f_seed_evap) + (f_coag + f_coal)*N_c**2
@@ -485,14 +495,15 @@ module mini_cloud_2_exp_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, Kn_n, vf, f_coal)
+  subroutine calc_coal(r_c, r_n, Kn_n, vf, f_coal)
     implicit none
 
-    real(dp), intent(in) :: r_c, Kn_n, vf
+    real(dp), intent(in) :: r_c, r_n, Kn_n
+    real(dp), intent(in) :: vf
 
     real(dp), intent(out) :: f_coal
 
-    real(dp) :: d_vf,  Stk, E, r_n
+    real(dp) :: d_vf,  Stk, E
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
@@ -503,10 +514,6 @@ module mini_cloud_2_exp_mod
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else
-
-      !! Number density averaged radius
-      r_n = max(r_c * g43, r_seed)
-
       !! Calculate Stokes number
       Stk = (vf * d_vf)/(grav * r_n)
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))

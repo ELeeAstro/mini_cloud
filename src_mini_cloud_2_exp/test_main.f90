@@ -34,7 +34,7 @@ program test_mini_cloud_2
   integer :: nlines, io, idx, idx1
   real(dp) :: p_bot, p_top
   real(dp), allocatable, dimension(:) :: T_f, p_f
-  real(dp) :: V_seed, m_seed
+  real(dp) :: m_seed
 
   logical :: end
 
@@ -100,7 +100,6 @@ program test_mini_cloud_2
       !! Change vapur VMR to mass density ratio
       q_v(1) = q_v(1) * mol_w_sp/mu(1)
 
-      V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
       m_seed = V_seed * rho_d
 
       do n = 1, n_it
@@ -228,7 +227,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(4.25_dp))/100.0_dp
+      grav = (10.0_dp**(3.25_dp))/100.0_dp
 
       !! Number density [cm-3] of layer
       nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
@@ -284,7 +283,7 @@ program test_mini_cloud_2
         !$omp end parallel do
 
         q(:,1) = q_v(:)
-        q(:,2) = q_0(:)
+        q(:,2) = q_0(:) * nd_atm(:) / rho(:)
         q(:,3) = q_1(:)
 
         call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf_q(:,:), 2, q(:,2:3), q0(2:3))
@@ -292,7 +291,7 @@ program test_mini_cloud_2
         call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
 
         q_v(:) = q(:,1)
-        q_0(:) = q(:,2)
+        q_0(:) = max(q(:,2) * rho(:) / nd_atm(:), 1e-30_dp)
         q_1(:) = q(:,3)
 
         !! Mean mass of particle [g]
