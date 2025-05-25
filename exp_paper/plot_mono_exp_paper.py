@@ -10,7 +10,7 @@ rho_d = 1.99
 dirs = ['../results_2_mono/','../results_2_exp/']
 ndir = len(dirs)
 
-fname = ['tracers.txt','tracers_325.txt']
+fname = ['tracers_325.txt','tracers_325.txt']
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
