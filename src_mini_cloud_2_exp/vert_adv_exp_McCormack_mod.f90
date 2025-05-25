@@ -13,7 +13,7 @@ module vert_adv_exp_McCormack_mod
 
   real(dp), parameter :: q_min = 1e-99_dp
 
-  character(len=*), parameter :: limiter = 'koren'
+  character(len=*), parameter :: limiter = 'minmod'
 
   public :: vert_adv_exp_McCormack
   private :: minmod, superbee, vanleer, mc, koren
@@ -37,10 +37,11 @@ module vert_adv_exp_McCormack_mod
     integer :: k
     real(dp) :: grav
     real(dp), dimension(nlev) :: alte, vf_e, pe
-    real(dp), dimension(nlay) :: delz, altm, delz_mid, pl, rho
+    real(dp), dimension(nlay) :: altm,  pl, rho
+    real(dp), dimension(nlay-1) :: delz_mid, c
 
     real(dp), dimension(nlay,nq) :: qc
-    real(dp), dimension(nlay) :: sig, c
+    real(dp), dimension(nlay) :: sig
 
     integer :: n_it, n
     real(dp) :: dt, t_now
@@ -54,8 +55,8 @@ module vert_adv_exp_McCormack_mod
 
     ! Find velocity at levels
     vf_e(1) = vf(1)
-    do k = 2, nlay
-      vf_e(k) = (vf(k-1) + vf(k))/2.0_dp
+    do k = 1, nlay-1
+      vf_e(k+1) = (vf(k+1) + vf(k))/2.0_dp
     end do
     vf_e(nlev) = vf(nlay)
 
@@ -63,7 +64,6 @@ module vert_adv_exp_McCormack_mod
     alte(nlev) = 0.0_dp
     do k = nlev-1, 1, -1
       alte(k) = alte(k+1) + (R*Tl(k))/(mu(k)*grav) * log(pe(k+1)/pe(k))
-      delz(k) = alte(k) - alte(k+1)
     end do
 
     rho(:) = pl(:) / ((R / mu(:)) * Tl(:))
@@ -77,15 +77,14 @@ module vert_adv_exp_McCormack_mod
       altm(k) = 0.5_dp * (alte(k) + alte(k+1))
     end do
 
-    do k = nlay, 2, -1
-      delz_mid(k) = altm(k-1) - altm(k)
+    do k = 1, nlay-1
+      delz_mid(k) = altm(k) - altm(k+1)
     end do
-    delz_mid(1) = delz_mid(2)
 
     !! Find minimum timestep that allows the CFL condition
     dt = t_end
-    do k = 1, nlay
-      dt = min(dt,CFL*(delz_mid(k)/abs(vf_e(k))))
+    do k = 1, nlay-1
+      dt = min(dt,CFL*(delz_mid(k)/abs(vf_e(k+1))))
     enddo
 
     t_now = 0.0_dp
@@ -99,7 +98,7 @@ module vert_adv_exp_McCormack_mod
       end if
 
       !! Find the courant number
-      c(:) = abs(vf_e(1:nlay)) * dt / delz_mid(:)
+      c(:) = (abs(vf_e(2:nlay)) * dt) / delz_mid(:)
 
       do n = 1, nq
 
@@ -156,7 +155,7 @@ module vert_adv_exp_McCormack_mod
   
     integer, intent(in) :: nlay
     real(dp), dimension(nlay), intent(in) :: q
-    real(dp), dimension(nlay), intent(in) :: dz
+    real(dp), dimension(nlay-1), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
   
     integer :: i
@@ -164,7 +163,7 @@ module vert_adv_exp_McCormack_mod
     real(dp) :: r, dq_minus, dq_plus
   
     sig(1) = 0.0_dp
-    do i = 2, nlay - 1
+    do i = 2, nlay-1
       dq_minus = (q(i) - q(i-1)) / dz(i-1)
       dq_plus  = (q(i+1) - q(i)) / dz(i)
       r = dq_minus / (dq_plus + sign(eps, dq_plus))
@@ -179,7 +178,7 @@ module vert_adv_exp_McCormack_mod
   
     integer, intent(in) :: nlay
     real(dp), dimension(nlay), intent(in) :: q
-    real(dp), dimension(nlay), intent(in) :: dz 
+    real(dp), dimension(nlay-1), intent(in) :: dz 
     real(dp), dimension(nlay), intent(out) :: sig
   
     integer :: i
@@ -187,7 +186,7 @@ module vert_adv_exp_McCormack_mod
     real(dp) :: r, dq_minus, dq_plus
     
     sig(1) = 0.0_dp
-    do i = 2, nlay - 1
+    do i = 2, nlay-1
       dq_minus = (q(i) - q(i-1)) / dz(i-1)
       dq_plus  = (q(i+1) - q(i)) / dz(i)
       r = dq_minus / (dq_plus + sign(eps, dq_plus))
@@ -202,7 +201,7 @@ module vert_adv_exp_McCormack_mod
   
     integer, intent(in) :: nlay
     real(dp), dimension(nlay), intent(in) :: q
-    real(dp), dimension(nlay), intent(in) :: dz
+    real(dp), dimension(nlay-1), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
   
     integer :: i
@@ -210,7 +209,7 @@ module vert_adv_exp_McCormack_mod
     real(dp) :: dq_minus, dq_plus, r
   
     sig(1) = 0.0_dp
-    do i = 2, nlay - 1
+    do i = 2, nlay-1
       dq_minus = (q(i) - q(i-1)) / dz(i-1)
       dq_plus  = (q(i+1) - q(i)) / dz(i)
       r = dq_minus / (dq_plus + sign(eps, dq_plus))
@@ -224,7 +223,8 @@ module vert_adv_exp_McCormack_mod
     implicit none
   
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay-1), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
   
     integer :: i
@@ -232,7 +232,7 @@ module vert_adv_exp_McCormack_mod
     real(dp) :: dq_minus, dq_plus, r
   
     sig(1) = 0.0_dp
-    do i = 2, nlay - 1
+    do i = 2, nlay-1
       dq_minus = (q(i) - q(i - 1)) / dz(i - 1)
       dq_plus  = (q(i + 1) - q(i)) / dz(i)
       r = dq_minus / (dq_plus + sign(eps, dq_plus))
@@ -247,7 +247,7 @@ module vert_adv_exp_McCormack_mod
   
     integer, intent(in) :: nlay
     real(dp), dimension(nlay), intent(in) :: q
-    real(dp), dimension(nlay), intent(in) :: dz
+    real(dp), dimension(nlay-1), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
   
     integer :: i
@@ -255,7 +255,7 @@ module vert_adv_exp_McCormack_mod
     real(dp) :: dq_minus, dq_plus, r
   
     sig(1) = 0.0_dp
-    do i = 2, nlay - 1
+    do i = 2, nlay-1
       dq_minus = (q(i) - q(i-1)) / dz(i - 1)
       dq_plus  = (q(i+1) - q(i)) / dz(i)
       r = dq_minus / (dq_plus + sign(eps, dq_plus))

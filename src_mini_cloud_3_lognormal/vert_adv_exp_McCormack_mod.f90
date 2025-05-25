@@ -7,6 +7,13 @@ module vert_adv_exp_McCormack_mod
   real(dp), parameter :: CFL = 0.95_dp
   real(dp), parameter :: R = 8.31446261815324e7_dp
   real(dp), parameter :: kb = 1.380649e-16_dp
+  real(dp), parameter :: amu = 1.66053906892e-24_dp
+
+
+
+  real(dp), parameter :: q_min = 1e-99_dp
+
+  character(len=*), parameter :: limiter = 'minmod'
 
   public :: vert_adv_exp_McCormack
   private :: minmod, superbee, vanleer, mc, koren
@@ -28,12 +35,13 @@ module vert_adv_exp_McCormack_mod
     real(dp), dimension(nlay,nq) :: q
 
     integer :: k
-    real(dp) :: h1, h2, grav
-    real(dp), dimension(nlev) :: alte, lpe, vf_e, Te, nde, pe
-    real(dp), dimension(nlay) :: delz, delz_mid, pl, nd
+    real(dp) :: grav
+    real(dp), dimension(nlev) :: alte, vf_e, pe
+    real(dp), dimension(nlay) :: altm,  pl, rho
+    real(dp), dimension(nlay-1) :: delz_mid, c
 
     real(dp), dimension(nlay,nq) :: qc
-    real(dp), dimension(nlay) :: sig, c
+    real(dp), dimension(nlay) :: sig
 
     integer :: n_it, n
     real(dp) :: dt, t_now
@@ -47,8 +55,8 @@ module vert_adv_exp_McCormack_mod
 
     ! Find velocity at levels
     vf_e(1) = vf(1)
-    do k = 2, nlay
-      vf_e(k) = (vf(k-1) + vf(k))/2.0_dp
+    do k = 1, nlay-1
+      vf_e(k+1) = (vf(k+1) + vf(k))/2.0_dp
     end do
     vf_e(nlev) = vf(nlay)
 
@@ -56,24 +64,26 @@ module vert_adv_exp_McCormack_mod
     alte(nlev) = 0.0_dp
     do k = nlev-1, 1, -1
       alte(k) = alte(k+1) + (R*Tl(k))/(mu(k)*grav) * log(pe(k+1)/pe(k))
-      delz(k) = alte(k) - alte(k+1)
     end do
 
-    nd(:) = pl(:)/(kb*Tl(:))  
+    rho(:) = pl(:) / ((R / mu(:)) * Tl(:))
 
     do n = 1, nq
-      q(:,n) = q_in(:,n) * nd(:)
+      q(:,n) = q_in(:,n) * rho(:)
     end do
 
     !! Find differences between layers directly
-    do k = 1, nlay-1
-      delz_mid(k) = (alte(k) + alte(k+1))/2.0_dp - (alte(k+1) + alte(k+2))/2.0_dp
+    do k = 1, nlay
+      altm(k) = 0.5_dp * (alte(k) + alte(k+1))
     end do
-    delz_mid(nlay) = delz(nlay)
+
+    do k = 1, nlay-1
+      delz_mid(k) = altm(k) - altm(k+1)
+    end do
 
     !! Find minimum timestep that allows the CFL condition
     dt = t_end
-    do k = 1, nlay
+    do k = 1, nlay-1
       dt = min(dt,CFL*(delz_mid(k)/abs(vf_e(k+1))))
     enddo
 
@@ -88,23 +98,39 @@ module vert_adv_exp_McCormack_mod
       end if
 
       !! Find the courant number
-      c(:) = abs(vf_e(2:nlev)) * dt / delz_mid(:)
+      c(:) = (abs(vf_e(2:nlay)) * dt) / delz_mid(:)
 
       do n = 1, nq
 
-        !! Find the minmod limiter
-        !call minmod(nlay,q(:,n),delz_mid,sig)
-        !call superbee(nlay,q(:,n),delz_mid,sig)
-        !call vanleer(nlay,q(:,n),delz_mid,sig)
-        !call mc(nlay,q(:,n),delz_mid,sig)
-        call koren(nlay,q(:,n),delz_mid,sig)
 
-        !! Perform McCormack step
+
+        !! Find the minmod limiter
+        select case (trim(adjustl(limiter)))
+        case ('minmod')
+          call minmod(nlay, q(:,n), delz_mid(:), sig)
+        case ('superbee')
+          call superbee(nlay, q(:,n), delz_mid(:), sig)
+        case ('vanleer')
+          call vanleer(nlay, q(:,n), delz_mid(:), sig)
+        case ('mc')
+          call mc(nlay, q(:,n), delz_mid(:), sig)
+        case ('koren')
+          call koren(nlay, q(:,n), delz_mid(:), sig)
+        case default
+          print *, 'Error: Unknown limiter: ', trim(limiter)
+          print*, 'STOP'
+          stop
+        end select
+
+        !! Perform McCormack step - do not evolve index nlay as we have fixed boundary condition
+        !! Predictor step (forward in space)
         qc(:,n) = q(:,n)
         qc(:nlay-1,n) = q(:nlay-1,n) - sig(:nlay-1)*c(:nlay-1)*(q(2:nlay,n) - q(:nlay-1,n))
-        q(2:nlay,n) = 0.5_dp * (q(2:nlay,n) + qc(2:nlay,n) - c(2:nlay)*(qc(2:nlay,n) - qc(:nlay-1,n)))
-
-        q(:,n) = max(q(:,n),1e-30_dp)
+        
+        !! Corrector step (backward in space)
+        q(2:nlay-1,n) = 0.5_dp * (q(2:nlay-1,n) + qc(2:nlay-1,n) - c(2:nlay-1)*(qc(2:nlay-1,n) - qc(1:nlay-2,n)))
+        
+        q(:,n) = max(q(:,n),q_min)
 
       end do
 
@@ -113,117 +139,130 @@ module vert_adv_exp_McCormack_mod
 
       ! Apply boundary conditions
       q(nlay,:) = q0(:)
+      q(1,:) = q(2,:)
 
     end do
 
     do n = 1, nq
-      q_in(:,n) = q(:,n)/nd(:)
+      q_in(:,n) = q(:,n)/rho(:)
+      q_in(:,n) = max(q_in(:,n),q_min)
     end do
     
   end subroutine vert_adv_exp_McCormack
 
-  subroutine minmod(nlay,q,dz,sig)
+  subroutine minmod(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
-
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay-1), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: de_minus, de_plus
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: r, dq_minus, dq_plus
+  
     sig(1) = 0.0_dp
     do i = 2, nlay-1
-      de_minus = (q(i) - q(i-1)) / dz(i)
-      de_plus = (q(i+1) - q(i)) / dz(i)
-      if ((de_minus > 0.0_dp) .and. (de_plus > 0.0_dp)) then
-        sig(i) = min(de_minus, de_plus)
-      else if ((de_minus < 0.0_dp) .and. (de_plus < 0.0_dp)) then
-        sig(i) = max(de_minus, de_plus)
-      else
-        sig(i) = 0.0_dp
-      end if
+      dq_minus = (q(i) - q(i-1)) / dz(i-1)
+      dq_plus  = (q(i+1) - q(i)) / dz(i)
+      r = dq_minus / (dq_plus + sign(eps, dq_plus))
+      sig(i) = max(0.0_dp, min(1.0_dp, r))
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine minmod
 
-  subroutine superbee(nlay,q,dz,sig)
+  subroutine superbee(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
-
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay-1), intent(in) :: dz 
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: r
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: r, dq_minus, dq_plus
+    
     sig(1) = 0.0_dp
     do i = 2, nlay-1
-      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
-      sig(i) = max(0.0_dp, min(2*r, 1.0_dp), min(r, 2.0_dp))
+      dq_minus = (q(i) - q(i-1)) / dz(i-1)
+      dq_plus  = (q(i+1) - q(i)) / dz(i)
+      r = dq_minus / (dq_plus + sign(eps, dq_plus))
+      sig(i) = max(0.0_dp, min(2.0_dp*r, 1.0_dp), min(r, 2.0_dp))
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine superbee
 
-  subroutine vanleer(nlay,q,dz,sig)
+  subroutine vanleer(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay-1), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: r
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: dq_minus, dq_plus, r
+  
     sig(1) = 0.0_dp
     do i = 2, nlay-1
-      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      dq_minus = (q(i) - q(i-1)) / dz(i-1)
+      dq_plus  = (q(i+1) - q(i)) / dz(i)
+      r = dq_minus / (dq_plus + sign(eps, dq_plus))
       sig(i) = (r + abs(r)) / (1.0_dp + abs(r))
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine vanleer
 
-  subroutine mc(nlay,q,dz,sig)
+  subroutine mc(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay-1), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: r
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: dq_minus, dq_plus, r
+  
     sig(1) = 0.0_dp
     do i = 2, nlay-1
-      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      dq_minus = (q(i) - q(i - 1)) / dz(i - 1)
+      dq_plus  = (q(i + 1) - q(i)) / dz(i)
+      r = dq_minus / (dq_plus + sign(eps, dq_plus))
       sig(i) = max(0.0_dp, min((1.0_dp + r) / 2.0_dp, 2.0_dp, r))
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine mc
-
-  subroutine koren(nlay,q,dz,sig)
+  
+  subroutine koren(nlay, q, dz, sig)
     implicit none
-
+  
     integer, intent(in) :: nlay
-    real(dp), dimension(nlay), intent(in) :: q, dz
+    real(dp), dimension(nlay), intent(in) :: q
+    real(dp), dimension(nlay-1), intent(in) :: dz
     real(dp), dimension(nlay), intent(out) :: sig
-
+  
     integer :: i
-    real(dp) :: r
-
+    real(dp), parameter :: eps = 1.0e-10_dp
+    real(dp) :: dq_minus, dq_plus, r
+  
     sig(1) = 0.0_dp
     do i = 2, nlay-1
-      r = (q(i) - q(i-1)) / (q(i+1) - q(i) + 1e-10_dp)
+      dq_minus = (q(i) - q(i-1)) / dz(i - 1)
+      dq_plus  = (q(i+1) - q(i)) / dz(i)
+      r = dq_minus / (dq_plus + sign(eps, dq_plus))
       sig(i) = max(0.0_dp, min(2.0_dp*r, (1.0_dp + 2.0_dp*r) / 3.0_dp, 2.0_dp))
     end do
     sig(nlay) = 0.0_dp
-
+  
   end subroutine koren
-
+  
 end module vert_adv_exp_McCormack_mod

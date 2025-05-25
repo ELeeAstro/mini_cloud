@@ -60,7 +60,7 @@ program test_mini_cloud_2
 
       nsp = 2
 
-      nlay = 200
+      nlay = 192
       nlev = nlay + 1
 
       n_wl = 11
@@ -271,7 +271,7 @@ program test_mini_cloud_2
 
       nsp = 4
 
-      nlay = 300
+      nlay = 192
       nlev = nlay + 1
 
       n_wl = 11

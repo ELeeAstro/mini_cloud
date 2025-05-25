@@ -11,7 +11,7 @@ rho_d = 1.99
 mol_w_sp = 74.5513
 Rd_v = R/mol_w_sp
 
-fname = 'tracers.txt'
+fname = 'tracers_325.txt'
 
 data = np.loadtxt(fname)
 

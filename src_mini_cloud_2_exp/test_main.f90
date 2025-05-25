@@ -147,7 +147,7 @@ program test_mini_cloud_2
 
       !! In this example we perform a 1D test of mini_cloud with diffusion and settling included
 
-      nlay = 200
+      nlay = 192
       nlev = nlay + 1
 
       n_wl = 11

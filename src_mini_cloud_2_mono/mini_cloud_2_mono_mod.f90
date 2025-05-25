@@ -292,6 +292,7 @@ module mini_cloud_2_mono_mod
 
     !! Interpolation for settling velocity
     vf = fx*vf_s + (1.0_dp - fx)*vf_e
+    vf = max(vf, 1e-30_dp)
 
     !! Find supersaturation ratio
     sat = p_v/p_vap
