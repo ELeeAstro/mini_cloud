@@ -13,7 +13,7 @@ module vert_adv_exp_McCormack_mod
 
   real(dp), parameter :: q_min = 1e-99_dp
 
-  character(len=*), parameter :: limiter = 'minmod'
+  character(len=*), parameter :: limiter = 'koren'
 
   public :: vert_adv_exp_McCormack
   private :: minmod, superbee, vanleer, mc, koren
