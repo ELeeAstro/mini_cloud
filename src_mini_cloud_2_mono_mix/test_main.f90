@@ -397,7 +397,7 @@ program test_mini_cloud_2
 
         !! Combine everything q into a single 2D array for advection and diffusion
         q(:,1:nsp) = q_v(:,:)
-        q(:,nsp+1) = q_0(:) * nd_atm(:) / rho(:) ! Give mass units to particle number density for vertical transport
+        q(:,nsp+1) = q_0(:) 
         q(:,nsp+2:) = q_1(:,:)
 
         call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf(:), nsp+1, q(:,nsp+1:), q0(nsp+1:))
@@ -406,7 +406,7 @@ program test_mini_cloud_2
 
         !! Return values to individual arrays
         q_v(:,:) = q(:,1:nsp)
-        q_0(:) = max(q(:,nsp+1) * rho(:) / nd_atm(:), 1e-30_dp) ! Return to number density after vertical transport
+        q_0(:) = q(:,nsp+1)
         q_1(:,:) = q(:,nsp+2:)
 
         do i = 1, nlay

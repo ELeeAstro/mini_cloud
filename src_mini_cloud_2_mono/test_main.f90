@@ -43,7 +43,7 @@ program test_mini_cloud_2
   t_step = 500.0_dp
 
   !! Number of iterations
-  n_it = 2000000
+  n_it = 1000000
 
   !! Start time
   time = 6840.0_dp
@@ -282,7 +282,7 @@ program test_mini_cloud_2
         !$omp end parallel do  
 
         q(:,1) = q_v(:)
-        q(:,2) = q_0(:) * nd_atm(:) / rho(:)
+        q(:,2) = q_0(:)
         q(:,3) = q_1(:)
 
         call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2, q(:,2:3), q0(2:3))
@@ -290,7 +290,7 @@ program test_mini_cloud_2
         call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
 
         q_v(:) = q(:,1)
-        q_0(:) = max(q(:,2) * rho(:) / nd_atm(:), 1e-30_dp)
+        q_0(:) = q(:,2) 
         q_1(:) = q(:,3)
 
         !! Mean mass of particle [g]
