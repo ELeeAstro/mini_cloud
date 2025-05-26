@@ -303,8 +303,6 @@ program test_mini_cloud_2
         !! increment time
         time = time + t_step
 
-        print*, n, time
-
         end = .True.
 
         do i = 1, nlay
