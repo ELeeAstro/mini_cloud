@@ -137,7 +137,7 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f = fx*vf_s + (1.0_dp - fx)*vf_e
-    v_f = max(v_f, 1.0e-10_dp)
+    v_f = max(v_f, 1.0e-30_dp)
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 

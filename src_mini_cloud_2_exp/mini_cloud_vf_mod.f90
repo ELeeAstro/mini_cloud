@@ -135,7 +135,7 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f(1) = fx*vf_s + (1.0_dp - fx)*vf_e
-    v_f(1) = max(v_f(1), 1e-10_dp)
+    v_f(1) = max(v_f(1), 1e-30_dp)
 
     !! First  moment
     !! Settling velocity (Stokes regime)
@@ -152,7 +152,7 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f(2) = fx*vf_s + (1.0_dp - fx)*vf_e
-    v_f(2) = max(v_f(2), 1e-10_dp)
+    v_f(2) = max(v_f(2), 1e-30_dp)
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 
