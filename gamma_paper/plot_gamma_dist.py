@@ -17,7 +17,7 @@ m_seed = V_seed * rho_d
 dirs = ['../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_425.txt'
+fname = 'tracers_325.txt'
 
 fig, ax =  plt.subplots()
 
@@ -75,7 +75,8 @@ for i in range(ndir):
 
 
   nu = np.zeros(nlay)
-  nu[:] = np.maximum(m_c[:]**2/sig2[:],0.01)
+  nu[:] = m_c[:]**2/sig2[:]
+  #nu[:] = np.maximum(m_c[:]**2/sig2[:],0.01)
   nu[:] = np.minimum(nu[:],10.0)
 
   lam = np.zeros(nlay)
@@ -92,12 +93,12 @@ cmap = sns.color_palette("crest", as_cmap=True)
 
 
 for i in range(0,nlay,5):
-  if nu[i] > 0.01: 
+  if nu[i] >= 0.001: 
   #if (pl[i] < 1e-2):
     print('y',pl[i],nu[i],r_c[i],nd[i],lam[i],sig2[i])
     plt.plot(r[:]*1e4,fx[:,i],c=cmap(normalize(np.log10(pl[i]))))
   else:
-   print('n',pl[i],nu[i],r_c[i],nd[i],lam[i],sig2[i])
+    print('n',pl[i],nu[i],r_c[i],nd[i],lam[i],sig2[i])
 
 scalarmappaple = cm.ScalarMappable(norm=normalize, cmap=cmap)
 scalarmappaple.set_array(np.log10(pl))
@@ -116,15 +117,15 @@ plt.tick_params(axis='both',which='major',labelsize=14)
 plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
-#plt.ylim(1e-5,1e-1)
-plt.ylim(1e1,1e4)
+plt.ylim(1e-5,1e-3)
+#plt.ylim(1e1,1e4)
 
 plt.xlim(1e-3,1e2)
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_gamma_dist.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_325_gamma_dist.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
