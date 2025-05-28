@@ -26,9 +26,10 @@ module vert_adv_exp_McCormack_mod
 
     integer, intent(in) :: nlay, nlev, nq
     real(dp), intent(in) :: t_end, grav_in
-    real(dp), dimension(nlay), intent(in) :: Tl, pl_in, vf, mu
+    real(dp), dimension(nlay), intent(in) :: Tl, pl_in, mu
     real(dp), dimension(nlev), intent(in) :: pe_in
     real(dp), dimension(nq), intent(in) :: q0
+    real(dp), dimension(nlay,nq), intent(in) :: vf
 
     real(dp), dimension(nlay,nq), intent(inout) :: q_in
 
@@ -36,10 +37,11 @@ module vert_adv_exp_McCormack_mod
 
     integer :: k
     real(dp) :: grav
-    real(dp), dimension(nlev) :: alte, vf_e, pe
-    real(dp), dimension(nlay) :: altm,  pl, rho
+    real(dp), dimension(nlev) :: alte, pe
+    real(dp), dimension(nlay) :: altm, pl, rho
     real(dp), dimension(nlay-1) :: delz_mid, c
 
+    real(dp), dimension(nlev,nq) :: vf_e
     real(dp), dimension(nlay,nq) :: qc
     real(dp), dimension(nlay) :: sig
 
@@ -54,11 +56,11 @@ module vert_adv_exp_McCormack_mod
 
 
     ! Find velocity at levels
-    vf_e(1) = vf(1)
+    vf_e(1,:) = vf(1,:)
     do k = 1, nlay-1
-      vf_e(k+1) = (vf(k+1) + vf(k))/2.0_dp
+      vf_e(k+1,:) = (vf(k+1,:) + vf(k,:))/2.0_dp
     end do
-    vf_e(nlev) = vf(nlay)
+    vf_e(nlev,:) = vf(nlay,:)
 
     !! First calculate the vertical height (cm) assuming hydrostatic equilibrium and differences
     alte(nlev) = 0.0_dp
@@ -84,7 +86,7 @@ module vert_adv_exp_McCormack_mod
     !! Find minimum timestep that allows the CFL condition
     dt = t_end
     do k = 1, nlay-1
-      dt = min(dt,CFL*(delz_mid(k)/abs(vf_e(k+1))))
+      dt = min(dt,CFL*(delz_mid(k)/maxval(abs(vf_e(k+1,:)))))
     enddo
 
     t_now = 0.0_dp
@@ -97,12 +99,10 @@ module vert_adv_exp_McCormack_mod
         dt = t_end - t_now
       end if
 
-      !! Find the courant number
-      c(:) = (abs(vf_e(2:nlay)) * dt) / delz_mid(:)
-
       do n = 1, nq
 
-
+        !! Find the courant number
+        c(:) = (abs(vf_e(2:nlay,n)) * dt) / delz_mid(:)
 
         !! Find the minmod limiter
         select case (trim(adjustl(limiter)))
