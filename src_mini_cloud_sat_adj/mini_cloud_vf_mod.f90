@@ -50,7 +50,7 @@ module mini_cloud_vf_mod
     integer :: n_gas
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta
     real(dp), allocatable, dimension(:) :: VMR_g
-    real(dp) :: r_c, Kn, beta
+    real(dp) :: r_c, Kn, Kn_b, beta, vf_s, vf_e, fx
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -83,14 +83,25 @@ module mini_cloud_vf_mod
 
     !! Knudsen number
     Kn = mfp/r_c
+    Kn_b = min(Kn, 100.0_dp)
 
-    !! Cunningham slip factor
-    beta = 1.0_dp + Kn*(1.257_dp + 0.4_dp * exp(-1.1_dp/Kn))
+    !! Cunningham slip factor (Jung et al. 2012)
+    beta = 1.0_dp + Kn_b*(1.165_dp + 0.480_dp * exp(-0.101_dp/Kn_b))
 
-    !! Settling velocity
-    v_f = (2.0_dp * beta * grav * r_c**2 * rho_d)/(9.0_dp * eta) & 
-      & * (1.0_dp + & 
-      & ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    !! Settling velocity (Stokes regime)
+    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
+     & * (1.0_dp &
+     & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+
+    !! Settling velocity (Epstein regime)
+    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
+
+    !! Interpolation for settling velocity
+    v_f = fx*vf_s + (1.0_dp - fx)*vf_e
+    v_f = max(v_f, 1.0e-30_dp)
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 

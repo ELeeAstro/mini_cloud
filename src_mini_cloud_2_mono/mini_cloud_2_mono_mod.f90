@@ -274,10 +274,10 @@ module mini_cloud_2_mono_mod
 
     !! Knudsen number
     Kn = mfp/r_c
-
-    !! Cunningham slip factor (Kim et al. 2005)
     Kn_b = min(Kn, 100.0_dp)
-    beta = 1.0_dp + Kn_b*(1.165_dp + 0.483_dp * exp(-0.997_dp/Kn_b))
+    
+    !! Cunningham slip factor (Jung et al. 2012)
+    beta = 1.0_dp + Kn_b*(1.165_dp + 0.480_dp * exp(-0.101_dp/Kn_b))
 
     !! Settling velocity (Stokes regime)
     vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
