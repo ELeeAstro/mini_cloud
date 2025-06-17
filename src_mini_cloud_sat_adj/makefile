@@ -12,11 +12,11 @@ DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=inva
 
 # Source files (mix of .f and .f90 files)
 SRCS_F90 = \
+    vert_diff_exp_mod.f90 \
+    vert_adv_exp_McCormack_mod.f90 \
     lxmie_mod.f90 \
-    mini_cloud_opac_mie_mod.f90 \
-    mini_cloud_opac_ln_mod.f90 \
-    mini_cloud_vf_mod.f90 \
-    mini_cloud_1_s_2_mod.f90 \
+    mini_cloud_vf_sat_adj_mod.f90 \
+    mini_cloud_sat_adj_mod.f90 \
     test_main.f90
 
 SRCS_F = dopri5.f
@@ -25,7 +25,7 @@ SRCS_F = dopri5.f
 OBJECTS = $(SRCS_F90:.f90=.o) $(SRCS_F:.f=.o)
 
 # Executable
-EXECS = ../mini_cloud_1_s
+EXECS = ../mini_cloud_sat_adj
 
 #====================
 # Phony targets

@@ -1,4 +1,4 @@
-module mini_cloud_vf_mod
+module mini_cloud_vf_sat_adj_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -29,15 +29,15 @@ module mini_cloud_vf_mod
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
-  !! Constuct required arrays for calculating gas mixtures
+  !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
-  public :: mini_cloud_vf
+  public :: mini_cloud_vf_sat_adj
   private :: eta_construct
 
   contains
 
-  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, rm, sigma, v_f)
+  subroutine mini_cloud_vf_sat_adj(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, rm, sigma, v_f)
     implicit none
 
     ! Input variables
@@ -48,7 +48,7 @@ module mini_cloud_vf_mod
     real(dp), intent(out) :: v_f
 
     integer :: n_gas
-    real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta
+    real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_g
     real(dp) :: r_c, Kn, Kn_b, beta, vf_s, vf_e, fx
 
@@ -71,6 +71,9 @@ module mini_cloud_vf_mod
 
     !! Mass density of layer
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
+
+    !! Thermal velocity
+    cT = sqrt((2.0_dp * kb * T) / (mu * amu))
 
     !! Calculate dynamical viscosity for this layer
     call eta_construct(n_gas, sp_bg, VMR_g, T, eta)
@@ -105,7 +108,7 @@ module mini_cloud_vf_mod
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 
-  end subroutine mini_cloud_vf
+  end subroutine mini_cloud_vf_sat_adj
 
   !! eta for background gas
   subroutine eta_construct(n_bg, sp_bg, VMR_bg, T, eta_out)
@@ -216,4 +219,4 @@ module mini_cloud_vf_mod
 
   end subroutine eta_construct
 
-end module mini_cloud_vf_mod
+end module mini_cloud_vf_sat_adj_mod
