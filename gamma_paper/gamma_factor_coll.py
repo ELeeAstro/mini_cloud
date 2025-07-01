@@ -1,57 +1,83 @@
 import numpy as np
 import matplotlib.pylab as plt
-from scipy.special import gammaln  # Use log-gamma instead of gamma
+from scipy.special import gammaln, gammaincc, gamma  # Use log-gamma instead of gamma
 import seaborn as sns
 
 # Define nu range
 #nu = np.logspace(np.log10(1.0/2.0), 1, 100)
-nu = np.logspace(-1, 1, 1000)
+nnu = 1000
+nu = np.logspace(-2, 1, nnu)
 
+rho = 1.99
+rmin = 1e-7
+xmin = 4.0/3.0 * np.pi * rmin**3 * rho
 
+gnu = gamma(nu)
+gi_p1_3 = gammaincc(nu + 1.0/3.0, xmin) * gamma(nu + 1.0/3.0)
+gi_m1_3 = np.zeros(nnu)
+for i in range(nnu):
+  if (nu[i] > 1.0/3.0):
+    gi_m1_3[i] = gammaincc(nu[i] - 1.0/3.0, xmin) * gamma(nu[i] - 1.0/3.0)
+  else:
+    gi_m1_3[i] = ((gammaincc(nu[i]-1.0/3.0+1.0,xmin)*gamma(nu[i]-1.0/3.0+1.0) - xmin**(nu[i]-1.0/3.0)*np.exp(-xmin))) \
+    /(nu[i]-1.0/3.0)
 
-# Compute the terms using exponentials of log-gamma for Kn << 1 with clamping
-Kn = 10.0
-A = 1.165
-B = 0.483
-C = 0.997
-
-nu_1 = np.maximum(0.667,nu)
-log_gamma_nu_p1_3 = gammaln(nu_1 + 1.0/3.0)
-log_gamma_nu_m1_3 = gammaln(nu_1 - 1.0/3.0)
-log_gamma_nu_m2_3 = gammaln(nu_1 - 2.0/3.0)
-log_gamma_nu = gammaln(nu_1)
-B_l = (2.0 * (1.0 + np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_3 - 2.0 * log_gamma_nu) + 
-      1.639*Kn*nu_1**(1.0/3.0) 
-      * (np.exp(log_gamma_nu_m1_3 - log_gamma_nu) 
-      + np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m2_3 - 2.0*log_gamma_nu)))) / (4.0*(1.0 + Kn * (A + B*np.exp(-C/Kn))))
-
-nu_1 = np.maximum(0.334,nu)
-log_gamma_nu_p1_3 = gammaln(nu_1 + 1.0/3.0)
-log_gamma_nu_m1_3 = gammaln(nu_1 - 1.0/3.0)
-log_gamma_nu_m2_3 = gammaln(nu_1 - 2.0/3.0)
-log_gamma_nu = gammaln(nu_1)
-B_l_2 = (2.0 * (1.0 + np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_3 - 2.0 * log_gamma_nu)))/4.0
+B_l_2 = (2.0 * (1.0 + (gi_p1_3*gi_m1_3)/gnu**2))/4.0
 
 
 H = 1.0/np.sqrt(2.0)
 
-nu_2 = np.maximum(0.501,nu)
-log_gamma_nu = gammaln(nu_2)
-log_gamma_nu_p1_3 = gammaln(nu_2 + 1.0/3.0)
-log_gamma_nu_m1_3 = gammaln(nu_2 - 1.0/3.0)
-log_gamma_nu_p2_3 = gammaln(nu_2 + 2.0/3.0)
-log_gamma_nu_p1_6 = gammaln(nu_2 + 1.0/6.0)
-log_gamma_nu_m1_2 = gammaln(nu_2 - 1.0/2.0)
-log_gamma_nu_m1_6 = gammaln(nu_2 - 1.0/6.0)
+gnu = gamma(nu)
+gi_p1_3 = gammaincc(nu + 1.0/3.0, xmin) * gamma(nu + 1.0/3.0)
+gi_m1_3 = np.zeros(nnu)
+gi_p2_3 = gammaincc(nu + 2.0/3.0, xmin) * gamma(nu + 2.0/3.0)
+gi_p1_6 = gammaincc(nu + 1.0/6.0, xmin) * gamma(nu + 1.0/6.0)
+gi_m1_2 = np.zeros(nnu)
+gi_m1_6 = np.zeros(nnu)
 
-B_h = (0.85 * np.sqrt(8.0) * nu_2**(-1.0/6.0) * 
-       (np.exp(log_gamma_nu_p2_3 + log_gamma_nu_m1_2 - 2.0 * log_gamma_nu) + 
-        2.0*np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_6 - 2.0 * log_gamma_nu) + 
-        np.exp(log_gamma_nu_p1_6 - log_gamma_nu))) / 8.0
-B_h_2 = (H * np.sqrt(8.0) * nu_2**(-1.0/6.0) * 
-       (np.exp(log_gamma_nu_p2_3 + log_gamma_nu_m1_2 - 2 * log_gamma_nu) + 
-        2.0*np.exp(log_gamma_nu_p1_3 + log_gamma_nu_m1_6 - 2 * log_gamma_nu) + 
-        np.exp(log_gamma_nu_p1_6 - log_gamma_nu))) / 8.0
+# for i in range(nnu):
+#   if (nu[i] > 1.0/3.0):
+#     gi_m1_3[i] = gammaincc(nu[i] - 1.0/3.0, xmin) * gamma(nu[i] - 1.0/3.0)
+#   else:
+#     gi_m1_3[i] = ((gammaincc(nu[i]-1.0/3.0+1.0,xmin)*gamma(nu[i]-1.0/3.0+1.0) - xmin**(nu[i]-1.0/3.0)*np.exp(-xmin))) \
+#     /(nu[i]-1.0/3.0)
+
+#   if (nu[i] > 1.0/2.0):
+#     gi_m1_2[i] = gammaincc(nu[i] - 1.0/2.0, xmin) * gamma(nu[i] - 1.0/2.0) 
+#   else:
+#     gi_m1_2[i] = ((gammaincc(nu[i]-1.0/2.0+1.0,xmin)*gamma(nu[i]-1.0/2.0+1.0) - xmin**(nu[i]-1.0/2.0)*np.exp(-xmin))) \
+#     /(nu[i]-1.0/2.0)
+
+#   if (nu[i] > 1.0/6.0):
+#     gi_m1_6[i] = gammaincc(nu[i] - 1.0/6.0, xmin) * gamma(nu[i] - 1.0/6.0)
+#   else:
+#     gi_m1_6[i] = ((gammaincc(nu[i]-1.0/6.0+1.0,xmin)*gamma(nu[i]-1.0/6.0+1.0) - xmin**(nu[i]-1.0/6.0)*np.exp(-xmin))) \
+#     /(nu[i]-1.0/6.0)
+
+for i in range(nnu):
+  if (nu[i] > 1.0/3.0):
+    gi_m1_3[i] = gamma(nu[i] - 1.0/3.0)
+  else:
+    gi_m1_3[i] = gamma(nu[i] - 1.0/3.0 + 1.0)/(nu[i]-1.0/3.0)
+
+  if (nu[i] > 1.0/2.0):
+    gi_m1_2[i] = gamma(nu[i] - 1.0/2.0) 
+  else:
+    gi_m1_2[i] = gamma(nu[i] - 1.0/2.0 + 1.0)/(nu[i]-1.0/2.0)
+
+  if (nu[i] > 1.0/6.0):
+    gi_m1_6[i] = gamma(nu[i] - 1.0/6.0)
+  else:
+    gi_m1_6[i] = gamma(nu[i] - 1.0/6.0 + 1.0)/(nu[i]-1.0/6.0)
+
+B_h = (0.85 * np.sqrt(8.0) * nu**(-1.0/6.0) * 
+       ((gi_p2_3*gi_m1_2)/gnu**2 + 
+        2.0*(gi_p1_3*gi_m1_6)/gnu**2 + 
+        (gi_p1_6/gnu)) / 8.0)
+B_h_2 = (H * np.sqrt(8.0) * nu**(-1.0/6.0) * 
+       ((gi_p2_3*gi_m1_2)/gnu**2 + 
+        2.0*(gi_p1_3*gi_m1_6)/gnu**2 + 
+        (gi_p1_6/gnu)) / 8.0)
 
 
 
@@ -74,11 +100,11 @@ plt.plot(nu, grav, label=r'Coal.', c=col[2])
 
 plt.hlines(1.0, np.log10(1.0/2.0), 10, colors='black', ls='dashed')
 
-plt.vlines(1.0, 0.1, 200.0, colors='black', ls='dotted')
-plt.text(1.1, 0.2, r'Exponential' "\n" r'distribution', c='black')
+plt.vlines(1.0, 0.1, 1e7, colors='black', ls='dotted')
+plt.text(1.1, 1e3, r'Exponential' "\n" r'distribution', c='black')
 
 plt.legend()
-plt.ylim(0.1, 200)
+plt.ylim(0.1, 1e7)
 plt.xlim(0.1, 10)
 plt.xscale('log')
 plt.yscale('log')
