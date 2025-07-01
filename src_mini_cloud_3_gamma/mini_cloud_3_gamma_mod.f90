@@ -1,5 +1,6 @@
 module mini_cloud_3_gamma_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
+  use gamma_func_mod, only : up_inc_gam
   implicit none
 
   ! Fortran 2008 intrinsic precisions - recommended if possible
@@ -250,6 +251,8 @@ module mini_cloud_3_gamma_mod
     real(dp) :: Rey, Ep, St, gam_fac, lgnu, lgnu1, lgnu2
     real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
+    real(dp) :: gi_m1_3
+
     real(dp), parameter :: A = 1.639_dp
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
@@ -292,9 +295,16 @@ module mini_cloud_3_gamma_mod
     Kn_b = min(Kn, 100.0_dp)
 
     !! Population averaged Knudsen number for n, m and m^2
-    nu_n = max(nu,0.3334_dp)
-    Kn_n = Kn * nu_n**(1.0_dp/3.0_dp) * &
-      & exp(log_gamma(nu_n - 1.0_dp/3.0_dp) - log_gamma(nu_n))
+    if (nu > 1.0_dp/3.0_dp) then
+      ! Ok to use gamma function
+      Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
+        & exp(log_gamma(nu - 1.0_dp/3.0_dp) - lgnu)
+    else
+      ! Use incomplete gamma function recurrence relation to avoid negative arguments
+      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,m_seed) - m_seed**(nu-1.0_dp/3.0_dp)*exp(-m_seed))/(nu - 1.0_dp/3.0_dp)
+      Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
+      & exp(log(gi_m1_3) - lgnu)
+    end if
     Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1)
     Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
@@ -525,8 +535,11 @@ module mini_cloud_3_gamma_mod
     real(dp) :: Knd0, phi0, Kl0, Kh0, nu_fac_l_0, nu_fac_h_0
     real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
 
-    real(dp) :: Kn, nu_1, nu_2
+    real(dp) :: Kn
     real(dp), parameter :: A = 1.639_dp, H = 1.0_dp/sqrt(2.0_dp)
+
+    !! Efficency variables
+    real(dp) :: gi_m1_3, gi_m2_3, gi_m1_2, gi_m1_6
 
     !! Limit Kn to avoid large overshoot of Kn << 1 regime.
     Kn = min(Kn_in,100.0_dp)
@@ -537,52 +550,61 @@ module mini_cloud_3_gamma_mod
     !! Thermal velocity limit rate
     !V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
-    !! Clamp nu values for Kn << 1 regime
+    lgnu  = log_gamma(nu)
+    lgnu1 = log_gamma(nu + 1.0_dp)
 
-    if (Kn >= 0.1_dp) then
-      !! Include slip correction
-      nu_1 = max(nu_in,0.667_dp)
-
-      lgnu  = log_gamma(nu_1)
-      lgnu1 = log_gamma(nu_1 + 1.0_dp)
-
-      nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 1.0_dp/3.0_dp) - 2.0_dp * lgnu) & 
-        & + A*Kn*nu_1**(1.0_dp/3.0_dp) &
-        & * (exp(log_gamma(nu_1 - 1.0_dp/3.0_dp) - lgnu) &
-        & + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 2.0_dp/3.0_dp) - 2.0_dp*lgnu))
-
-      nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
-        & + A*Kn*nu_1**(1.0_dp/3.0_dp) &
-        & * (exp(log_gamma(nu_1 + 2.0_dp/3.0_dp) - lgnu1) &
-        & + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
+    !! Kn << 1 regime
+    if (nu > 1.0_dp/3.0_dp) then
+      !! Use gamma function
+      gi_m1_3 = gamma(nu - 1.0_dp/3.0_dp)
     else
-      !! Don't include slip correction
-      nu_1 = max(nu_in,0.334_dp)
-
-      lgnu  = log_gamma(nu_1)
-      lgnu1 = log_gamma(nu_1 + 1.0_dp)
-
-      nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu_1 + 1.0_dp/3.0_dp) + log_gamma(nu_1 - 1.0_dp/3.0_dp) - 2.0_dp * lgnu)
-
-      nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu_1 + 4.0_dp/3.0_dp) + log_gamma(nu_1 + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1)
+      !! Use incomplete gamma function
+      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,m_seed) - m_seed**(nu-1.0_dp/3.0_dp)*exp(-m_seed))/(nu - 1.0_dp/3.0_dp)
+    end if
+    if (nu > 2.0_dp/3.0_dp) then
+      !! Use gamma function
+      gi_m2_3 = gamma(nu - 2.0_dp/3.0_dp)
+    else
+      !! Use incomplete gamma function
+      gi_m2_3 = (up_inc_gam(nu-2.0/3.0_dp+1.0_dp,m_seed) - m_seed**(nu-2.0_dp/3.0_dp)*exp(-m_seed))/(nu - 2.0_dp/3.0_dp)
     end if
 
+    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log(gi_m1_3) - 2.0_dp * lgnu) & 
+      & + A*Kn*nu**(1.0_dp/3.0_dp) &
+      & * (exp(log(gi_m1_3) - lgnu) &
+      & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log(gi_m2_3) - 2.0_dp*lgnu))
 
-    !! Clamp nu values for Kn >> 1 regime 
-    nu_2 = max(nu_in,0.501_dp)
+    nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
+      & + A*Kn*nu**(1.0_dp/3.0_dp) &
+      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1) &
+      & + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
 
-    lgnu  = log_gamma(nu_2)
-    lgnu1 = log_gamma(nu_2 + 1.0_dp)
 
-    nu_fac_h_0 = H * nu_2**(-1.0_dp/6.0_dp)  &
-      & * (exp(log_gamma(nu_2 + 2.0_dp/3.0_dp) + log_gamma(nu_2 - 1.0_dp/2.0_dp) - 2.0_dp * lgnu)  &
-      & + 2.0*exp(log_gamma(nu_2 + 1.0_dp/3.0_dp) + log_gamma(nu_2 - 1.0_dp/6.0_dp) - 2.0_dp * lgnu) & 
-      & +  exp(log_gamma(nu_2 + 1.0_dp/6.0_dp) - lgnu))
+    !! Kn >> 1 regime
+      if (nu > 1.0_dp/2.0_dp) then
+        !! Use gamma function
+        gi_m1_2 = gamma(nu - 1.0_dp/2.0_dp)
+      else
+        !! Use incomplete gamma function
+        gi_m1_2 = (up_inc_gam(nu-1.0/2.0_dp+1.0_dp,m_seed) - m_seed**(nu-1.0_dp/2.0_dp)*exp(-m_seed))/(nu - 1.0_dp/2.0_dp)
+      end if
+      if (nu > 1.0_dp/6.0_dp) then
+        !! Use gamma function
+        gi_m1_6 = gamma(nu - 1.0_dp/6.0_dp)
+      else
+        !! Use incomplete gamma function
+        gi_m1_6 = (up_inc_gam(nu-1.0/6.0_dp+1.0_dp,m_seed) - m_seed**(nu-1.0_dp/6.0_dp)*exp(-m_seed))/(nu - 1.0_dp/6.0_dp)
+      end if
 
-    nu_fac_h_2 = H * nu_2**(-1.0_dp/6.0_dp)  &
-      & * (exp(log_gamma(nu_2 + 5.0_dp/3.0_dp) + log_gamma(nu_2 + 1.0_dp/2.0_dp) - 2.0_dp * lgnu1)  &
-      & + 2.0*exp(log_gamma(nu_2 + 4.0_dp/3.0_dp) + log_gamma(nu_2 + 5.0_dp/6.0_dp) - 2.0_dp * lgnu1) & 
-      & +  exp(log_gamma(nu_2 + 7.0_dp/6.0_dp) - lgnu1))
+    nu_fac_h_0 = H * nu**(-1.0_dp/6.0_dp)  &
+      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log(gi_m1_2) - 2.0_dp * lgnu)  &
+      & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log(gi_m1_6) - 2.0_dp * lgnu) & 
+      & +  exp(log_gamma(nu + 1.0_dp/6.0_dp) - lgnu))
+
+    nu_fac_h_2 = H * nu**(-1.0_dp/6.0_dp)  &
+      & * (exp(log_gamma(nu + 5.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/2.0_dp) - 2.0_dp * lgnu1)  &
+      & + 2.0*exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 5.0_dp/6.0_dp) - 2.0_dp * lgnu1) & 
+      & +  exp(log_gamma(nu + 7.0_dp/6.0_dp) - lgnu1))
 
     Kl0 = (4.0_dp*kb*T)/(3.0_dp*eta) * nu_fac_l_0
     Kl2 = (4.0_dp*kb*T)/(3.0_dp*eta) * nu_fac_l_2

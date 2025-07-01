@@ -35,40 +35,40 @@ gi_p1_6 = gammaincc(nu + 1.0/6.0, xmin) * gamma(nu + 1.0/6.0)
 gi_m1_2 = np.zeros(nnu)
 gi_m1_6 = np.zeros(nnu)
 
-# for i in range(nnu):
-#   if (nu[i] > 1.0/3.0):
-#     gi_m1_3[i] = gammaincc(nu[i] - 1.0/3.0, xmin) * gamma(nu[i] - 1.0/3.0)
-#   else:
-#     gi_m1_3[i] = ((gammaincc(nu[i]-1.0/3.0+1.0,xmin)*gamma(nu[i]-1.0/3.0+1.0) - xmin**(nu[i]-1.0/3.0)*np.exp(-xmin))) \
-#     /(nu[i]-1.0/3.0)
-
-#   if (nu[i] > 1.0/2.0):
-#     gi_m1_2[i] = gammaincc(nu[i] - 1.0/2.0, xmin) * gamma(nu[i] - 1.0/2.0) 
-#   else:
-#     gi_m1_2[i] = ((gammaincc(nu[i]-1.0/2.0+1.0,xmin)*gamma(nu[i]-1.0/2.0+1.0) - xmin**(nu[i]-1.0/2.0)*np.exp(-xmin))) \
-#     /(nu[i]-1.0/2.0)
-
-#   if (nu[i] > 1.0/6.0):
-#     gi_m1_6[i] = gammaincc(nu[i] - 1.0/6.0, xmin) * gamma(nu[i] - 1.0/6.0)
-#   else:
-#     gi_m1_6[i] = ((gammaincc(nu[i]-1.0/6.0+1.0,xmin)*gamma(nu[i]-1.0/6.0+1.0) - xmin**(nu[i]-1.0/6.0)*np.exp(-xmin))) \
-#     /(nu[i]-1.0/6.0)
-
 for i in range(nnu):
   if (nu[i] > 1.0/3.0):
-    gi_m1_3[i] = gamma(nu[i] - 1.0/3.0)
+    gi_m1_3[i] = gammaincc(nu[i] - 1.0/3.0, xmin) * gamma(nu[i] - 1.0/3.0)
   else:
-    gi_m1_3[i] = gamma(nu[i] - 1.0/3.0 + 1.0)/(nu[i]-1.0/3.0)
+    gi_m1_3[i] = ((gammaincc(nu[i]-1.0/3.0+1.0,xmin)*gamma(nu[i]-1.0/3.0+1.0) - xmin**(nu[i]-1.0/3.0)*np.exp(-xmin))) \
+    /(nu[i]-1.0/3.0)
 
   if (nu[i] > 1.0/2.0):
-    gi_m1_2[i] = gamma(nu[i] - 1.0/2.0) 
+    gi_m1_2[i] = gammaincc(nu[i] - 1.0/2.0, xmin) * gamma(nu[i] - 1.0/2.0) 
   else:
-    gi_m1_2[i] = gamma(nu[i] - 1.0/2.0 + 1.0)/(nu[i]-1.0/2.0)
+    gi_m1_2[i] = ((gammaincc(nu[i]-1.0/2.0+1.0,xmin)*gamma(nu[i]-1.0/2.0+1.0) - xmin**(nu[i]-1.0/2.0)*np.exp(-xmin))) \
+    /(nu[i]-1.0/2.0)
 
   if (nu[i] > 1.0/6.0):
-    gi_m1_6[i] = gamma(nu[i] - 1.0/6.0)
+    gi_m1_6[i] = gammaincc(nu[i] - 1.0/6.0, xmin) * gamma(nu[i] - 1.0/6.0)
   else:
-    gi_m1_6[i] = gamma(nu[i] - 1.0/6.0 + 1.0)/(nu[i]-1.0/6.0)
+    gi_m1_6[i] = ((gammaincc(nu[i]-1.0/6.0+1.0,xmin)*gamma(nu[i]-1.0/6.0+1.0) - xmin**(nu[i]-1.0/6.0)*np.exp(-xmin))) \
+    /(nu[i]-1.0/6.0)
+
+# for i in range(nnu):
+#   if (nu[i] > 1.0/3.0):
+#     gi_m1_3[i] = gamma(nu[i] - 1.0/3.0)
+#   else:
+#     gi_m1_3[i] = gamma(nu[i] - 1.0/3.0 + 1.0)/(nu[i]-1.0/3.0)
+
+#   if (nu[i] > 1.0/2.0):
+#     gi_m1_2[i] = gamma(nu[i] - 1.0/2.0) 
+#   else:
+#     gi_m1_2[i] = gamma(nu[i] - 1.0/2.0 + 1.0)/(nu[i]-1.0/2.0)
+
+#   if (nu[i] > 1.0/6.0):
+#     gi_m1_6[i] = gamma(nu[i] - 1.0/6.0)
+#   else:
+#     gi_m1_6[i] = gamma(nu[i] - 1.0/6.0 + 1.0)/(nu[i]-1.0/6.0)
 
 B_h = (0.85 * np.sqrt(8.0) * nu**(-1.0/6.0) * 
        ((gi_p2_3*gi_m1_2)/gnu**2 + 
