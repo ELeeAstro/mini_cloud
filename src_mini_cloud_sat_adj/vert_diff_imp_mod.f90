@@ -27,10 +27,12 @@ contains
     real(dp), dimension(nlay,nq) :: qc, q_new, q_em, q_in
 
     integer :: k, n
-    real(dp) :: grav, q_min, inv_dt, scale
+    real(dp) :: grav, q_min, inv_dt, scale, theta
     real(dp), dimension(nlev) :: alte, pe, K_e, rho_e, D, J_old
     real(dp), dimension(nlay) :: dz, pl, rho, altm, a, b, c, rhs, scales
     real(dp), dimension(nlay-1) :: dz_m
+
+    theta = 0.5_dp
 
     q_min = 1e-99_dp
 
@@ -41,7 +43,6 @@ contains
 
     rho(:) = pl(:) / ((R / mu(:)) * Tl(:))
 
-    !! Face (interface) averages
     K_e(1)   = Kzz(1)
     rho_e(1) = rho(1)
     do k = 1, nlay-1
@@ -51,8 +52,6 @@ contains
     K_e(nlev)  = Kzz(nlay)
     rho_e(nlev) = rho(nlay)
 
-    !! Geometry
-    !! First calculate the vertical height (cm) assuming hydrostatic equilibrium and differences
     alte(nlev) = 0.0_dp
     do k = nlev-1, 1, -1
       alte(k) = alte(k+1) + (R*Tl(k))/(mu(k)*grav) * log(pe(k+1)/pe(k))
@@ -67,12 +66,10 @@ contains
       dz_m(k) = altm(k) - altm(k+1)
     end do
 
-    !! Diffusive conductance at faces: D[f] multiplies (q_R - q_L)
     D(1) = 0.0_dp
     do k = 2, nlay
       D(k) = rho_e(k) * K_e(k) / (dz_m(k-1) + 1e-300_dp)
     end do
-    ! outer faces (0 and nlay) not used in D; J_top provides the top flux
 
     scales(:) = 1.0_dp / (rho(:) * dz(:))
 
@@ -80,32 +77,26 @@ contains
 
     do n = 1, nq
 
-      ! Old-time fluxes for RHS (explicit half of CN)
-      J_old(1) = 0.0_dp                    ! top boundary flux
+      J_old(1) = 0.0_dp
       do k = 2, nlev-1
         J_old(k) = -D(k) * (q(k,n) - q(k-1,n))
       end do
-      J_old(nlev) = 0.0_dp                  ! bottom outer face (unused in divergence)
+      J_old(nlev) = 0.0_dp
 
-      ! Rows i = 0 .. nlay-2 (bottom cell handled as Dirichlet)
       do k = 1, nlay-1
 
-        ! New-time contributions (CN): coefficients from J_R - J_L
-        a(k) = -0.5_dp * scales(k) * D(k)
-        c(k) = -0.5_dp * scales(k) * D(k+1)
-        b(k) =  inv_dt + 0.5_dp * scales(k) * (D(k) + D(k+1))
+        a(k) = -theta * scales(k) * D(k)
+        c(k) = -theta * scales(k) * D(k+1)
+        b(k) = inv_dt + theta * scales(k) * (D(k) + D(k+1))
 
-        ! RHS: old-time contribution
-        rhs(k) = inv_dt * q(k,n) - 0.5_dp * scales(k) * (J_old(k+1) - J_old(k))
+        rhs(k) = inv_dt * q(k,n) - (1.0_dp - theta) * scales(k) * (J_old(k+1) - J_old(k))
       end do
 
-      ! Bottom boundary: Dirichlet q_{N-1}^{n+1} = q_bot
       a(nlay) = 0.0_dp
       b(nlay) = 1.0_dp
       c(nlay) = 0.0_dp
       rhs(nlay) = q0(n)
 
-      ! Solve and floor
       call thomas(a, b, c, rhs, q(:,n))
       q(:,n) = max(q(:,n),q_min)
 
@@ -113,10 +104,6 @@ contains
 
   end subroutine vert_diff_imp
 
-
-  ! Solve tridiagonal system:
-  !  a[i]*x[i-1] + b[i]*x[i] + c[i]*x[i+1] = d[i]
-  ! with a[0]=0 and c[n-1]=0.
   subroutine thomas(a, b, c, d, x)
     implicit none
     real(dp), intent(in)  :: a(:), b(:), c(:), d(:)

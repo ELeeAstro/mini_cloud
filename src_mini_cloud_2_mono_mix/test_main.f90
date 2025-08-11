@@ -4,7 +4,8 @@ program test_mini_cloud_2
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
-  use vert_adv_exp_McCormack_mod, only : vert_adv_exp_McCormack
+  use vert_adv_exp_mod, only : vert_adv_exp
+  use vert_diff_imp_mod, only : vert_diff_imp
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -41,10 +42,10 @@ program test_mini_cloud_2
   logical :: end
 
   !! time step
-  t_step = 500.0_dp
+  t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 10000!10000!2000000
+  n_it = 10000!
 
   !! Start time
   time = 6840.0_dp
@@ -202,7 +203,7 @@ program test_mini_cloud_2
         q(:,nsp+1) = q_0(:) * nd_atm(:) / rho(:) ! Make mass ratio for vertical transport
         q(:,nsp+2:) = q_1(:,:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:), q0(nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:))
 
         call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
 
@@ -381,17 +382,9 @@ program test_mini_cloud_2
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
-
-          !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
-            & nsp, q_v(i,:), q_0(i), q_1(i,:), dTdt(i))
-
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
             &  nsp, q_0(i), q_1(i,:), vf(i))
-
-            !! Calculate the opacity at the wavelength grid
-          call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
         !$omp end parallel do
 
@@ -400,14 +393,57 @@ program test_mini_cloud_2
         q(:,nsp+1) = q_0(:) 
         q(:,nsp+2:) = q_1(:,:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf(:), nsp+1, q(:,nsp+1:), q0(nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:), nsp+1, q(:,nsp+1:))
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
 
-        !! Return values to individual arrays
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
         q_1(:,:) = q(:,nsp+2:)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Call mini-cloud and perform integrations for a single layer
+          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), dTdt(i))
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:) 
+        q(:,nsp+2:) = q_1(:,:)
+
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
+
+        q_v(:,:) = q(:,1:nsp)
+        q_0(:) = q(:,nsp+1)
+        q_1(:,:) = q(:,nsp+2:)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Calculate settling velocity for this layer
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
+            &  nsp, q_0(i), q_1(i,:), vf(i))
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:) 
+        q(:,nsp+2:) = q_1(:,:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:), nsp+1, q(:,nsp+1:))
+
+        q_v(:,:) = q(:,1:nsp)
+        q_0(:) = q(:,nsp+1)
+        q_1(:,:) = q(:,nsp+2:)
+
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+            !! Calculate the opacity at the wavelength grid
+          call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+        end do
+        !$omp end parallel do
 
         do i = 1, nlay
           !! Total condensed mass
@@ -428,6 +464,9 @@ program test_mini_cloud_2
           !! Mass weighted mean radius of particle [um]
           r_c(i) = max(((3.0_dp*m_c(i))/(4.0_dp*pi*rho_d_mean))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
         end do
+
+
+
 
         end = .True.
 

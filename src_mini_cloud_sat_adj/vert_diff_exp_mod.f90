@@ -123,7 +123,8 @@ contains
 
       !! Calculated q_embedded
       call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_new(:,:), k4(:,:))
-      q_em(:,:) = qc(:,:) + dt * (7.0_dp / 24.0_dp * k1(:,:) + 1.0_dp / 4.0_dp * k2(:,:) + 1.0_dp / 3.0_dp * k3(:,:) + 1.0_dp/8.0_dp * k4(:,:))
+      q_em(:,:) = qc(:,:) + dt * (7.0_dp / 24.0_dp * k1(:,:) + 1.0_dp / 4.0_dp * k2(:,:) + 1.0_dp / 3.0_dp * k3(:,:) &
+        & + 1.0_dp/8.0_dp * k4(:,:))
       q_em(1,:) = q_em(2,:); q_em(nlay,:) = q0(:)
       q_em(:,:) = max(q_em(:,:), 1.0e-99_dp)
 

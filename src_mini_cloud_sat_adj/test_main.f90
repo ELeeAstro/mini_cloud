@@ -179,30 +179,59 @@ program test_mini_cloud_sat_adj
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
-
-          !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_sat_adj(i, t_step, mol_w_sp, sp, rho_d, Tl(i), pl(i), rho(i), met, tau_cond, q_v(i), q_1(i))
-
           !! Calculate settling velocity for this layer
           call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, r_m, sigma, vf(i,1))
-
-          !! Calculate the opacity at the wavelength grid
-          call opac_mie_sat_adj(1, sp, Tl(i), mu(i), pl(i), q_1(i), r_m, rho_d, sigma, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
         !$omp end parallel do  
 
         q(:,1) = q_v(:)
         q(:,2) = q_1(:)
 
-        !! Do Strang operator splitting (half advection timestep then full diffusion timestep then half advection timestep)
         call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1), 1, q(:,2))
 
-        call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 2, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2, q(:,:), q0(:))
 
+        q_v(:) = q(:,1)
+        q_1(:) = q(:,2)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Call mini-cloud and perform integrations for a single layer
+          call mini_cloud_sat_adj(i, t_step, mol_w_sp, sp, rho_d, Tl(i), pl(i), rho(i), met, tau_cond, q_v(i), q_1(i))
+        end do
+        !$omp end parallel do  
+
+        q(:,1) = q_v(:)
+        q(:,2) = q_1(:)
+
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2, q(:,:), q0(:))
+
+        q_v(:) = q(:,1)
+        q_1(:) = q(:,2)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Calculate settling velocity for this layer
+          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, r_m, sigma, vf(i,1))
+        end do
+        !$omp end parallel do  
+
+        q(:,1) = q_v(:)
+        q(:,2) = q_1(:)
+        
         call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1), 1, q(:,2))
 
         q_v(:) = q(:,1)
         q_1(:) = q(:,2)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Calculate the opacity at the wavelength grid
+          call opac_mie_sat_adj(1, sp, Tl(i), mu(i), pl(i), q_1(i), r_m, rho_d, sigma, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+        end do
+        !$omp end parallel do
+
+
 
         end = .True.
 

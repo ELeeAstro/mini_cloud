@@ -4,7 +4,8 @@ program test_mini_cloud_2
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
-  use vert_adv_exp_McCormack_mod, only : vert_adv_exp_McCormack
+  use vert_adv_exp_mod, only : vert_adv_exp
+  use vert_diff_imp_mod, only : vert_diff_imp
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -39,10 +40,10 @@ program test_mini_cloud_2
   logical :: end
 
   !! time step
-  t_step = 500.0_dp
+  t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 2000000
+  n_it = 10000
 
   !! Start time
   time = 6840.0_dp
@@ -176,7 +177,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file
@@ -227,7 +228,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(3.25_dp))/100.0_dp
+      grav = (10.0_dp**(4.25_dp))/100.0_dp
 
       !! Number density [cm-3] of layer
       nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
@@ -270,15 +271,8 @@ program test_mini_cloud_2
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
-
-          !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_exp(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
-
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf_q(i,:))
-
-          !! Calculate the opacity at the wavelength grid
-         !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
         !$omp end parallel do
 
@@ -286,9 +280,43 @@ program test_mini_cloud_2
         q(:,2) = q_0(:)
         q(:,3) = q_1(:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf_q(:,:), 2, q(:,2:3), q0(2:3))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf_q(:,:), 2, q(:,2:3))
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+
+        q_v(:) = q(:,1)
+        q_0(:) = q(:,2)
+        q_1(:) = q(:,3)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Call mini-cloud and perform integrations for a single layer
+          call mini_cloud_2_exp(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i))
+        end do
+        !$omp end parallel do
+
+        q(:,1) = q_v(:)
+        q(:,2) = q_0(:)
+        q(:,3) = q_1(:)
+
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 3, q(:,:), q0(:))
+
+        q_v(:) = q(:,1)
+        q_0(:) = q(:,2)
+        q_1(:) = q(:,3)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Re-calculate settling velocity for this layer
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf_q(i,:))
+        end do
+        !$omp end parallel do
+
+        q(:,1) = q_v(:)
+        q(:,2) = q_0(:)
+        q(:,3) = q_1(:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf_q(:,:), 2, q(:,2:3))
 
         q_v(:) = q(:,1)
         q_0(:) = q(:,2)

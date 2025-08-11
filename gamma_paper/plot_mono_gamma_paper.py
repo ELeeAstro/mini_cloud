@@ -6,11 +6,13 @@ kb = 1.380649e-16
 amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
+V_seed = 4.0/3.0 * np.pi * r_seed**3
+m_seed = V_seed * rho_d
 
 dirs = ['../results_2_mono/','../results_2_exp/','../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -34,7 +36,7 @@ for i in range(ndir):
   q_v = data[:,8]
   q_0 = data[:,9]
   q_1 = data[:,10]
-  vf = data[:,11]
+  q_2 = data[:,11]
 
   nlay = len(pl)
 
@@ -48,13 +50,35 @@ for i in range(ndir):
   rho[:] = (pl[:]*1e6*mu[:]*amu)/(kb * Tl[:])
 
   m_c = np.zeros(nlay)
-  m_c[:] = (q_1[:]*rho[:])/(q_0[:]*nd_atm[:])
+  m_c[:] = np.maximum((q_1[:]*rho[:])/(q_0[:]*nd_atm[:]),m_seed)
 
   r_c = np.zeros(nlay)
   r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d))**(1.0/3.0),r_seed) * 1e4
 
+  sig2 = np.zeros(nlay)
+  sig2[:] = np.maximum((q_2[:]*rho[:]**2)/(q_0[:]*nd_atm[:]) - ((q_1[:]*rho[:])/(q_0[:]*nd_atm[:]))**2,m_seed**2)
+
+  nu = np.zeros(nlay)
+  nu[:] = m_c[:]**2/sig2[:]
+  nu[:] = np.maximum(m_c[:]**2/sig2[:],0.001)
+  nu[:] = np.minimum(nu[:],100.0)
+
+  lam = np.zeros(nlay)
+  lam[:] = m_c[:]/nu[:]
+
+  m_p = np.zeros(nlay)
+  #m_p[:] = np.maximum((q_2[:]*rho[:]**2)/(q_1[:]*rho[:]),m_seed)
+  m_p[:] = np.maximum(lam[:] * (nu[:] + 1.0),m_seed)
+
+  r_p = np.zeros(nlay)
+  r_p[:] = np.maximum(((3.0*m_p[:])/(4.0*np.pi*rho_d))**(1.0/3.0),r_seed) * 1e4
+  #r_p[:] = np.maximum(r_c[:]/1e4 * ((nu[:] + 1.0)/nu[:])**(1.0/3.0),r_seed) * 1e4
+  
   p_rc = ax1.plot(r_c,pl,c=col[0],label=r'$r_{\rm c}$',ls=lss[i])
   p_nc = ax2.plot(nd,pl,c=col[1],label=r'$N_{\rm c}$',ls=lss[i])
+
+  if (i == 2):
+    p_rp = ax1.plot(r_p,pl,c=col[2],label=r'$r_{\rm p}$',ls=lss[i])
 
 ax1.set_yscale('log')
 ax1.set_xscale('log')
@@ -67,28 +91,29 @@ ax1.set_yticks(yticks,yticks_lab)
 
 ax1.set_xlim(1e-3,1e2)
 
-#ax2.set_xlim(1e1,1e6)
-ax2.set_xlim(1e-4,1e0)
+
+#ax2.set_xlim(1e-4,1e0)
+ax2.set_xlim(1e1,1e6)
 
 plt.ylim(300,3e-3)
 
 ax1.tick_params(axis='both',which='major',labelsize=14)
 ax2.tick_params(axis='both',which='major',labelsize=14)
 
-ax1.set_xlabel(r'$r_{\rm c}$ [$\mu$m]',fontsize=16)
+ax1.set_xlabel(r'$r$ [$\mu$m]',fontsize=16)
 ax2.set_xlabel(r'$N_{\rm c}$ [cm$^{-3}$]',fontsize=16)
 ax1.set_ylabel(r'$p_{\rm gas}$ [bar]',fontsize=16)
 
 # added these three lines
 ax2.set_zorder(1)
-lns = p_rc + p_nc
+lns = p_rc + p_rp + p_nc
 labs = [l.get_label() for l in lns]
 ax2.legend(lns, labs,fontsize=10,loc='lower right')
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono_gamma.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_gamma.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

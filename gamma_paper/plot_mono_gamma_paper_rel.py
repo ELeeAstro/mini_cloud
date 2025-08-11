@@ -76,8 +76,8 @@ yticks = [100,10,1,0.1,0.01,1e-3,]
 yticks_lab = ['100','10','1','0.1','0.01','10$^{-3}$']
 ax1.set_yticks(yticks,yticks_lab)
 
-ax1.set_xlim(0,3)
-ax2.set_xlim(0,1)
+ax1.set_xlim(0,0.2)
+ax2.set_xlim(0,0.4)
 #ax1.set_xticks(np.arange(-100, 120, step=20))
 #ax2.set_xticks(np.arange(-500, 600, step=100))
 #ax1.set_xticks(np.arange(-100, 110, step=10),minor=True)
