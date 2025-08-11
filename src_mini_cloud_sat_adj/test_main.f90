@@ -2,9 +2,10 @@ program test_mini_cloud_sat_adj
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   use mini_cloud_sat_adj_mod, only : mini_cloud_sat_adj
   use mini_cloud_vf_sat_adj_mod, only : mini_cloud_vf_sat_adj
-  use mini_cloud_opac_mie_sat_adj_mod, only : opac_mie_sat_aj
+  use mini_cloud_opac_mie_sat_adj_mod, only : opac_mie_sat_adj
   use vert_diff_exp_mod, only : vert_diff_exp
-  use vert_adv_exp_McCormack_mod, only : vert_adv_exp_McCormack
+  use vert_diff_imp_mod, only : vert_diff_imp
+  use vert_adv_exp_mod, only : vert_adv_exp
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -41,7 +42,7 @@ program test_mini_cloud_sat_adj
   t_step = 500.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 100000
 
   !! Start time
   time = 6840.0_dp
@@ -193,9 +194,12 @@ program test_mini_cloud_sat_adj
         q(:,1) = q_v(:)
         q(:,2) = q_1(:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf(:,1), 1, q(:,2), q0(2))
+        !! Do Strang operator splitting (half advection timestep then full diffusion timestep then half advection timestep)
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1), 1, q(:,2))
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 2, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 2, q(:,:), q0(:))
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1), 1, q(:,2))
 
         q_v(:) = q(:,1)
         q_1(:) = q(:,2)

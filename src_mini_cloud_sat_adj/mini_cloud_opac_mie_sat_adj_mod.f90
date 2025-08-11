@@ -1,4 +1,4 @@
-module mini_cloud_opac_mie_mod
+module mini_cloud_opac_mie_sat_adj_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   use lxmie_mod, only : lxmie
   implicit none
@@ -26,13 +26,13 @@ module mini_cloud_opac_mie_mod
   logical :: first_call = .True.
   !$omp threadprivate (first_call)
 
-  public :: opac_mie
+  public :: opac_mie_sat_adj
   private :: locate, linear_log_interp, m2e, e2m, &
     & read_nk_tables, read_and_interp_nk_table
 
 contains
 
-  subroutine opac_mie(n_dust, sp, T_in, mu_in, P_in, q_c, rm, rho_d, sigma, n_wl, wl, k_ext, alb, gg)
+  subroutine opac_mie_sat_adj(n_dust, sp, T_in, mu_in, P_in, q_c, rm, rho_d, sigma, n_wl, wl, k_ext, alb, gg)
     implicit none
 
     integer, intent(in) :: n_dust, n_wl
@@ -110,7 +110,7 @@ contains
 
     end do
 
-  end subroutine opac_mie
+  end subroutine opac_mie_sat_adj
 
   ! Small dielectric sphere approximation, small particle limit x << 1
   subroutine rayleigh(x, ri, q_abs, q_sca, q_ext)
@@ -418,4 +418,4 @@ contains
 
   end subroutine locate
 
-end module mini_cloud_opac_mie_mod
+end module mini_cloud_opac_mie_sat_adj_mod

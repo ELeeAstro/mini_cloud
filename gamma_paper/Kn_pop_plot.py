@@ -39,7 +39,7 @@ plt.legend()
 
 plt.hlines(1, 1e-2, 100, colors='black', linestyles='dotted')
 
-plt.ylabel(r'Kn(gamma)/Kn(mono)',fontsize=16)
+plt.ylabel(r'$\overline{\rm Kn}$(gamma)/$\overline{\rm Kn}$(mono)',fontsize=16)
 plt.xlabel(r'$\nu$',fontsize=16)
 
 plt.ylim(1e-1,1e4)

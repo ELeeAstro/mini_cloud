@@ -5,7 +5,7 @@ module vert_diff_exp_mod
 
   integer, parameter :: dp = REAL64 ! Precision variable
 
-  real(dp), parameter :: CFL = 0.90_dp
+  real(dp), parameter :: CFL = 0.95_dp
   real(dp), parameter :: R = 8.31446261815324e7_dp
   real(dp), parameter :: kb = 1.380649e-16_dp
 
@@ -29,16 +29,17 @@ contains
 
     integer :: k
     real(dp) :: grav
-    real(dp), dimension(nlev) :: alte, pe, Kzze, nde
-    real(dp), dimension(nlay) :: delz, delz_mid, pl, nd
+    real(dp), dimension(nlev) :: alte, pe, Kzze, rhoe
+    real(dp), dimension(nlay) :: delz, pl, rho
+    real(dp), dimension(nlay-1) :: delz_mid
 
-    real(dp), dimension(nlay,nq) :: k1, k2, k3
+    real(dp), dimension(nlay,nq) :: k1, k2, k3, k4
 
     integer :: n_it, n, accept, ierr
     real(dp) :: dt, t_now, dt_max
     real(dp), dimension(nq) :: tol, err
     real(dp), parameter ::  pow = 0.2_dp, safe = 0.9_dp
-    real(dp), parameter ::  atol = 1e-30_dp, rtol = 1e-3_dp
+    real(dp), parameter ::  atol = 1e-99_dp, rtol = 1e-3_dp
 
     pl(:) = pl_in(:) * 10.0_dp   ! Convert pascal to dyne cm-2
     pe(:) = pe_in(:) * 10.0_dp   ! Convert pascal to dyne cm-2
@@ -57,7 +58,6 @@ contains
     do k = 1, nlay-1
       delz_mid(k) = delz(k)/2.0_dp + delz(k+1)/2.0_dp
     end do
-    delz_mid(nlay) = delz(nlay)
 
     !! Find Kzz at levels
     Kzze(1) = Kzz(1)
@@ -66,14 +66,15 @@ contains
     end do
     Kzze(nlev) = Kzz(nlay)
 
-    nd(:) = pl(:)/(kb*Tl(:))  
-    !! Find nd at levels
-    nde(1) = nd(1)
+    rho(:) = pl(:) / ((R / mu(:)) * Tl(:))
+    !! Find rho at levels
+    rhoe(1) = rho(1)
     do k = 2, nlay
-      nde(k) = (nd(k) + nd(k-1))/2.0_dp
+      rhoe(k) = (rho(k) + rho(k-1))/2.0_dp
     end do
-    nde(nlev) = nd(nlay)
+    rhoe(nlev) = rho(nlay)
 
+    !! Copy tracer array
     do k = 1, nlay
       qc(k,:) = q(k,:)
     end do
@@ -101,20 +102,32 @@ contains
       qc(1,:) = qc(2,:)
       qc(nlay,:) = q0(:)
       do n = 1, nq
-        qc(:,n) = max(qc(:,n),1e-30_dp)
+        qc(:,n) = max(qc(:,n),1e-99_dp)
       end do
 
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nde(:), nd(:), nq, qc(:,:), k1(:,:))
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, qc(:,:), k1(:,:))
       q_in(:,:) = qc(:,:) + 0.5_dp * dt * k1(:,:)
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nde(:), nd(:), nq, q_in(:,:), k2(:,:))
+      q_in(1,:) = q_in(2,:); q_in(nlay,:) = q0(:)
+      q_in(:,:) = max(q_in(:,:), 1.0e-99_dp)
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_in(:,:), k2(:,:))
       q_in(:,:) = qc(:,:) + 0.75_dp * dt * k2(:,:)
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), nde(:), nd(:), nq, q_in(:,:), k3(:,:))
+      q_in(1,:) = q_in(2,:); q_in(nlay,:) = q0(:)
+      q_in(:,:) = max(q_in(:,:), 1.0e-99_dp)
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_in(:,:), k3(:,:))
 
-      ! Update u_new and u_embedded
+      !! Update q_new 
       q_new(:,:) = qc(:,:) + dt * (2.0_dp / 9.0_dp * k1(:,:) + 3.0_dp / 9.0_dp * k2(:,:) + 4.0_dp / 9.0_dp * k3(:,:))
-      q_em(:,:) = qc(:,:) + dt * (7.0_dp / 24.0_dp * k1(:,:) + 1.0_dp / 4.0_dp * k2(:,:) + 1.0_dp / 3.0_dp * k3(:,:))
 
-      ! Compute error
+      q_new(1,:) = q_new(2,:); q_new(nlay,:) = q0(:)
+      q_new(:,:) = max(q_new(:,:), 1.0e-99_dp)
+
+      !! Calculated q_embedded
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_new(:,:), k4(:,:))
+      q_em(:,:) = qc(:,:) + dt * (7.0_dp / 24.0_dp * k1(:,:) + 1.0_dp / 4.0_dp * k2(:,:) + 1.0_dp / 3.0_dp * k3(:,:) + 1.0_dp/8.0_dp * k4(:,:))
+      q_em(1,:) = q_em(2,:); q_em(nlay,:) = q0(:)
+      q_em(:,:) = max(q_em(:,:), 1.0e-99_dp)
+
+      !! Compute error
       accept = 0
       ierr = 0
       do n = 1, nq
@@ -168,32 +181,35 @@ contains
     q(nlay,:) = q0(:)
 
     do n = 1, nq
-      q(:,n) = max(q(:,n),1e-30_dp)
+      q(:,n) = max(q(:,n),1e-99_dp)
     end do
 
   end subroutine vert_diff_exp
 
-  subroutine compute_fluxes(nlay, delz_mid, delz, Kzze, nde, nd, nq, q_in, flux)
+  subroutine compute_fluxes(nlay, delz_mid, delz, Kzze, rhoe, rho, nq, q_in, flux)
     implicit none
 
     integer, intent(in) :: nlay, nq
-    real(dp), dimension(nlay), intent(in) :: delz_mid, delz, nd
-    real(dp), dimension(nlay+1), intent(in) :: Kzze, nde
+    real(dp), dimension(nlay-1), intent(in) :: delz_mid
+    real(dp), dimension(nlay), intent(in) :: delz, rho
+    real(dp), dimension(nlay+1), intent(in) :: Kzze, rhoe
     real(dp), dimension(nlay, nq), intent(in) :: q_in
 
     real(dp), dimension(nlay, nq), intent(out) :: flux
 
-    integer :: k
+    integer :: k, n
     real(dp), dimension(nlay, nq) :: phit, phil
 
-    !! Find flux between layers
-    flux(1,:) = 0.0_dp
-    do k = 2, nlay-1
-      phit(k,:) = nde(k+1)*Kzze(k+1)*(q_in(k+1,:) - q_in(k,:))/delz_mid(k)
-      phil(k,:) = nde(k)*Kzze(k)*(q_in(k,:) - q_in(k-1,:))/delz_mid(k-1)
-      flux(k,:) = ((phit(k,:) - phil(k,:))/delz(k))/nd(k)
+    !! Find flux between layers 
+    do n = 1, nq
+        flux(1,n) = 0.0_dp
+        do k = 2, nlay-1
+          phit(k,n) = rhoe(k+1)*Kzze(k+1)*(q_in(k+1,n) - q_in(k,n))/delz_mid(k)
+          phil(k,n) = rhoe(k)*Kzze(k)*(q_in(k,n) - q_in(k-1,n))/delz_mid(k-1)
+          flux(k,n) = ((phit(k,n) - phil(k,n))/delz(k))/rho(k)
+        end do
+        flux(nlay,n) = 0.0_dp
     end do
-    flux(nlay,:) = 0.0_dp
 
   end subroutine compute_fluxes
 
