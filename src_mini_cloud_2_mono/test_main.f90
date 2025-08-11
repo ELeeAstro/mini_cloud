@@ -4,7 +4,8 @@ program test_mini_cloud_2
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
-  use vert_adv_exp_McCormack_mod, only : vert_adv_exp_McCormack
+  use vert_adv_exp_mod, only : vert_adv_exp
+  use vert_diff_imp_mod, only : vert_diff_imp
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -43,7 +44,7 @@ program test_mini_cloud_2
   t_step = 500.0_dp
 
   !! Number of iterations
-  n_it = 1000000
+  n_it = 10000
 
   !! Start time
   time = 6840.0_dp
@@ -287,9 +288,10 @@ program test_mini_cloud_2
         q(:,2) = q_0(:)
         q(:,3) = q_1(:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf(:,1:2), 2, q(:,2:3), q0(2:3))
+        call vert_adv_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf(:,1:2), 2, q(:,2:3))
 
         call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 3, q(:,:), q0(:))
+        !call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 3, q(:,:), q0(:))
 
 
         q_v(:) = q(:,1)

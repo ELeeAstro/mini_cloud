@@ -30,9 +30,10 @@ contains
     integer :: k
     real(dp) :: grav
     real(dp), dimension(nlev) :: alte, pe, Kzze, rhoe
-    real(dp), dimension(nlay) :: delz, delz_mid, pl, rho
+    real(dp), dimension(nlay) :: delz, pl, rho
+    real(dp), dimension(nlay-1) :: delz_mid
 
-    real(dp), dimension(nlay,nq) :: k1, k2, k3
+    real(dp), dimension(nlay,nq) :: k1, k2, k3, k4
 
     integer :: n_it, n, accept, ierr
     real(dp) :: dt, t_now, dt_max
@@ -57,7 +58,6 @@ contains
     do k = 1, nlay-1
       delz_mid(k) = delz(k)/2.0_dp + delz(k+1)/2.0_dp
     end do
-    delz_mid(nlay) = delz(nlay)
 
     !! Find Kzz at levels
     Kzze(1) = Kzz(1)
@@ -74,6 +74,7 @@ contains
     end do
     rhoe(nlev) = rho(nlay)
 
+    !! Copy tracer array
     do k = 1, nlay
       qc(k,:) = q(k,:)
     end do
@@ -106,15 +107,27 @@ contains
 
       call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, qc(:,:), k1(:,:))
       q_in(:,:) = qc(:,:) + 0.5_dp * dt * k1(:,:)
+      q_in(1,:) = q_in(2,:); q_in(nlay,:) = q0(:)
+      q_in(:,:) = max(q_in(:,:), 1.0e-99_dp)
       call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_in(:,:), k2(:,:))
       q_in(:,:) = qc(:,:) + 0.75_dp * dt * k2(:,:)
+      q_in(1,:) = q_in(2,:); q_in(nlay,:) = q0(:)
+      q_in(:,:) = max(q_in(:,:), 1.0e-99_dp)
       call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_in(:,:), k3(:,:))
 
-      ! Update u_new and u_embedded
+      !! Update q_new 
       q_new(:,:) = qc(:,:) + dt * (2.0_dp / 9.0_dp * k1(:,:) + 3.0_dp / 9.0_dp * k2(:,:) + 4.0_dp / 9.0_dp * k3(:,:))
-      q_em(:,:) = qc(:,:) + dt * (7.0_dp / 24.0_dp * k1(:,:) + 1.0_dp / 4.0_dp * k2(:,:) + 1.0_dp / 3.0_dp * k3(:,:))
 
-      ! Compute error
+      q_new(1,:) = q_new(2,:); q_new(nlay,:) = q0(:)
+      q_new(:,:) = max(q_new(:,:), 1.0e-99_dp)
+
+      !! Calculated q_embedded
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_new(:,:), k4(:,:))
+      q_em(:,:) = qc(:,:) + dt * (7.0_dp / 24.0_dp * k1(:,:) + 1.0_dp / 4.0_dp * k2(:,:) + 1.0_dp / 3.0_dp * k3(:,:) + 1.0_dp/8.0_dp * k4(:,:))
+      q_em(1,:) = q_em(2,:); q_em(nlay,:) = q0(:)
+      q_em(:,:) = max(q_em(:,:), 1.0e-99_dp)
+
+      !! Compute error
       accept = 0
       ierr = 0
       do n = 1, nq
@@ -177,7 +190,8 @@ contains
     implicit none
 
     integer, intent(in) :: nlay, nq
-    real(dp), dimension(nlay), intent(in) :: delz_mid, delz, rho
+    real(dp), dimension(nlay-1), intent(in) :: delz_mid
+    real(dp), dimension(nlay), intent(in) :: delz, rho
     real(dp), dimension(nlay+1), intent(in) :: Kzze, rhoe
     real(dp), dimension(nlay, nq), intent(in) :: q_in
 
