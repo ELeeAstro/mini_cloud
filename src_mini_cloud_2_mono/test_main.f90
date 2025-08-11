@@ -276,11 +276,8 @@ program test_mini_cloud_2
 
           ! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i,1))
-
           vf(i,2) = vf(i,1)
 
-          !! Calculate the opacity at the wavelength grid
-          !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
         !$omp end parallel do  
 
@@ -288,11 +285,29 @@ program test_mini_cloud_2
         q(:,2) = q_0(:)
         q(:,3) = q_1(:)
 
-        call vert_adv_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf(:,1:2), 2, q(:,2:3))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1:2), 2, q(:,2:3))
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 3, q(:,:), q0(:))
-        !call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 3, q(:,:), q0(:))
+        !call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 3, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz(:), 3, q(:,:), q0(:))
 
+        q_v(:) = q(:,1)
+        q_0(:) = q(:,2) 
+        q_1(:) = q(:,3)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          ! Re-calculate settling velocity for this layer
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), vf(i,1))
+          vf(i,2) = vf(i,1)
+        end do
+        !$omp end parallel do
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1:2), 2, q(:,2:3))
+
+        do i = 1, nlay
+          !! Calculate the opacity at the wavelength grid
+          ! call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+        end do
 
         q_v(:) = q(:,1)
         q_0(:) = q(:,2) 
