@@ -23,8 +23,8 @@ program test_mini_cloud_2
   character(len=20), allocatable, dimension(:) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v, cp, dTdt
-  real(dp), allocatable, dimension(:) :: q_0, vf, r_c, m_c, q0, r_c_old, del
-  real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1
+  real(dp), allocatable, dimension(:) :: q_0, r_c, m_c, q0, r_c_old, del
+  real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1, vf
   real(dp) :: grav, met
 
   integer :: n_wl
@@ -165,7 +165,7 @@ program test_mini_cloud_2
       m_seed = V_seed * rho_d(1)
 
       allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q0(nsp*2+1), q(nlay,nsp*2+1))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay), r_c_old(nlay), del(nlay))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay,2), r_c_old(nlay), del(nlay))
 
       q_v(:,:) = 1e-30_dp
       q_0(:) = 1e-30_dp
@@ -192,7 +192,7 @@ program test_mini_cloud_2
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i))
+            &  nsp, q_0(i), q_1(i,:), vf(i,1))
 
           !! Calculate the opacity at the wavelength grid
           call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
@@ -260,7 +260,7 @@ program test_mini_cloud_2
       print*, del(:)/t_step
 
       do i = 1, nlay
-        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i,:), q_0(i), q_1(i,:), r_c(i), vf(i), q_0(i)*nd_atm(i)
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i,:), q_0(i), q_1(i,:), r_c(i), vf(i,1), q_0(i)*nd_atm(i)
       end do
 
       !! mini-cloud test output
@@ -355,7 +355,7 @@ program test_mini_cloud_2
       m_seed = V_seed * rho_d(1)
 
       allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q0(nsp*2+1), q(nlay,nsp*2+1))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay), r_c_old(nlay), del(nlay))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay,nsp+1), r_c_old(nlay), del(nlay))
 
       !! Set everything to zero first
       do j = 1, nsp
@@ -384,7 +384,8 @@ program test_mini_cloud_2
         do i = 1, nlay
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i))
+            &  nsp, q_0(i), q_1(i,:), vf(i,1))
+          vf(i,:) = vf(i,1)
         end do
         !$omp end parallel do
 
@@ -393,7 +394,7 @@ program test_mini_cloud_2
         q(:,nsp+1) = q_0(:) 
         q(:,nsp+2:) = q_1(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:), nsp+1, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
 
         call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
 
@@ -423,7 +424,8 @@ program test_mini_cloud_2
         do i = 1, nlay
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i))
+            &  nsp, q_0(i), q_1(i,:), vf(i,1))
+          vf(i,:) = vf(i,1)
         end do
         !$omp end parallel do
 
@@ -431,7 +433,7 @@ program test_mini_cloud_2
         q(:,nsp+1) = q_0(:) 
         q(:,nsp+2:) = q_1(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:), nsp+1, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
@@ -495,7 +497,7 @@ program test_mini_cloud_2
       print*, del(:)/t_step
 
       do i = 1, nlay
-        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i,:), q_0(i), q_1(i,:), r_c(i), vf(i), q_0(i)*nd_atm(i)
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i,:), q_0(i), q_1(i,:), r_c(i), vf(i,1), q_0(i)*nd_atm(i)
       end do
 
       !! mini-cloud test output
@@ -530,7 +532,7 @@ contains
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), vf(i), dTdt(i)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), vf(i,1), dTdt(i)
       write(u2,*) t, time, pl(i), k_ext(i,:)
       write(u3,*) t, time, pl(i), ssa(i,:)
       write(u4,*) t, time, pl(i), g(i,:)
