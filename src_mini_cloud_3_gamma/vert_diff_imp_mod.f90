@@ -32,7 +32,7 @@ contains
     real(dp), dimension(nlay) :: dz, pl, rho, altm, a, b, c, rhs, scales
     real(dp), dimension(nlay-1) :: dz_m
 
-    theta = 0.6_dp
+    theta = 0.65dp
 
     q_min = 1e-99_dp
 
