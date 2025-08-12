@@ -93,7 +93,7 @@ ax1.set_xlim(1e-3,1e2)
 
 
 #ax2.set_xlim(1e-4,1e0)
-ax2.set_xlim(1e1,1e6)
+ax2.set_xlim(1e-1,1e2)
 
 plt.ylim(300,3e-3)
 

@@ -32,7 +32,7 @@ contains
     real(dp), dimension(nlay) :: dz, pl, rho, altm, a, b, c, rhs, scales
     real(dp), dimension(nlay-1) :: dz_m
 
-    theta = 0.5_dp
+    theta = 0.6_dp
 
     q_min = 1e-99_dp
 
@@ -66,7 +66,7 @@ contains
       dz_m(k) = altm(k) - altm(k+1)
     end do
 
-    D(1) = 0.0_dp
+    D(:) = 0.0_dp
     do k = 2, nlay
       D(k) = rho_e(k) * K_e(k) / (dz_m(k-1) + 1e-300_dp)
     end do
@@ -81,7 +81,7 @@ contains
       do k = 2, nlev-1
         J_old(k) = -D(k) * (q(k,n) - q(k-1,n))
       end do
-      J_old(nlev) = 0.0_dp
+      J_old(nlev) = - D(nlay) * ( q0(n) - q(nlay-1,n) )   ! bottom face uses Dirichlet q0
 
       do k = 1, nlay-1
 
