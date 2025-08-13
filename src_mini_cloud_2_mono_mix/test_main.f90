@@ -45,7 +45,7 @@ program test_mini_cloud_2
   t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 10000!
+  n_it = 100000
 
   !! Start time
   time = 6840.0_dp
@@ -435,9 +435,9 @@ program test_mini_cloud_2
 
         call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
 
-        q_v(:,:) = q(:,1:nsp)
-        q_0(:) = q(:,nsp+1)
-        q_1(:,:) = q(:,nsp+2:)
+        q_v(:,:) = max(q(:,1:nsp),1e-30_dp)
+        q_0(:) = max(q(:,nsp+1),1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+2:),1e-30_dp)
 
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)

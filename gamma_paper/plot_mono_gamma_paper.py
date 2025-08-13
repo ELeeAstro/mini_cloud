@@ -12,7 +12,7 @@ m_seed = V_seed * rho_d
 dirs = ['../results_2_mono/','../results_2_exp/','../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_425.txt'
+fname = 'tracers_325.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -65,7 +65,6 @@ for i in range(ndir):
 
   lam = np.zeros(nlay)
   lam[:] = m_c[:]/nu[:]
-
   m_p = np.zeros(nlay)
   #m_p[:] = np.maximum((q_2[:]*rho[:]**2)/(q_1[:]*rho[:]),m_seed)
   m_p[:] = np.maximum(lam[:] * (nu[:] + 1.0),m_seed)
@@ -92,8 +91,8 @@ ax1.set_yticks(yticks,yticks_lab)
 ax1.set_xlim(1e-3,1e2)
 
 
-#ax2.set_xlim(1e-4,1e0)
-ax2.set_xlim(1e-1,1e2)
+ax2.set_xlim(1e-4,1e0)
+#ax2.set_xlim(1e-1,1e2)
 
 plt.ylim(300,3e-3)
 
@@ -113,7 +112,7 @@ ax2.legend(lns, labs,fontsize=10,loc='lower right')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_mono_gamma.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_325_mono_gamma.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
