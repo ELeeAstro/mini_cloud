@@ -281,7 +281,7 @@ module mini_cloud_3_gamma_mod
     nu = min(nu,100.0_dp)
     lam = max(m_seed,m_c/nu)
 
-    x_seed = m_seed / lam
+    x_seed = m_seed
 
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
