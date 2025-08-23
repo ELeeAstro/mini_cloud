@@ -35,7 +35,7 @@ module mini_cloud_3_gamma_mod
   real(dp) :: V_seed, m_seed
   real(dp) :: alp = 1.0_dp
 
-  real(dp) :: mfp, eta, nu, cT
+  real(dp) :: mfp, eta, nu_kin, cT
 
   !! Diameter, LJ potential and molecular weight for background gases
   real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
@@ -130,7 +130,7 @@ module mini_cloud_3_gamma_mod
     call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
 
     !! Mixture kinematic viscosity
-    nu = eta/rho
+    nu_kin= eta/rho
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
@@ -246,12 +246,12 @@ module mini_cloud_3_gamma_mod
     real(dp) :: f_coal0, f_coag0, f_coal2, f_coag2
     real(dp) :: m_c, r_c, r_n, sat, vf_s, vf_e
     real(dp), dimension(2) :: vf
-    real(dp) :: p_v, n_v, fx, nu_n, N_c, rho_c, Z_c, rho_v
+    real(dp) :: p_v, n_v, fx, N_c, rho_c, Z_c, rho_v
 
     real(dp) :: Rey, Ep, St, gam_fac, lgnu, lgnu1, lgnu2
     real(dp) :: sig2, lam, nu, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
-    real(dp) :: gi_m1_3
+    real(dp) :: gi_m1_3, x_seed
 
     real(dp), parameter :: A = 1.639_dp
 
@@ -279,7 +279,9 @@ module mini_cloud_3_gamma_mod
     sig2 = max(Z_c/N_c - (rho_c/N_c)**2,m_seed**2)
     nu = max(m_c**2/sig2,0.01_dp)
     nu = min(nu,100.0_dp)
-    lam = m_c/nu
+    lam = max(m_seed,m_c/nu)
+
+    x_seed = m_seed / lam
 
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
@@ -301,7 +303,7 @@ module mini_cloud_3_gamma_mod
         & exp(log_gamma(nu - 1.0_dp/3.0_dp) - lgnu)
     else
       ! Use incomplete gamma function recurrence relation to avoid negative arguments
-      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,m_seed) - m_seed**(nu-1.0_dp/3.0_dp)*exp(-m_seed))/(nu - 1.0_dp/3.0_dp)
+      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/3.0_dp)*exp(-x_seed))/(nu - 1.0_dp/3.0_dp)
       Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log(gi_m1_3) - lgnu)
     end if
@@ -364,7 +366,7 @@ module mini_cloud_3_gamma_mod
     call calc_seed_evap(N_c, m_c, f_cond1, f_seed_evap)
 
     !! Calculate the coagulation rate
-    call calc_coag(m_c, r_c, nu, Kn, f_coag0, f_coag2)
+    call calc_coag(m_c, r_c, nu, Kn, x_seed, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
     call calc_coal(r_c, r_n, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
@@ -384,19 +386,21 @@ module mini_cloud_3_gamma_mod
   end subroutine RHS_mom
 
   !! Condensation and evaporation
-  subroutine calc_cond(r_c, Kn, Kn_m, Kn_m2, n_v, sat, nu, dmdt1, dmdt2)
+  subroutine calc_cond(r_c, Kn, Kn_m, Kn_m2, n_v, sat, nu_in, dmdt1, dmdt2)
     implicit none
 
-    real(dp), intent(in) :: r_c, Kn, Kn_m, Kn_m2, n_v, sat, nu
+    real(dp), intent(in) :: r_c, Kn, Kn_m, Kn_m2, n_v, sat, nu_in
 
     real(dp), intent(out) :: dmdt1, dmdt2
 
     real(dp) :: dmdt_low1, dmdt_high1, dmdt_low2, dmdt_high2
     real(dp) :: c_facl1, c_facg1, lgnu, lgnu1, nuth, nu2th
-    real(dp) :: Knd_m, Knd_m2, fx_m, fx_m2, Kn_crit_m, Kn_crit_m2
+    real(dp) :: nu, Knd_m, Knd_m2, fx_m, fx_m2, Kn_crit_m, Kn_crit_m2
 
     !gnu = gamma(nu)
     !gnu1 = gamma(nu+1.0_dp)
+
+    nu = nu_in
 
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
@@ -523,14 +527,14 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, nu_in, Kn_in, f_coag0, f_coag2)
+  subroutine calc_coag(m_c, r_c, nu_in, Kn_in, x_seed, f_coag0, f_coag2)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, nu_in, Kn_in
+    real(dp), intent(in) :: m_c, r_c, nu_in, Kn_in, x_seed
 
     real(dp), intent(out) :: f_coag0, f_coag2
 
-    real(dp) :: lgnu, lgnu1
+    real(dp) :: nu, lgnu, lgnu1
 
     real(dp) :: Knd0, phi0, Kl0, Kh0, nu_fac_l_0, nu_fac_h_0
     real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
@@ -550,6 +554,8 @@ module mini_cloud_3_gamma_mod
     !! Thermal velocity limit rate
     !V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
 
+    nu = nu_in
+
     lgnu  = log_gamma(nu)
     lgnu1 = log_gamma(nu + 1.0_dp)
 
@@ -559,14 +565,14 @@ module mini_cloud_3_gamma_mod
       gi_m1_3 = gamma(nu - 1.0_dp/3.0_dp)
     else
       !! Use incomplete gamma function
-      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,m_seed) - m_seed**(nu-1.0_dp/3.0_dp)*exp(-m_seed))/(nu - 1.0_dp/3.0_dp)
+      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/3.0_dp)*exp(-x_seed))/(nu - 1.0_dp/3.0_dp)
     end if
     if (nu > 2.0_dp/3.0_dp) then
       !! Use gamma function
       gi_m2_3 = gamma(nu - 2.0_dp/3.0_dp)
     else
       !! Use incomplete gamma function
-      gi_m2_3 = (up_inc_gam(nu-2.0/3.0_dp+1.0_dp,m_seed) - m_seed**(nu-2.0_dp/3.0_dp)*exp(-m_seed))/(nu - 2.0_dp/3.0_dp)
+      gi_m2_3 = (up_inc_gam(nu-2.0/3.0_dp+1.0_dp,x_seed) - x_seed**(nu-2.0_dp/3.0_dp)*exp(-x_seed))/(nu - 2.0_dp/3.0_dp)
     end if
 
     nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log(gi_m1_3) - 2.0_dp * lgnu) & 
@@ -586,14 +592,14 @@ module mini_cloud_3_gamma_mod
       gi_m1_2 = gamma(nu - 1.0_dp/2.0_dp)
     else
       !! Use incomplete gamma function
-      gi_m1_2 = (up_inc_gam(nu-1.0/2.0_dp+1.0_dp,m_seed) - m_seed**(nu-1.0_dp/2.0_dp)*exp(-m_seed))/(nu - 1.0_dp/2.0_dp)
+      gi_m1_2 = (up_inc_gam(nu-1.0/2.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/2.0_dp)*exp(-x_seed))/(nu - 1.0_dp/2.0_dp)
     end if
     if (nu > 1.0_dp/6.0_dp) then
       !! Use gamma function
       gi_m1_6 = gamma(nu - 1.0_dp/6.0_dp)
     else
       !! Use incomplete gamma function
-      gi_m1_6 = (up_inc_gam(nu-1.0/6.0_dp+1.0_dp,m_seed) - m_seed**(nu-1.0_dp/6.0_dp)*exp(-m_seed))/(nu - 1.0_dp/6.0_dp)
+      gi_m1_6 = (up_inc_gam(nu-1.0/6.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/6.0_dp)*exp(-x_seed))/(nu - 1.0_dp/6.0_dp)
     end if
 
     nu_fac_h_0 = H * nu**(-1.0_dp/6.0_dp)  &
@@ -626,19 +632,21 @@ module mini_cloud_3_gamma_mod
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, r_n, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
+  subroutine calc_coal(r_c, r_n, vf, nu_in, Kn_n, Kn_m, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_c, r_n, nu, Kn_n, Kn_m
+    real(dp), intent(in) :: r_c, r_n, nu_in, Kn_n, Kn_m
     real(dp), dimension(2), intent(in) :: vf
 
     real(dp), intent(out) :: f_coal0, f_coal2
 
-    real(dp) :: d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, K0
+    real(dp) :: nu, d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, K0
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
     d_vf = eps * vf(1)
+
+    nu = nu_in
 
     lgnu  = log_gamma(nu)
 
