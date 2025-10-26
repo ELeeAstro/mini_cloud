@@ -1,3 +1,5 @@
+# NOTE: Rewrite in progress, expect changes
+
 # mini_cloud
 
 `mini-cloud' is a selection of time-dependent cloud microphysical models primarily using the mass moment method for exoplanet atmosphere cloud formation.

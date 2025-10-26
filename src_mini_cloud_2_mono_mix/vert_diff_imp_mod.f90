@@ -5,6 +5,11 @@ module vert_diff_imp_mod
 
   integer, parameter :: dp = REAL64 ! Precision variable
 
+
+  real(dp), parameter :: theta = 0.5_dp
+  real(dp), parameter :: qmin = 1e-99_dp
+  real(dp), parameter :: eps = 1.0e-300_dp 
+
   real(dp), parameter :: R_gas = 8.31446261815324e7_dp
   real(dp), parameter :: kb = 1.380649e-16_dp
 
@@ -32,28 +37,20 @@ contains
     real(dp), dimension(nlay) :: dz, pl, rho, altm, a, b, c, rhs, scales
     real(dp), dimension(nlay-1) :: dz_m
 
-    theta = 0.5_dp
-
-    q_min = 1e-99_dp
-
-    pl(:) = pl_in(:) * 10.0_dp   ! Convert pascal to dyne cm-2
-    pe(:) = pe_in(:) * 10.0_dp   ! Convert pascal to dyne cm-2
+    pl(:) = pl_in(:) * 10.0_dp 
+    pe(:) = pe_in(:) * 10.0_dp 
 
     grav = grav_in * 100.0_dp
 
-    ! ---- Densities at centers and faces ----
     rho(:) = pl(:) / ((R_gas / mu(:)) * Tl(:))
     rho_e(1) = pe(1) / ((R_gas / mu(1)) * Tl(1)) 
     do k = 2, nlay
-      ! face between cells k-1 and k corresponds to pe(k)
       Te = 0.5_dp*(Tl(k-1) + Tl(k))
       mue = 0.5_dp*(mu(k-1) + mu(k))
       rho_e(k) = pe(k) / ((R_gas / mue) * Te)
     end do
-    rho_e(nlev) = pe(nlev) / ((R_gas / mu(nlay)) * Tl(nlay))  ! bottom face: one-sided
+    rho_e(nlev) = pe(nlev) / ((R_gas / mu(nlay)) * Tl(nlay))
 
-
-    ! Face Kzz (harmonic). Sizes: Kzz(nlay), K_e(nlev)
     K_e(1) = Kzz(1)
     do k = 1, nlay-1
       K_e(k+1) = harm_mean( Kzz(k), Kzz(k+1) )
@@ -64,19 +61,22 @@ contains
     do k = nlev-1, 1, -1
       alte(k) = alte(k+1) + (R_gas*Tl(k))/(mu(k)*grav) * log(pe(k+1)/pe(k))
     end do
+
     do k = 1, nlay
       altm(k) = 0.5_dp * (alte(k) + alte(k+1))
     end do
+
     do k = 1, nlay
       dz(k) = alte(k) - alte(k+1)
     end do
+
     do k = 1, nlay-1
       dz_m(k) = altm(k) - altm(k+1)
     end do
 
     D(:) = 0.0_dp
     do k = 2, nlay
-      D(k) = rho_e(k) * K_e(k) / (dz_m(k-1) + 1e-300_dp)
+      D(k) = rho_e(k) * K_e(k) / (dz_m(k-1) + eps)
     end do
 
     scales(:) = 1.0_dp / (rho(:) * dz(:))
@@ -89,7 +89,7 @@ contains
       do k = 2, nlev-1
         J_old(k) = -D(k) * (q(k,n) - q(k-1,n))
       end do
-      J_old(nlev) = - D(nlay) * ( q0(n) - q(nlay-1,n) )   ! bottom face uses Dirichlet q0
+      J_old(nlev) = - D(nlay) * ( q0(n) - q(nlay-1,n) ) 
 
       do k = 1, nlay-1
 
@@ -118,7 +118,7 @@ contains
     real(dp), intent(out) :: x(:)
     integer               :: n, i
     real(dp), allocatable :: cp(:), dpv(:)
-    real(dp)              :: denom, eps
+    real(dp)              :: denom
 
     n = size(b)
     if (size(a) /= n .or. size(c) /= n .or. size(d) /= n .or. size(x) /= n) then
@@ -126,9 +126,7 @@ contains
     end if
 
     allocate(cp(n), dpv(n))
-    eps = 1.0e-300_dp  ! tiny to avoid division by zero
 
-    ! Forward sweep
     if (abs(b(1)) <= eps) error stop "thomas_solve: zero pivot at i=1"
     cp(1)  = c(1) / b(1)
     dpv(1) = d(1) / b(1)
@@ -139,24 +137,23 @@ contains
       if (i < n) then
         cp(i) = c(i) / denom
       else
-        cp(i) = 0.0_dp      ! c(n) is not used
+        cp(i) = 0.0_dp 
       end if
       dpv(i) = (d(i) - a(i) * dpv(i-1)) / denom
     end do
 
-    ! Back substitution
     x(n) = dpv(n)
     do i = n-1, 1, -1
       x(i) = dpv(i) - cp(i) * x(i+1)
     end do
 
     deallocate(cp, dpv)
+
   end subroutine thomas
 
-  ! Harmonic mean helper (protect against a+b ~ 0)
   pure elemental real(dp) function harm_mean(a, b) result(hm)
     real(dp), intent(in) :: a, b
-    hm = 2.0_dp*a*b / (a + b + 1.0e-300_dp)
+    hm = 2.0_dp*a*b / (a + b + eps)
   end function harm_mean
 
 end module vert_diff_imp_mod

@@ -68,15 +68,17 @@ contains
     do k = nlev-1, 1, -1
       alte(k) = alte(k+1) + (R_gas*Tl(k))/(mu(k)*grav) * log(pe(k+1)/pe(k))
     end do
+
     do i = 1, nlay
       dz(i)   = alte(i) - alte(i+1)
       altm(i) = 0.5_dp*(alte(i) + alte(i+1))
     end do
+    
     do i = 1, nlay-1
       dzm(i) = altm(i) - altm(i+1)
     end do
 
-    ! ---- densities at centres and faces (Python behaviour) ----
+    ! ---- densities at centres and faces ----
     rho(:) = pl(:) / ((R_gas / mu(:)) * Tl(:))
     rho_e(1) = rho(1)
     do k = 2, nlay
@@ -151,7 +153,7 @@ contains
   end subroutine vert_adv_exp
 
 
-  ! ----- RHS: non-uniform MUSCL (downward flow, A >= 0), matches Python -----
+  ! ----- RHS: non-uniform MUSCL (downward flow, A >= 0) -----
   subroutine adv_rhs_muscl_down_nugrid(nlay, nlev, dz, dzm, rho, A, q, q_top, &
                                        sigma, qR_face, F, rhs)
     implicit none
@@ -214,21 +216,12 @@ contains
     end do
   end subroutine adv_rhs_muscl_down_nugrid
 
-
   pure real(dp) function koren_phi(r) result(phi)
     implicit none
     real(dp), intent(in) :: r
-    real(dp) :: a, b, m1, m2
-    a  = 2.0_dp * r
-    b  = (1.0_dp + 2.0_dp * r) / 3.0_dp
-    m1 = merge(a, b, a < b)             ! min(a,b)
-    m2 = merge(2.0_dp, m1, 2.0_dp < m1) ! min(2,m1)
-    if (m2 > 0.0_dp) then
-      phi = m2
-    else
-      phi = 0.0_dp
-    end if
+    phi = max( 0.0_dp, min( min( 2.0_dp*r, (1.0_dp + 2.0_dp*r)/3.0_dp ), 2.0_dp ) )
   end function koren_phi
+
 
 end module vert_adv_exp_mod
 

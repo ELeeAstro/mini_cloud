@@ -271,8 +271,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp), dimension(n_eq), intent(inout) :: f
 
     real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf_e, vf, Kn_b
-    real(dp) :: fx
+    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf, Kn_b
 
     integer :: j
     real(dp) :: N_c, rho_c_t, rho_d_m, V_tot
@@ -315,25 +314,16 @@ module mini_cloud_2_mono_mix_mod
 
     !! Knudsen number
     Kn = mfp_a/r_c
-    Kn_b = min(Kn, 100.0_dp)
     
     !! Cunningham slip factor (Jung et al. 2012)
-    beta = 1.0_dp + Kn_b*(1.165_dp + 0.480_dp * exp(-0.101_dp/Kn_b))
+    beta = 1.0_dp + Kn*(1.165_dp + 0.480_dp * exp(-0.101_dp/Kn))
 
     !! Settling velocity (Stokes regime)
     vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta_a) & 
      & * (1.0_dp &
      & + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta_a**2))**(0.4_dp))**(-1.25_dp)
 
-    !! Settling velocity (Epstein regime)
-    vf_e = (sqrt(pi)*grav*rho_d_m*r_c)/(2.0_dp*cT*rho)
-
-    !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
-
-    !! Interpolation for settling velocity
-    vf = fx*vf_s + (1.0_dp - fx)*vf_e
-    vf = max(vf, 1e-30_dp)
+    vf = max(vf_s, 1e-30_dp)
 
     !! Find supersaturation ratio
     cld(:)%sat = p_v(:)/cld(:)%p_vap

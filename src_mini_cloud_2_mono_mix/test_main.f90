@@ -286,7 +286,7 @@ program test_mini_cloud_2
       allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay), cp(nlay), dTdt(nlay))
 
       !! Find pressure level grid (pa) - logspaced between p_top and p_bot
-      p_top = 1e-8_dp * 1e5_dp
+      p_top = 1e-4_dp * 1e5_dp
       p_bot = 1000.0_dp * 1e5_dp
 
       p_top = log10(p_top)
@@ -394,7 +394,7 @@ program test_mini_cloud_2
         q(:,nsp+1) = q_0(:) 
         q(:,nsp+2:) = q_1(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1), nsp+1, q(:,nsp+1:))
 
         call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
 
@@ -466,9 +466,6 @@ program test_mini_cloud_2
           !! Mass weighted mean radius of particle [um]
           r_c(i) = max(((3.0_dp*m_c(i))/(4.0_dp*pi*rho_d_mean))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
         end do
-
-
-
 
         end = .True.
 
