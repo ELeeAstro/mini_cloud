@@ -78,6 +78,7 @@ contains
     do k = 2, nlay
       D(k) = rho_e(k) * K_e(k) / (dz_m(k-1) + 1e-300_dp)
     end do
+    D(nlev) = rho_e(nlev) * K_e(nlev) / (dz_m(nlay-1) + 1e-300_dp)
 
     scales(:) = 1.0_dp / (rho(:) * dz(:))
 
@@ -89,7 +90,7 @@ contains
       do k = 2, nlev-1
         J_old(k) = -D(k) * (q(k,n) - q(k-1,n))
       end do
-      J_old(nlev) = - D(nlay) * ( q0(n) - q(nlay-1,n) )   ! bottom face uses Dirichlet q0
+      J_old(nlev) = -D(nlev) * ( q0(n) - q(nlay,n) )     ! bottom face (Dirichlet)
 
       do k = 1, nlay-1
 

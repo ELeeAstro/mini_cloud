@@ -28,7 +28,7 @@ contains
     real(dp), dimension(nlay,nq) :: qc, q_new, q_em, q_in
 
     integer :: k
-    real(dp) :: grav
+    real(dp) :: grav, Te, mue
     real(dp), dimension(nlev) :: alte, pe, Kzze, rhoe
     real(dp), dimension(nlay) :: delz, pl, rho
     real(dp), dimension(nlay-1) :: delz_mid
@@ -67,12 +67,13 @@ contains
     Kzze(nlev) = Kzz(nlay)
 
     rho(:) = pl(:) / ((R / mu(:)) * Tl(:))
-    !! Find rho at levels
-    rhoe(1) = rho(1)
+    rhoe(1) = pe(1) / ((R / mu(1)) * Tl(1)) 
     do k = 2, nlay
-      rhoe(k) = (rho(k) + rho(k-1))/2.0_dp
+      Te = 0.5_dp*(Tl(k-1) + Tl(k))
+      mue = 0.5_dp*(mu(k-1) + mu(k))
+      rhoe(k) = pe(k) / ((R / mue) * Te)
     end do
-    rhoe(nlev) = rho(nlay)
+    rhoe(nlev) = pe(nlev) / ((R / mu(nlay)) * Tl(nlay))
 
     !! Copy tracer array
     do k = 1, nlay

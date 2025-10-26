@@ -14,14 +14,14 @@ module vert_adv_exp_mod
 contains
 
   subroutine vert_adv_exp(nlay, nlev, t_end, mu, grav_in, Tl, pl_in, pe_in, vf, nq, q)
-    ! Multi-tracer advection with shared velocity vf(nlay) for all tracers.
-    ! Downward/positive flow only (A >= 0). Shared dt for all tracers.
+    ! Multi-tracer advection with per-tracer velocities vf(nlay,nq).
+    ! Downward/positive flow only (A >= 0). Shared dt for all tracers (min over tracers).
     !
     ! Inputs:
     !   nlay, nlev=nlay+1
     !   t_end [s]
     !   mu(nlay) [g/mol], grav_in [m/s^2], Tl(nlay) [K], pl_in(nlay) [Pa], pe_in(nlev) [Pa]
-    !   vf(nlay) [cm/s]  -- identical for all tracers
+    !   vf(nlay, nq) [cm/s]  -- tracer-specific settling/advection velocity
     !   nq: number of tracers
     ! InOut:
     !   q(nlay,nq): mixing ratios (cell-avg)
@@ -29,15 +29,15 @@ contains
     integer, intent(in)            :: nlay, nlev, nq
     real(dp), intent(in)           :: t_end, grav_in
     real(dp), intent(in)           :: Tl(nlay), pl_in(nlay), mu(nlay), pe_in(nlev)
-    real(dp), intent(in)           :: vf(nlay)          ! shared for all tracers
+    real(dp), intent(in)           :: vf(nlay, nq)
     real(dp), intent(inout)        :: q(nlay, nq)
 
     ! geometry/state
     real(dp), allocatable :: alte(:), altm(:), dz(:), dzm(:)
     real(dp), allocatable :: pl(:), pe(:), rho(:), rho_e(:)
 
-    ! shared face velocities/fluxes
-    real(dp), allocatable :: v_e(:), A(:)
+    ! per-tracer face velocities/fluxes
+    real(dp), allocatable :: v_e(:,:), A(:,:)
 
     ! time integration buffers
     real(dp), allocatable :: q1(:,:), q2(:,:), rhs(:)
@@ -56,7 +56,7 @@ contains
     ! ---- allocate ----
     allocate(alte(nlev), altm(nlay), dz(nlay), dzm(nlay-1))
     allocate(pl(nlay), pe(nlev), rho(nlay), rho_e(nlev))
-    allocate(v_e(nlev), A(nlev))
+    allocate(v_e(nlev,nq), A(nlev,nq))
     allocate(q1(nlay,nq), q2(nlay,nq), rhs(nlay))
     allocate(sigma(nlay), qR_face(nlay), F(nlev))
 
@@ -68,15 +68,17 @@ contains
     do k = nlev-1, 1, -1
       alte(k) = alte(k+1) + (R_gas*Tl(k))/(mu(k)*grav) * log(pe(k+1)/pe(k))
     end do
+
     do i = 1, nlay
       dz(i)   = alte(i) - alte(i+1)
       altm(i) = 0.5_dp*(alte(i) + alte(i+1))
     end do
+
     do i = 1, nlay-1
       dzm(i) = altm(i) - altm(i+1)
     end do
 
-    ! ---- densities at centres and faces (Python behaviour) ----
+    ! ---- densities at centres and faces ----
     rho(:) = pl(:) / ((R_gas / mu(:)) * Tl(:))
     rho_e(1) = rho(1)
     do k = 2, nlay
@@ -84,29 +86,39 @@ contains
     end do
     rho_e(nlev) = rho(nlay)
 
-    ! ---- face velocities from vf (shared across tracers) ----
-    v_e(1) = vf(1)
-    do i = 1, nlay-1
-      v_e(i+1) = 0.5_dp*(vf(i) + vf(i+1))
-    end do
-    v_e(nlev) = vf(nlay)
+    ! ---- per-tracer face velocities from vf and face mass fluxes ----
+    do n = 1, nq
+      v_e(1,n) = vf(1,n)
+      do i = 1, nlay-1
+        v_e(i+1,n) = 0.5_dp*(vf(i,n) + vf(i+1,n))
+      end do
+      v_e(nlev,n) = vf(nlay,n)
 
-    ! ---- face mass flux ----
-    do k = 1, nlev
-      A(k) = rho_e(k) * v_e(k)
+      do k = 1, nlev
+        A(k,n) = rho_e(k) * v_e(k,n)
+      end do
     end do
 
     ! ---- time integration loop (shared dt for all tracers) ----
     t = 0.0_dp
     do while (t < t_end - T_TOL)
 
-      ! Python-style CFL: interior faces only (k=2..nlay)
+      ! CFL restriction: take minimum over all interior faces AND over all tracers
       dt_max = t_end - t
-      do k = 2, nlay
-        num = rho(k-1) * dz(k-1)
-        den = A(k) + TINY
-        if (den > 0.0_dp) dt_max = min(dt_max, CFL * num / den)
+      do n = 1, nq
+        do k = 2, nlay
+          num = rho(k-1) * dz(k-1)
+          den = A(k,n) + TINY
+          if (den > 0.0_dp) dt_max = min(dt_max, CFL * num / den)
+        end do
       end do
+
+      if (dt_max < 1e-6_dp) then
+        do k = 1, nlay
+          print*, k, vf(k,:)
+        end do
+        stop
+      end if
 
       remaining = t_end - t
       dt = min(dt_max, remaining)
@@ -114,7 +126,7 @@ contains
 
       ! ===== Stage 1: q1 = q + dt*L(q) for ALL tracers =====
       do n = 1, nq
-        call adv_rhs_muscl_down_nugrid(nlay, nlev, dz, dzm, rho, A, q(:,n), q_top, &
+        call adv_rhs_muscl_down_nugrid(nlay, nlev, dz, dzm, rho, A(:,n), q(:,n), q_top, &
                                        sigma, qR_face, F, rhs)
         do i = 1, nlay
           q1(i,n) = q(i,n) + dt*rhs(i)
@@ -124,7 +136,7 @@ contains
 
       ! ===== Stage 2: q2 = 3/4 q + 1/4 (q1 + dt*L(q1)) =====
       do n = 1, nq
-        call adv_rhs_muscl_down_nugrid(nlay, nlev, dz, dzm, rho, A, q1(:,n), q_top, &
+        call adv_rhs_muscl_down_nugrid(nlay, nlev, dz, dzm, rho, A(:,n), q1(:,n), q_top, &
                                        sigma, qR_face, F, rhs)
         do i = 1, nlay
           q2(i,n) = 0.75_dp*q(i,n) + 0.25_dp*( q1(i,n) + dt*rhs(i) )
@@ -134,7 +146,7 @@ contains
 
       ! ===== Stage 3: q = 1/3 q + 2/3 (q2 + dt*L(q2)) =====
       do n = 1, nq
-        call adv_rhs_muscl_down_nugrid(nlay, nlev, dz, dzm, rho, A, q2(:,n), q_top, &
+        call adv_rhs_muscl_down_nugrid(nlay, nlev, dz, dzm, rho, A(:,n), q2(:,n), q_top, &
                                        sigma, qR_face, F, rhs)
         do i = 1, nlay
           q(i,n) = (1.0_dp/3.0_dp)*q(i,n) + (2.0_dp/3.0_dp)*( q2(i,n) + dt*rhs(i) )
@@ -151,7 +163,7 @@ contains
   end subroutine vert_adv_exp
 
 
-  ! ----- RHS: non-uniform MUSCL (downward flow, A >= 0), matches Python -----
+  ! ----- RHS: non-uniform MUSCL (downward flow, A >= 0) -----
   subroutine adv_rhs_muscl_down_nugrid(nlay, nlev, dz, dzm, rho, A, q, q_top, &
                                        sigma, qR_face, F, rhs)
     implicit none
@@ -214,21 +226,10 @@ contains
     end do
   end subroutine adv_rhs_muscl_down_nugrid
 
-
   pure real(dp) function koren_phi(r) result(phi)
     implicit none
     real(dp), intent(in) :: r
-    real(dp) :: a, b, m1, m2
-    a  = 2.0_dp * r
-    b  = (1.0_dp + 2.0_dp * r) / 3.0_dp
-    m1 = merge(a, b, a < b)             ! min(a,b)
-    m2 = merge(2.0_dp, m1, 2.0_dp < m1) ! min(2,m1)
-    if (m2 > 0.0_dp) then
-      phi = m2
-    else
-      phi = 0.0_dp
-    end if
+    phi = max( 0.0_dp, min( min( 2.0_dp*r, (1.0_dp + 2.0_dp*r)/3.0_dp ), 2.0_dp ) )
   end function koren_phi
 
 end module vert_adv_exp_mod
-

@@ -33,7 +33,7 @@ contains
 
     integer :: k, n
     real(dp) :: grav, q_min, inv_dt, scale, theta, Te, mue
-    real(dp), dimension(nlev) :: alte, pe, K_e, rho_e, D, J_old
+    real(dp), dimension(nlev) :: alte, pe, K_e, rho_e, Df, J_old
     real(dp), dimension(nlay) :: dz, pl, rho, altm, a, b, c, rhs, scales
     real(dp), dimension(nlay-1) :: dz_m
 
@@ -52,8 +52,8 @@ contains
     rho_e(nlev) = pe(nlev) / ((R_gas / mu(nlay)) * Tl(nlay))
 
     K_e(1) = Kzz(1)
-    do k = 1, nlay-1
-      K_e(k+1) = harm_mean( Kzz(k), Kzz(k+1) )
+    do k = 2, nlay
+      K_e(k) = 0.5_dp*(Kzz(k-1) + Kzz(k))
     end do
     K_e(nlev) = Kzz(nlay)
 
@@ -74,10 +74,12 @@ contains
       dz_m(k) = altm(k) - altm(k+1)
     end do
 
-    D(:) = 0.0_dp
+    Df(1) = 0.0_dp
     do k = 2, nlay
-      D(k) = rho_e(k) * K_e(k) / (dz_m(k-1) + eps)
+      Df(k) = rho_e(k) * K_e(k) / (dz_m(k-1) + eps)
     end do
+    Df(nlay+1) = rho_e(nlev) * K_e(nlev) / (dz_m(nlay-1) + eps)
+    
 
     scales(:) = 1.0_dp / (rho(:) * dz(:))
 
@@ -85,17 +87,17 @@ contains
 
     do n = 1, nq
 
-      J_old(1) = 0.0_dp
+      J_old(1) = 0.0_dp  ! top Neumann
       do k = 2, nlev-1
-        J_old(k) = -D(k) * (q(k,n) - q(k-1,n))
+        J_old(k) = -Df(k) * ( q(k,n) - q(k-1,n) )         ! interior faces
       end do
-      J_old(nlev) = - D(nlay) * ( q0(n) - q(nlay-1,n) ) 
+      J_old(nlev) = -Df(nlay+1) * ( q0(n) - q(nlay,n) )     ! bottom face (Dirichlet)
 
       do k = 1, nlay-1
 
-        a(k) = -theta * scales(k) * D(k)
-        c(k) = -theta * scales(k) * D(k+1)
-        b(k) = inv_dt + theta * scales(k) * (D(k) + D(k+1))
+        a(k) = -theta * scales(k) * Df(k)
+        c(k) = -theta * scales(k) * Df(k+1)
+        b(k) = inv_dt + theta * scales(k) * (Df(k) + Df(k+1))
 
         rhs(k) = inv_dt * q(k,n) - (1.0_dp - theta) * scales(k) * (J_old(k+1) - J_old(k))
       end do
