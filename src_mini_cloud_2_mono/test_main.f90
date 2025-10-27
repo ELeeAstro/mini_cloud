@@ -43,7 +43,7 @@ program test_mini_cloud_2
   t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 10000
+  n_it = 1000000
 
   !! Start time
   time = 6840.0_dp
@@ -177,7 +177,7 @@ program test_mini_cloud_2
       p_bot = 10.0_dp**p_bot
 
       !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
       ! Read header
       read(u,*) ; read(u,*)
     ! Find number of lines in file
@@ -228,7 +228,7 @@ program test_mini_cloud_2
       mu(:) = 2.33_dp
 
       !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(4.25_dp))/100.0_dp
+      grav = (10.0_dp**(3.25_dp))/100.0_dp
 
       !! Number density [cm-3] of layer
       nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
