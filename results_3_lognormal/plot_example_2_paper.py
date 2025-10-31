@@ -7,7 +7,7 @@ amu = 1.66053906660e-24
 r_seed = 1e-7
 rho_d = 1.99
 
-fname = 'tracers_425.txt'
+fname = 'tracers.txt'
 
 data = np.loadtxt(fname)
 
@@ -57,8 +57,9 @@ yticks = [100,10,1,0.1,0.01,1e-3,]
 yticks_lab = ['100','10','1','0.1','0.01','10$^{-3}$']
 ax1.set_yticks(yticks,yticks_lab)
 
-#ax1.set_xlim(1e-3,1e1)
-#ax2.set_xlim(1e-5,1e6)
+ax1.set_xlim(1e-3,1e1)
+
+ax2.set_xlim(1e-1,1e2)
 
 plt.ylim(300,3e-3)
 

@@ -113,9 +113,9 @@ plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
 #plt.ylim(1e-12,1e-3)
-plt.ylim(1e-2,1e7)
+plt.ylim(1e-3,1e2)
 
-plt.xlim(1e-3,1e3)
+plt.xlim(1e-3,1e2)
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)

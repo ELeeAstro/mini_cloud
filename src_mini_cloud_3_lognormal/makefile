@@ -12,13 +12,16 @@ DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=inva
 
 # Source files (mix of .f and .f90 files)
 SRCS_F90 = \
+    cli_progress_mod.f90 \
     vert_diff_exp_mod.f90 \
-    vert_adv_exp_McCormack_mod.f90 \
+    vert_diff_imp_mod.f90 \
+    vert_adv_exp_mod.f90 \
     lxmie_mod.f90 \
     mini_cloud_opac_mie_mod.f90 \
     mini_cloud_vf_mod.f90 \
     mini_cloud_3_lognormal_mod.f90 \
     test_main.f90
+
 
 SRCS_F = dlsode.f
 

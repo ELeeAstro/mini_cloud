@@ -4,7 +4,10 @@ program test_mini_cloud_3
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
-  use vert_adv_exp_McCormack_mod, only : vert_adv_exp_McCormack
+  use vert_diff_exp_mod, only : vert_diff_exp
+  use vert_adv_exp_mod, only : vert_adv_exp
+  use vert_diff_imp_mod, only : vert_diff_imp
+  use cli_progress
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -14,6 +17,7 @@ program test_mini_cloud_3
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
   real(dp), parameter :: R = 8.31446261815324e7_dp
   real(dp), parameter :: r_seed = 1e-7_dp
+  real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
 
   integer :: example, n_it
   real(dp) :: t_step, time
@@ -33,7 +37,7 @@ program test_mini_cloud_3
   integer :: nlines, io, idx, idx1
   real(dp) :: p_bot, p_top
   real(dp), allocatable, dimension(:) :: T_f, p_f, Kzz_f
-  real(dp) :: V_seed, m_seed
+  real(dp) :: m_seed
 
   integer :: nm
   real(dp), allocatable, dimension(:) :: alte, q_a
@@ -41,11 +45,13 @@ program test_mini_cloud_3
 
   logical :: end
 
+  call progress_begin()
+
   !! time step
-  t_step = 500.0_dp
+  t_step = 1000.0_dp
 
   !! Number of iterations
-  n_it = 2000000
+  n_it = 100000
 
   !! Start time
   time = 6840.0_dp
@@ -104,7 +110,6 @@ program test_mini_cloud_3
       !! Change vapur VMR to mass density ratio
       q_v(1) = q_v(1) * mol_w_sp/mu(1)
 
-      V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
       m_seed = V_seed * rho_d
 
       do n = 1, n_it
@@ -152,7 +157,7 @@ program test_mini_cloud_3
 
       !! In this example we perform a 1D test of mini_cloud with diffusion and settling included
 
-      nlay = 200
+      nlay = 192
       nlev = nlay + 1
 
       n_wl = 11
@@ -234,6 +239,12 @@ program test_mini_cloud_3
       !! Assume constant gravity [m s-2]
       grav = (10.0_dp**(3.25_dp))/100.0_dp
 
+      !! Number density [cm-3] of layer
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
+
+      !! Mass density of layer
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
+
       !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
       sp_bg = (/'H2','He'/)
@@ -248,52 +259,78 @@ program test_mini_cloud_3
       allocate(q_v(nlay), q_0(nlay), q_1(nlay), q_2(nlay), q0(4), q(nlay,4))
       allocate(r_c(nlay), m_c(nlay), vf_q(nlay,3), r_c_old(nlay), del(nlay))
 
-      !! Number density [cm-3] of layer
-      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
-
-      !! Mass density of layer
-      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
-
-      q_v(:) = 1e-30_dp!rho(:)
-      q_0(:) = 1e-30_dp!/nd_atm(:)
-      q_1(:) = 1e-30_dp!rho(:)
-      q_2(:) = 1e-30_dp!/rho(:)**2
+      q_v(:) = 1e-30_dp
+      q_0(:) = 1e-30_dp
+      q_1(:) = 1e-30_dp
+      q_2(:) = 1e-30_dp
 
       q0(1) = 1.17e-7_dp * mol_w_sp/mu(nlay)
       q0(2) = 1e-30_dp
       q0(3) = 1e-30_dp
       q0(4) = 1e-30_dp
 
-      q_v(nlay) = q0(1)
+      m_seed = V_seed * rho_d
 
       time = 0.0_dp
       n = 0
 
       r_c_old(:) = r_seed * 1e-4_dp
 
-   
       do n = 1, n_it
 
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
-
-          !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_3_lognormal(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i), q_2(i))
-
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), q_2(i), vf_q(i,:))
-
-          !! Calculate the opacity at the wavelength grid
-         !call opac_mie(1, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i), rho_d, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
+        !$omp end parallel do
 
         q(:,1) = q_v(:)
         q(:,2) = q_0(:)
         q(:,3) = q_1(:)
         q(:,4) = q_2(:)
 
-        call vert_adv_exp_McCormack(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf_q(:,:), 3, q(:,2:4), q0(2:4))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf_q(:,:), 3, q(:,2:4))
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 4, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 4, q(:,:), q0(:))
+
+        q_v(:) = q(:,1)
+        q_0(:) = q(:,2)
+        q_1(:) = q(:,3)
+        q_2(:) = q(:,4)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Call mini-cloud and perform integrations for a single layer
+          call mini_cloud_3_lognormal(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i), q_2(i))
+        end do
+        !$omp end parallel do
+
+        q(:,1) = q_v(:)
+        q(:,2) = q_0(:)
+        q(:,3) = q_1(:)
+        q(:,4) = q_2(:)
+
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 4, q(:,:), q0(:))
+
+        q_v(:) = q(:,1)
+        q_0(:) = q(:,2)
+        q_1(:) = q(:,3)
+        q_2(:) = q(:,4)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Re-calculate settling velocity for this layer
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), q_2(i), vf_q(i,:))
+        end do
+        !$omp end parallel do
+
+        q(:,1) = q_v(:)
+        q(:,2) = q_0(:)
+        q(:,3) = q_1(:)
+        q(:,4) = q_2(:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf_q(:,:), 3, q(:,2:4))
 
         q_v(:) = q(:,1)
         q_0(:) = q(:,2)
@@ -306,11 +343,6 @@ program test_mini_cloud_3
         !! Mass weighted mean radius of particle [um]
         r_c(:) = max(((3.0_dp*m_c(:))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
 
-        !! increment time
-        time = time + t_step
-
-        print*, n, time
-
         end = .True.
 
         do i = 1, nlay
@@ -322,11 +354,20 @@ program test_mini_cloud_3
         end do
         r_c_old(:) = r_c(:)
 
+        !! increment time
+        time = time + t_step
+
+        !print*, n, time, maxval(del(:)/t_step)
+
         if ((end .eqv. .True.) .and. (n > int(1e7))) then
           print*, 'exit: ', n, n_it, end
           print*, del(:)
           print*, del(:)/t_step
           exit
+        end if
+
+        if (mod(n,1) == 0) then 
+          call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
         end if
 
 
@@ -346,6 +387,8 @@ program test_mini_cloud_3
       print*, 'Invalid test case example: ', example
       stop
     end select
+
+  call progress_end()
 
 contains
 
