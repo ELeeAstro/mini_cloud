@@ -1,6 +1,6 @@
 program test_mini_cloud_2
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_2_mono_mix_mod, only : mini_cloud_2_mono_mix
+  use mini_cloud_2_exp_mix_mod, only : mini_cloud_2_exp_mix
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
@@ -45,7 +45,7 @@ program test_mini_cloud_2
   t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 100000
+  n_it = 10000
 
   !! Start time
   time = 6840.0_dp
@@ -187,12 +187,12 @@ program test_mini_cloud_2
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
+          call mini_cloud_2_exp_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
             & nsp, q_v(i,:), q_0(i), q_1(i,:), dTdt(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i,1))
+            &  nsp, q_0(i), q_1(i,:), vf(i,:))
 
           !! Calculate the opacity at the wavelength grid
           call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
@@ -385,8 +385,8 @@ program test_mini_cloud_2
         do i = 1, nlay
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i,1))
-          vf(i,:) = vf(i,1)
+            &  nsp, q_0(i), q_1(i,:), vf(i,1:2))
+            vf(i,3:) = vf(i,2)
         end do
         !$omp end parallel do
 
@@ -408,7 +408,7 @@ program test_mini_cloud_2
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_mono_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
+          call mini_cloud_2_exp_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
             & nsp, q_v(i,:), q_0(i), q_1(i,:), dTdt(i))
         end do
         !$omp end parallel do
@@ -427,8 +427,8 @@ program test_mini_cloud_2
         do i = 1, nlay
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i,1))
-          vf(i,:) = vf(i,1)
+            &  nsp, q_0(i), q_1(i,:), vf(i,1:2))
+          vf(i,3:) = vf(i,2)
         end do
         !$omp end parallel do
 
@@ -519,15 +519,15 @@ contains
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_2_mono_mix/tracers.txt',action='readwrite')
+      open(newunit=u1,file='results_2_exp_mix/tracers.txt',action='readwrite')
       write(u1,*) nsp
       write(u1,*) rho_d(:)
       write(u1,*) mol_w_sp(:)
-      open(newunit=u2,file='results_2_mono_mix/opac_k.txt',action='readwrite')
+      open(newunit=u2,file='results_2_exp_mix/opac_k.txt',action='readwrite')
       write(u2,*) wl(:)
-      open(newunit=u3,file='results_2_mono_mix/opac_a.txt',action='readwrite')
+      open(newunit=u3,file='results_2_exp_mix/opac_a.txt',action='readwrite')
       write(u3,*) wl(:)
-      open(newunit=u4,file='results_2_mono_mix/opac_g.txt',action='readwrite')
+      open(newunit=u4,file='results_2_exp_mix/opac_g.txt',action='readwrite')
       write(u4,*) wl(:)            
       first_call = .False.
     end if

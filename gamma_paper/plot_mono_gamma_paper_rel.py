@@ -10,7 +10,7 @@ rho_d = 1.99
 dirs = ['../results_2_mono/','../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -65,6 +65,7 @@ r_c_rel[:] = abs((r_c[:,1]-r_c[:,0])/r_c[:,0])
 p_rc = ax1.plot(r_c_rel,pl,c=col[0],label=r'relative $r_{\rm c}$',ls=lss[i])
 p_nc = ax2.plot(nd_rel,pl,c=col[1],label=r'relative $N_{\rm c}$',ls=lss[i])
 
+
 plt.vlines(0, 3e-3, 300, colors='black', linestyles='dotted')
 
 ax1.set_yscale('log')
@@ -76,8 +77,8 @@ yticks = [100,10,1,0.1,0.01,1e-3,]
 yticks_lab = ['100','10','1','0.1','0.01','10$^{-3}$']
 ax1.set_yticks(yticks,yticks_lab)
 
-ax1.set_xlim(0,2)
-ax2.set_xlim(0,20)
+ax1.set_xlim(0,1)
+ax2.set_xlim(0,12)
 #ax1.set_xticks(np.arange(-100, 120, step=20))
 #ax2.set_xticks(np.arange(-500, 600, step=100))
 #ax1.set_xticks(np.arange(-100, 110, step=10),minor=True)
@@ -109,7 +110,7 @@ ax2.legend(lns, labs,fontsize=10,loc='lower left')
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono_gamma_rel.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_gamma_rel.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

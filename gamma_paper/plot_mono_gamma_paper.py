@@ -79,9 +79,20 @@ for i in range(ndir):
   if (i == 2):
     p_rp = ax1.plot(r_p,pl,c=col[2],label=r'$r_{\rm p}$',ls=lss[i])
 
+
+# Read CARMA values
+fname = 'Carma_325.txt'
+data = np.loadtxt(fname,delimiter=',')
+r_Ca = data[:,0]
+p_Ca = data[:,1]
+
+p_Ca = ax1.plot(r_Ca, p_Ca, c=col[3],ls='dotted',label=r'$r_{\rm eff}$ (Gao+ 2018)')
+
 ax1.set_yscale('log')
 ax1.set_xscale('log')
 ax2.set_xscale('log')
+
+
 
 plt.gca().invert_yaxis()
 yticks = [100,10,1,0.1,0.01,1e-3,]
@@ -105,9 +116,9 @@ ax1.set_ylabel(r'$p_{\rm gas}$ [bar]',fontsize=16)
 
 # added these three lines
 ax2.set_zorder(1)
-lns = p_rc + p_rp + p_nc
+lns = p_rc + p_rp + p_nc + p_Ca
 labs = [l.get_label() for l in lns]
-ax2.legend(lns, labs,fontsize=10,loc='lower right')
+ax2.legend(lns, labs,fontsize=10,loc='lower right',ncol=2)
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)

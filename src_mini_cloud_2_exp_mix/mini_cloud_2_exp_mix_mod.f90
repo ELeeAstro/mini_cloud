@@ -1,4 +1,4 @@
-module mini_cloud_2_mono_mix_mod
+module mini_cloud_2_exp_mix_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -73,18 +73,25 @@ module mini_cloud_2_mono_mix_mod
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
+  !! Gamma constants for exponential distribution
+  real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
+  real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), g12 = gamma(1.0_dp/2.0_dp)
+  real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp), g76 = gamma(7.0_dp/6.0_dp)
+  real(dp), parameter :: g13 = gamma(1.0_dp/3.0_dp)
+  real(dp), parameter :: g73 = gamma(7.0_dp/3.0_dp), g83 = gamma(8.0_dp/3.0_dp)
+
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
   !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
 
-  public :: mini_cloud_2_mono_mix, RHS_mom, jac_dum
+  public :: mini_cloud_2_exp_mix, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, sig_sp, l_heat_sp, eta_a_mix, kappa_a_mix
 
   contains
 
-  subroutine mini_cloud_2_mono_mix(ilay, T_in, P_in, grav_in, mu_in, met_in, cp_in, bg_VMR_in, t_end, sp_in, sp_bg, &
+  subroutine mini_cloud_2_exp_mix(ilay, T_in, P_in, grav_in, mu_in, met_in, cp_in, bg_VMR_in, t_end, sp_in, sp_bg, &
     & n_in, q_v, q_0, q_1, dTdt)
     implicit none
 
@@ -260,7 +267,7 @@ module mini_cloud_2_mono_mix_mod
 
     deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, cld)
 
-  end subroutine mini_cloud_2_mono_mix
+  end subroutine mini_cloud_2_exp_mix
 
   subroutine RHS_mom(n_eq, time, y, f)
     implicit none
@@ -271,13 +278,16 @@ module mini_cloud_2_mono_mix_mod
     real(dp), dimension(n_eq), intent(inout) :: f
 
     real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf, Kn_b
+    real(dp) :: m_c, r_n, r_c, Kn, beta, vf, Kn_b, Kn_n, Kn_m
 
     integer :: j
     real(dp) :: N_c, rho_c_t, rho_d_m, V_tot
+    real(dp) :: Ep, fx, gam_fac, Rey, St, vf_e, vf_s
     real(dp), dimension(ndust) :: rho_c, rho_v, V_mix
     real(dp), dimension(ndust) :: p_v, n_v
     real(dp), dimension(ndust) :: f_nuc_hom, f_cond, f_seed_evap
+
+    real(dp), parameter :: A = 1.639_dp
 
     !! In this routine, you calculate the instantaneous new fluxes (f) for each moment
     !! The current values of each moment (y) are typically kept constant
@@ -312,25 +322,41 @@ module mini_cloud_2_mono_mix_mod
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
+    r_n = r_c * g43
 
     !! Knudsen number
     Kn = mfp_a/r_c
-    
-    !! Cunningham slip factor (Jung et al. 2012)
-    beta = 1.0_dp + Kn*(1.165_dp + 0.480_dp * exp(-0.101_dp/Kn))
+    Kn_n = Kn * g23
+    Kn_m = Kn * g53
 
+    Kn_b = min(Kn_m, 100.0_dp)
+
+    !! Now find moment dependent settling velocities
+    St = (2.0_dp * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta_a) 
+    Ep = (sqrt(pi)*grav*rho_d_m*r_c)/(2.0_dp*cT*rho)
+
+    !! Zeroth moment
     !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta_a) & 
-     & * (1.0_dp &
-     & + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta_a**2))**(0.4_dp))**(-1.25_dp)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d_m)/(54.0_dp*eta_a**2))**(0.4_dp))**(-1.25_dp)
+    gam_fac = g53 + A*Kn_b*g43
+    vf_s = St * gam_fac * Rey
 
-    vf = max(vf_s, 1e-30_dp)
+    !! Settling velocity (Epstein regime)
+    gam_fac = g43
+    vf_e = Ep * gam_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_n)))
+
+    !! Interpolation for settling velocity
+    vf = fx*vf_s + (1.0_dp - fx)*vf_e
+    vf = max(vf, 1e-30_dp)
 
     !! Find supersaturation ratio
     cld(:)%sat = p_v(:)/cld(:)%p_vap
 
     !! Calculate condensation rate
-    call calc_cond(ndust, r_c, Kn, n_v(:), V_mix(:), f_cond)
+    call calc_cond(ndust, r_c, Kn_m, n_v(:), V_mix(:), f_cond)
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(ndust, n_v(:), f_nuc_hom)
@@ -339,10 +365,10 @@ module mini_cloud_2_mono_mix_mod
     call calc_seed_evap(ndust, N_c, m_c, f_seed_evap)
 
     !! Calculate the coagulation rate
-    call calc_coag(m_c, r_c, beta, f_coag)
+    call calc_coag(m_c, r_c, Kn, f_coag)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, Kn, vf, f_coal)
+    call calc_coal(r_c, r_n, Kn_n, vf, f_coal)
 
     !! Calculate final net flux rate for each moment and vapour
     f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag + f_coal)*N_c**2
@@ -394,11 +420,11 @@ module mini_cloud_2_mono_mix_mod
 
       !! Diffusive limited regime (Kn << 1) [g s-1]
       dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) &
-        & *  (1.0_dp - 1.0_dp/cld(j)%sat)
+        & *  (1.0_dp - 1.0_dp/cld(j)%sat) * g53
 
       !! Free molecular flow regime (Kn >> 1) [g s-1]
       dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp_c & 
-        & * (1.0_dp - 1.0_dp/cld(j)%sat)
+        & * (1.0_dp - 1.0_dp/cld(j)%sat) * g43
 
       !! If evaporation, weight rate by current condensed volume ratio (Woitke et al. 2020)
       if (cld(j)%sat < 1.0_dp) then
@@ -536,34 +562,44 @@ module mini_cloud_2_mono_mix_mod
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, beta, f_coag)
+  subroutine calc_coag(m_c, r_c, Kn_in, f_coag)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, beta
+    real(dp), intent(in) :: m_c, r_c, Kn_in
 
     real(dp), intent(out) :: f_coag
 
-    real(dp) :: phi, D_r, V_r
-    real(dp) :: Knd
+    real(dp) :: Kl0, Kh0, Kn
+    real(dp) :: Knd, phi
+    real(dp), parameter :: A = 1.639_dp, H = 1.0_dp/sqrt(2.0_dp)
 
-    !! Particle diffusion rate
-    D_r = (kb*T*beta)/(6.0_dp*pi*eta_a*r_c)
+    !! Limit Kn to avoid large overshoot of Kn << 1 regime.
+    Kn = min(Kn_in,100.0_dp)
 
-    !! Thermal velocity limit rate
-    V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
+    !! Kn << 1 population averaged kernel
+    Kl0 = (4.0_dp*kb*T)/(3.0_dp*eta_a) * (1.0_dp + g43*g23 + &
+      & Kn * A * (g23 + g43*g13))
+
+    !! Kn >> 1 population averaged kernel
+    Kh0 = 2.0_dp * H * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * (g53*g12 + 2.0_dp*g43*g56 + g76)
 
     !! Moran (2022) method using diffusive Knudsen number
-    Knd = (8.0_dp*D_r)/(pi*V_r*r_c)
+    Knd = (2.0_dp*sqrt(2.0_dp))/pi * (Kl0/Kh0)
+    
+    !! Interpolation factor
     phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
-    f_coag = (-4.0_dp*kb*T*beta)/(3.0_dp*eta_a) * phi
+
+    !! Coagulation rate
+    f_coag = -0.5_dp * Kl0 * phi 
 
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, Kn, vf, f_coal)
+  subroutine calc_coal(r_c, r_n, Kn_n, vf, f_coal)
     implicit none
 
-    real(dp), intent(in) :: r_c, Kn, vf
+    real(dp), intent(in) :: r_c, r_n, Kn_n
+    real(dp), intent(in) :: vf
 
     real(dp), intent(out) :: f_coal
 
@@ -574,17 +610,17 @@ module mini_cloud_2_mono_mix_mod
     d_vf = eps * vf
 
     !! Calculate E
-    if (Kn >= 1.0_dp) then
+    if (Kn_n >= 1.0_dp) then
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else
       !! Calculate Stokes number
-      Stk = (vf * d_vf)/(grav * r_c)
+      Stk = (vf * d_vf)/(grav * r_n)
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal = -2.0_dp*pi*r_c**2*d_vf*E
+    f_coal = -pi*r_c**2*d_vf*E*(g53 + g43**2)
 
   end subroutine calc_coal
 
@@ -1727,4 +1763,4 @@ module mini_cloud_2_mono_mix_mod
     real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
   end subroutine jac_dum
 
-end module mini_cloud_2_mono_mix_mod
+end module mini_cloud_2_exp_mix_mod

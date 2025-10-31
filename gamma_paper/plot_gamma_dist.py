@@ -17,7 +17,7 @@ m_seed = V_seed * rho_d
 dirs = ['../results_3_gamma/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig, ax =  plt.subplots()
 
@@ -117,15 +117,15 @@ plt.tick_params(axis='both',which='major',labelsize=14)
 plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
-plt.ylim(1e-5,1e-1)
-#plt.ylim(1e-3,1e1)
+#plt.ylim(1e-5,1e-1)
+plt.ylim(1e-3,1e1)
 
 plt.xlim(1e-3,1e2)
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_gamma_dist.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_gamma_dist.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 

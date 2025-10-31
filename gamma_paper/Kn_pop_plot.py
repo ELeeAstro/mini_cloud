@@ -30,7 +30,7 @@ fig = plt.figure()
 col = sns.color_palette('colorblind')
 
 plt.plot(nu, Kn_av_n_1,c=col[0],label=r'$\overline{{\rm Kn}_{N}}$ (gamma)')
-plt.plot(nu, Kn_av_n_2,c=col[0],label=r'$\overline{{\rm Kn}_{N}}$ (inc. gamma)',ls='dashed')
+plt.plot(nu, Kn_av_n_2,c=col[0],label=r'$\overline{{\rm Kn}_{N}}$ (incomplete gamma)',ls='dashed')
 
 plt.plot(nu, Kn_av_m,c=col[1],label=r'$\overline{{\rm Kn}_{m}}$')
 plt.plot(nu, Kn_av_m2,c=col[2],label=r'$\overline{{\rm Kn}_{m^{2}}}$')

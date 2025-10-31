@@ -16,7 +16,7 @@ m = r**3*(4.0*np.pi*rho_d/3.0)
 rc = 1.0 * 1e-4
 mc = rc**3*(4.0*np.pi*rho_d/3.0)
 
-nu = [0.5,1,2,3,10]
+nu = [0.33,0.5,1,2,10]
 nu = np.array(nu)
 nnu = len(nu)
 
