@@ -81,8 +81,8 @@ contains
     iwork(:) = 0
 
     !! initial conditions - convert to VMR from MMR
-    y(1) = q_v
-    y(2) = q_c
+    y(1) = max(q_v,1e-30_dp)
+    y(2) = max(q_c,1e-30_dp)
 
     call dopri5(n,dqdt,t_now,y,t_step, &
       &         rtol,atol,itol, &
@@ -90,8 +90,8 @@ contains
       &         work,lwork,iwork,liwork,rpar,ipar,idid)
 
     !! Final results, convert back to MMR
-    q_v = y(1)
-    q_c = y(2)
+    q_v = max(y(1),1e-30_dp)
+    q_c = max(y(2),1e-30_dp)
 
     if (idid /= 1) then
       print*, 'error in dopri5: ', idid
@@ -119,8 +119,8 @@ contains
     !! rpar(1) = q_s
     !! rpar(2) = tau_cond
 
-    q_v = y(1)
-    q_c = y(2)
+    q_v = max(y(1),1e-30_dp)
+    q_c = max(y(2),1e-30_dp)
     q_s = rpar(1)
     tau_cond = rpar(2)
 

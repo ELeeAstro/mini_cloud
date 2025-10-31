@@ -113,7 +113,7 @@ contains
         end do
       end do
 
-      if (dt_max < 1e-6_dp) then
+      if (dt_max < 1e-12_dp) then
         do k = 1, nlay
           print*, k, vf(k,:)
         end do
