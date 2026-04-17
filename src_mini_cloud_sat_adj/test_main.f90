@@ -34,7 +34,9 @@ program test_mini_cloud_sat_adj
   real(dp) :: p_bot, p_top
   real(dp), allocatable, dimension(:) :: T_f, p_f
 
-  real(dp) :: tau_cond, sigma, met, mol_w_sp, r_m, rho_d
+  real(dp) :: tau_cond, sigma, met, mol_w_sp, r_c, rho_d
+
+  integer :: dist
 
   logical :: end
 
@@ -49,6 +51,9 @@ program test_mini_cloud_sat_adj
 
   !! example select
   example = 2
+
+  !! Selection of size distribution 1 = lognormal, 2 = gamma
+  dist = 1
 
   select case (example)
 
@@ -157,10 +162,16 @@ program test_mini_cloud_sat_adj
       rho_d = 1.99_dp
       mol_w_sp = 74.5513_dp
 
+      !! Metalicity (log10) of the atmosphere
       met = 0.0_dp
 
-      r_m = 10.0_dp * 1e-4_dp
+      ! Characteristic particle size (cm)
+      r_c = 10.0_dp * 1e-4_dp
+
+      ! geometric standard deviation
       sigma = 2.0_dp
+
+      ! condensation timescale
       tau_cond = 10.0_dp
 
       allocate(q_v(nlay), q_1(nlay), q0(2), q(nlay,2))
@@ -180,7 +191,7 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, r_m, sigma, vf(i,1))
+          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, r_c, sigma, vf(i,1), dist)
         end do
         !$omp end parallel do  
 
@@ -212,7 +223,7 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, r_m, sigma, vf(i,1))
+          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, r_c, sigma, vf(i,1), dist)
         end do
         !$omp end parallel do  
 
@@ -227,7 +238,7 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate the opacity at the wavelength grid
-          call opac_mie_sat_adj(1, sp, Tl(i), mu(i), pl(i), q_1(i), r_m, rho_d, sigma, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+          call opac_mie_sat_adj(1, sp, Tl(i), mu(i), pl(i), q_1(i), r_c, rho_d, sigma, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:), dist)
         end do
         !$omp end parallel do
 
@@ -260,7 +271,7 @@ program test_mini_cloud_sat_adj
       print*, del(:)/t_step
 
       do i = 1, nlay
-        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_1(i), r_m, vf(i,1)
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_1(i), r_c, vf(i,1)
       end do
 
       !! mini-cloud test output
@@ -288,7 +299,7 @@ contains
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_1(i), r_m, vf(i,:)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_1(i), r_c, vf(i,:)
       write(u2,*) t, time, k_ext(i,:), ssa(i,:), g(i,:)
     end do
 

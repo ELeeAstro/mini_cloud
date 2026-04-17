@@ -26,19 +26,21 @@ module mini_cloud_opac_mie_sat_adj_mod
   logical :: first_call = .True.
   !$omp threadprivate (first_call)
 
+  real(dp), parameter :: r_seed = 1e-7_dp
+
   public :: opac_mie_sat_adj
   private :: locate, linear_log_interp, m2e, e2m, &
     & read_nk_tables, read_and_interp_nk_table
 
 contains
 
-  subroutine opac_mie_sat_adj(n_dust, sp, T_in, mu_in, P_in, q_c, rm, rho_d, sigma, n_wl, wl, k_ext, alb, gg)
+  subroutine opac_mie_sat_adj(n_dust, sp, T_in, mu_in, P_in, q_c, r_c, rho_d, sigma, n_wl, wl, k_ext, alb, gg, dist)
     implicit none
 
-    integer, intent(in) :: n_dust, n_wl
+    integer, intent(in) :: n_dust, n_wl, dist
     character(len=11), dimension(n_dust), intent(in) :: sp
     real(dp), intent(in) :: T_in, mu_in, P_in
-    real(dp), intent(in) :: q_c, rm, sigma, rho_d
+    real(dp), intent(in) :: q_c, r_c, sigma, rho_d
     real(dp), dimension(n_wl), intent(in) :: wl
 
     real(dp), dimension(n_wl), intent(out) :: k_ext, alb, gg
@@ -50,6 +52,8 @@ contains
     complex(dp) :: e_eff, e_eff0
     complex(dp) :: N_eff
     complex(dp), dimension(n_dust) :: N_inc, e_inc
+
+    real(dp) :: A, B
 
 
     if (first_call .eqv. .True.) then
@@ -67,9 +71,21 @@ contains
 
     rho = (P_in * 10.0_dp * mu_in * amu)/(kb * T_in)
 
-    amean = rm * exp(5.0_dp/2.0_dp * log(sigma)**2)! Find effective particle size [cm]
 
-    n_d = (3.0_dp * q_c * rho)/(4.0_dp*pi*rho_d*rm**3) * exp(-9.0_dp/2.0_dp * log(sigma)**2)! Find particle number density
+    if (dist == 1) then
+      ! lognormal total number density - r_c is the median particle size
+      n_d = (3.0_dp * q_c * rho)/(4.0_dp*pi*rho_d*r_c**3) * exp(-9.0_dp/2.0_dp * log(sigma)**2)
+      ! Find effective particle size [cm]
+      amean = max(r_c * exp(5.0_dp/2.0_dp * log(sigma)**2), r_seed)
+    else if (dist == 2) then
+      ! gamma total number density - r_c is the number weighted particle size
+      A = inv_trigamma_pos(log(sigma)**2)
+      B = A/r_c
+      n_d = (3.0_dp * q_c * rho)/(4.0_dp*pi*rho_d)
+      ! Find effective particle size [cm]
+      amean = max((A + 2.0_dp)/B, r_seed)
+    end if
+    
 
     xsec = pi * amean**2
     
@@ -417,5 +433,57 @@ contains
     idx = jl
 
   end subroutine locate
+
+  pure real(dp) function inv_trigamma_pos(y_target) result(x)
+    real(dp), intent(in) :: y_target
+    real(dp) :: x_lo, x_hi, x_mid
+    integer :: i
+
+    if (y_target <= 0.0_dp) then
+      x = huge(1.0_dp)
+      return
+    end if
+
+    ! trigamma(x) is strictly decreasing for x > 0.
+    x_lo = epsilon(1.0_dp)
+    x_hi = max(1.0_dp, 1.0_dp/y_target + 1.0_dp/sqrt(y_target))
+
+    do while (trigamma_pos(x_hi) > y_target)
+      x_hi = 2.0_dp*x_hi
+    end do
+
+    do i = 1, 100
+      x_mid = 0.5_dp*(x_lo + x_hi)
+      if (trigamma_pos(x_mid) > y_target) then
+        x_lo = x_mid
+      else
+        x_hi = x_mid
+      end if
+    end do
+
+    x = 0.5_dp*(x_lo + x_hi)
+
+  end function inv_trigamma_pos
+
+  pure real(dp) function trigamma_pos(x) result(y)
+    real(dp), intent(in) :: x
+    real(dp) :: z, inv, inv2
+
+    z = x
+    y = 0.0_dp
+
+    do while (z < 8.0_dp)
+      y = y + 1.0_dp / (z*z)
+      z = z + 1.0_dp
+    end do
+
+    inv  = 1.0_dp / z
+    inv2 = inv * inv
+
+    y = y + inv + 0.5_dp*inv2 + inv2*inv/6.0_dp &
+          - inv2*inv2*inv/30.0_dp &
+          + inv2*inv2*inv2*inv/42.0_dp &
+          - inv2*inv2*inv2*inv2*inv/30.0_dp
+  end function trigamma_pos
 
 end module mini_cloud_opac_mie_sat_adj_mod

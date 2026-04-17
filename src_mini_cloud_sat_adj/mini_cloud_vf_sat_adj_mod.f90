@@ -37,12 +37,13 @@ module mini_cloud_vf_sat_adj_mod
 
   contains
 
-  subroutine mini_cloud_vf_sat_adj(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, rm, sigma, v_f)
+  subroutine mini_cloud_vf_sat_adj(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, r_c, sigma, v_f, dist)
     implicit none
 
     ! Input variables
     character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, rho_d, rm, sigma
+    integer, intent(in) :: dist
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, rho_d, r_c, sigma
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
     real(dp), intent(out) :: v_f
@@ -50,7 +51,9 @@ module mini_cloud_vf_sat_adj_mod
     integer :: n_gas
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_g
-    real(dp) :: r_c, Kn, Kn_b, beta, vf_s, vf_e, fx
+    real(dp) :: r_v, Kn, Kn_b, beta, vf_s, vf_e, fx
+
+    real(dp) :: A, B
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -81,30 +84,33 @@ module mini_cloud_vf_sat_adj_mod
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
-    !! Volume (or mass) weighted mean radius of particle assuming log-normal distribution
-    r_c = max(rm * exp(7.0_dp/2.0_dp * log(sigma)**2),r_seed)
+    !! Volume (or mass) weighted mean radius of particle assuming given distribution
+    if (dist == 1) then
+      ! Lognormal distribution - r_c is median particle size and sigma the geometric std. dev.
+      r_v = max(r_c * exp(7.0_dp/2.0_dp * log(sigma)**2), r_seed)
+      ! print*, sigma, r_c*1e4, r_v*1e4
+      ! stop
+    else if (dist == 2) then
+      ! Gamma distribution - r_c is now the number weighted radius and sigma is related to the trigamma function
+      A = inv_trigamma_pos(log(sigma)**2)
+      B = A/r_c
+      r_v = max((A + 3.0_dp)/B, r_seed)
+      ! print*,A, B, r_c*1e4, r_v*1e4
+      ! stop
+    end if
 
     !! Knudsen number
-    Kn = mfp/r_c
-    Kn_b = min(Kn, 100.0_dp)
+    Kn = mfp/r_v
 
     !! Cunningham slip factor (Jung et al. 2012)
-    beta = 1.0_dp + Kn_b*(1.165_dp + 0.480_dp * exp(-0.101_dp/Kn_b))
+    beta = 1.0_dp + Kn*(1.165_dp + 0.480_dp * exp(-0.101_dp/Kn))
 
     !! Settling velocity (Stokes regime)
-    vf_s = (2.0_dp * beta * grav * r_c**2 * (rho_d - rho))/(9.0_dp * eta) & 
+    vf_s = (2.0_dp * beta * grav * r_v**2 * (rho_d - rho))/(9.0_dp * eta) & 
      & * (1.0_dp &
      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
-    !! Settling velocity (Epstein regime)
-    vf_e = (sqrt(pi)*grav*rho_d*r_c)/(2.0_dp*cT*rho)
-
-    !! tanh interpolation function
-    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn)))
-
-    !! Interpolation for settling velocity
-    v_f = fx*vf_s + (1.0_dp - fx)*vf_e
-    v_f = max(v_f, 1.0e-30_dp)
+    v_f = max(vf_s, 1.0e-30_dp)
 
     deallocate(d_g, LJ_g, molg_g, eta_g)
 
@@ -218,5 +224,58 @@ module mini_cloud_vf_sat_adj_mod
     eta_out = 1.0_dp/eta_out
 
   end subroutine eta_construct
+
+  pure real(dp) function inv_trigamma_pos(y_target) result(x)
+    real(dp), intent(in) :: y_target
+    real(dp) :: x_lo, x_hi, x_mid
+    integer :: i
+
+    if (y_target <= 0.0_dp) then
+      x = huge(1.0_dp)
+      return
+    end if
+
+    ! trigamma(x) is strictly decreasing for x > 0.
+    x_lo = epsilon(1.0_dp)
+    x_hi = max(1.0_dp, 1.0_dp/y_target + 1.0_dp/sqrt(y_target))
+
+    do while (trigamma_pos(x_hi) > y_target)
+      x_hi = 2.0_dp*x_hi
+    end do
+
+    do i = 1, 100
+      x_mid = 0.5_dp*(x_lo + x_hi)
+      if (trigamma_pos(x_mid) > y_target) then
+        x_lo = x_mid
+      else
+        x_hi = x_mid
+      end if
+    end do
+
+    x = 0.5_dp*(x_lo + x_hi)
+
+  end function inv_trigamma_pos
+
+  pure real(dp) function trigamma_pos(x) result(y)
+    real(dp), intent(in) :: x
+    real(dp) :: z, inv, inv2
+
+    z = x
+    y = 0.0_dp
+
+    do while (z < 8.0_dp)
+      y = y + 1.0_dp / (z*z)
+      z = z + 1.0_dp
+    end do
+
+    inv  = 1.0_dp / z
+    inv2 = inv * inv
+
+    y = y + inv + 0.5_dp*inv2 + inv2*inv/6.0_dp &
+          - inv2*inv2*inv/30.0_dp &
+          + inv2*inv2*inv2*inv/42.0_dp &
+          - inv2*inv2*inv2*inv2*inv/30.0_dp
+  end function trigamma_pos
+
 
 end module mini_cloud_vf_sat_adj_mod
