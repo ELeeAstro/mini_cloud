@@ -328,9 +328,6 @@ program test_mini_cloud_2
         !! Mass weighted mean radius of particle [um]
         r_c(:) = max(((3.0_dp*m_c(:))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
 
-        !! increment time
-        time = time + t_step
-
         end = .True.
 
         do i = 1, nlay

@@ -1,5 +1,6 @@
 module mini_cloud_opac_mie_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
+  use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
   use lxmie_mod, only : lxmie
   implicit none
 
@@ -11,7 +12,7 @@ module mini_cloud_opac_mie_mod
 
   type nk_table
 
-    character(len=11) :: name
+    character(len=20) :: name
     character(len=50) :: fname
 
     real(dp), allocatable, dimension(:) :: n, k
@@ -36,7 +37,7 @@ contains
     implicit none
 
     integer, intent(in) :: n_dust, n_wl
-    character(len=11), dimension(n_dust), intent(in) :: sp
+    character(len=20), dimension(n_dust), intent(in) :: sp
     real(dp), intent(in) :: T_in, mu_in, P_in
     real(dp), intent(in) :: q_0, q_1, rho_d
     real(dp), dimension(n_wl), intent(in) :: wl
@@ -110,6 +111,10 @@ contains
       k_ext(l) = (q_ext * xsec * n_d)/rho
       alb(l) = min(q_sca/q_ext, 0.95_dp)
       gg(l) = max(g, 0.0_dp)
+
+      if (.not. ieee_is_finite(k_ext(l))) k_ext(l) = 0.0_dp
+      if (.not. ieee_is_finite(alb(l))) alb(l) = 0.0_dp
+      if (.not. ieee_is_finite(gg(l))) gg(l) = 0.0_dp
 
     end do
 
@@ -201,7 +206,7 @@ contains
 
     integer, intent(in) :: n_dust, n_wl
     real(dp), dimension(n_wl), intent(in) :: wl
-    character(len=11), dimension(n_dust), intent(in) :: sp
+    character(len=20), dimension(n_dust), intent(in) :: sp
 
     integer :: n
 

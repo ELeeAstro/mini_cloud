@@ -240,7 +240,7 @@ module mini_cloud_2_exp_mod
     q_1 = y(2)
     q_v = y(3)
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g)
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, VMR_bg)
 
   end subroutine mini_cloud_2_exp
 

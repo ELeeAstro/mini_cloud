@@ -1,4 +1,4 @@
-module mini_cloud_2_exp_mix_mod
+module mini_cloud_3_gamma_mix_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   implicit none
 
@@ -73,13 +73,6 @@ module mini_cloud_2_exp_mix_mod
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
-  !! Gamma constants for exponential distribution
-  real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
-  real(dp), parameter :: g23 = gamma(2.0_dp/3.0_dp), g12 = gamma(1.0_dp/2.0_dp)
-  real(dp), parameter :: g56 = gamma(5.0_dp/6.0_dp), g76 = gamma(7.0_dp/6.0_dp)
-  real(dp), parameter :: g13 = gamma(1.0_dp/3.0_dp)
-  real(dp), parameter :: g73 = gamma(7.0_dp/3.0_dp), g83 = gamma(8.0_dp/3.0_dp)
-
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
@@ -91,8 +84,8 @@ module mini_cloud_2_exp_mix_mod
 
   contains
 
-  subroutine mini_cloud_2_exp_mix(ilay, T_in, P_in, grav_in, mu_in, met_in, cp_in, bg_VMR_in, t_end, sp_in, sp_bg, &
-    & n_in, q_v, q_0, q_1, dTdt)
+  subroutine mini_cloud_3_gamma_mix(ilay, T_in, P_in, grav_in, mu_in, met_in, cp_in, bg_VMR_in, t_end, sp_in, sp_bg, &
+    & n_in, q_v, q_0, q_1, q_2, dTdt)
     implicit none
 
     ! Input variables
@@ -104,7 +97,7 @@ module mini_cloud_2_exp_mix_mod
 
     ! Input/Output tracer values
     real(dp), intent(inout) :: q_0
-    real(dp), dimension(n_in), intent(inout) :: q_v, q_1
+    real(dp), dimension(n_in), intent(inout) :: q_v, q_1, q_2
     real(dp), intent(out) :: dTdt
 
     integer :: ncall
@@ -131,7 +124,7 @@ module mini_cloud_2_exp_mix_mod
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
-    n_eq = ndust*2+1
+    n_eq = ndust*3+1
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -219,7 +212,8 @@ module mini_cloud_2_exp_mix_mod
     !! Give tracer values to y
     y(1) = q_0
     y(2:2+ndust-1) = q_1(:)
-    y(2+ndust:) = q_v(:)
+    y(2+ndust:2+ndust+ndust-1) = q_2(:)
+    y(2+ndust+nudts:) = q_v(:)
 
     !! Save initial value for q_1
     q_1_old(:) = q_1(:)
@@ -259,7 +253,8 @@ module mini_cloud_2_exp_mix_mod
     !! Give y values to tracers
     q_0 = y(1)
     q_1(:) = y(2:2+ndust-1)
-    q_v(:) = y(2+ndust:)
+    q_2(:) = y(2+ndust:2+ndust+ndust-1)
+    q_v(:) = y(2+ndust+ndust:)
 
     !! We can now calculate the temperature tendency from the change in condensed mass of each material
     Q_latent = sum(cld(:)%lh * (q_1_old(:) - q_1(:)))
@@ -267,7 +262,7 @@ module mini_cloud_2_exp_mix_mod
 
     deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, VMR_bg, cld)
 
-  end subroutine mini_cloud_2_exp_mix
+  end subroutine mini_cloud_3_gamma_mix
 
   subroutine RHS_mom(n_eq, time, y, f)
     implicit none

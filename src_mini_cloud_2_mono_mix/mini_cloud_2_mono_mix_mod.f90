@@ -258,7 +258,7 @@ module mini_cloud_2_mono_mix_mod
     Q_latent = sum(cld(:)%lh * (q_1_old(:) - q_1(:)))
     dTdt = -Q_latent/(cp*t_end)
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, cld)
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, VMR_bg, cld)
 
   end subroutine mini_cloud_2_mono_mix
 

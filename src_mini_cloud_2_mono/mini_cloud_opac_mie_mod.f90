@@ -1,5 +1,6 @@
 module mini_cloud_opac_mie_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
+  use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
   use lxmie_mod, only : lxmie
   implicit none
 
@@ -16,7 +17,7 @@ module mini_cloud_opac_mie_mod
   
   type nk_table
 
-    character(len=11) :: name
+    character(len=20) :: name
     character(len=50) :: fname
 
     real(dp), allocatable, dimension(:) :: n, k
@@ -128,6 +129,10 @@ contains
       k_ext(l) = (q_ext * xsec * N_c)/rho
       alb(l) = min(q_sca/q_ext, 0.95_dp)
       gg(l) = max(g, 0.0_dp)
+
+      if (.not. ieee_is_finite(k_ext(l))) k_ext(l) = 0.0_dp
+      if (.not. ieee_is_finite(alb(l))) alb(l) = 0.0_dp
+      if (.not. ieee_is_finite(gg(l))) gg(l) = 0.0_dp
 
     end do
 

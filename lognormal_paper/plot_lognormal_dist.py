@@ -112,7 +112,7 @@ plt.tick_params(axis='both',which='major',labelsize=14)
 plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
 plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
 
-#plt.ylim(1e-12,1e-3)
+#plt.ylim(1e-5,1e-1)
 plt.ylim(1e-3,1e2)
 
 plt.xlim(1e-3,1e2)
@@ -120,7 +120,7 @@ plt.xlim(1e-3,1e2)
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_425_lognormal_dist.png',dpi=300,bbox_inches='tight')
+plt.savefig('Y_425_lognormal_dist.pdf',dpi=300,bbox_inches='tight')
 
 plt.show()
 

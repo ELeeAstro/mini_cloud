@@ -227,11 +227,6 @@ program test_mini_cloud_2
           r_c(i) = max(((3.0_dp*m_c(i))/(4.0_dp*pi*rho_d_mean))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
         end do
 
-        !! increment time
-        time = time + t_step
-
-        print*, n, time
-
         end = .True.
 
         do i = 1, nlay

@@ -228,7 +228,7 @@ module mini_cloud_3_lognormal_mod
     q_2 = y(3)
     q_v = y(4)
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g)
+    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, VMR_bg)
 
   end subroutine mini_cloud_3_lognormal
 

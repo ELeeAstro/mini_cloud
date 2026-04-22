@@ -11,10 +11,10 @@ rho_d = 1.99
 mol_w_sp = 74.5513
 Rd_v = R/mol_w_sp
 
-dirs = ['../results_2_mono/','../results_3_lognormal/']
+dirs = ['../results_2_mono/','../results_3_gamma/','../results_3_lognormal/']
 ndir = len(dirs)
 
-fname = 'tracers_325.txt'
+fname = 'tracers_425.txt'
 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
@@ -22,7 +22,7 @@ ax2 = ax1.twiny()
 
 col = sns.color_palette('colorblind')
 
-lss = ['dashed','solid']
+lss = ['solid','dashed','dotted']
 
 for i in range(ndir):
 
@@ -92,12 +92,12 @@ ax1.set_ylabel(r'$p_{\rm gas}$ [bar]',fontsize=16)
 ax2.set_zorder(1)
 lns = p_T + p_qc + p_qv + p_qs
 labs = [l.get_label() for l in lns]
-ax2.legend(lns, labs,fontsize=10,loc='upper center')
+ax2.legend(lns, labs,fontsize=10,loc='lower left')
 
 
 plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
 
-plt.savefig('Y_325_mono_lognormal_Tq.pdf',dpi=144,bbox_inches='tight')
+plt.savefig('Y_425_mono_lognormal_Tq.pdf',dpi=144,bbox_inches='tight')
 
 plt.show()
 
