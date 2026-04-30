@@ -528,7 +528,7 @@ contains
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), vf(i,1), dTdt(i)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), vf(i,:), dTdt(i)
       write(u2,*) t, time, pl(i), k_ext(i,:)
       write(u3,*) t, time, pl(i), ssa(i,:)
       write(u4,*) t, time, pl(i), g(i,:)

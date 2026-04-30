@@ -24,7 +24,7 @@ program test_mini_cloud_2
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v, cp, dTdt
   real(dp), allocatable, dimension(:) :: q_0, r_c, m_c, q0, r_c_old, del
-  real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1, vf
+  real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1, q_2, vf
   real(dp) :: grav, met
 
   integer :: n_wl
@@ -164,12 +164,13 @@ program test_mini_cloud_2
 
       m_seed = V_seed * rho_d(1)
 
-      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q0(nsp*2+1), q(nlay,nsp*2+1))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay,2), r_c_old(nlay), del(nlay))
+      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q_2(nlay,nsp), q0(nsp*3+1), q(nlay,nsp*3+1))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay,2*nsp+1), r_c_old(nlay), del(nlay))
 
       q_v(:,:) = 1e-30_dp
       q_0(:) = 1e-30_dp
       q_1(:,:) = 1e-30_dp
+      q_2(:,:) = 1e-30_dp
 
       q0(1) = 1.17e-7_dp * mol_w_v(1)/mu(nlay)
       q0(2) = 3.63e-8_dp * mol_w_v(2)/mu(nlay)
@@ -187,12 +188,14 @@ program test_mini_cloud_2
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_2_exp_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
-            & nsp, q_v(i,:), q_0(i), q_1(i,:), dTdt(i))
+          call mini_cloud_3_gamma_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), dTdt(i))
 
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i,:))
+            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf(i,1:3))
+          vf(i,2:nsp+1) = vf(i,2)
+          vf(i,nsp+2:) = vf(i,3)
 
           !! Calculate the opacity at the wavelength grid
           call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
@@ -201,15 +204,17 @@ program test_mini_cloud_2
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:) * nd_atm(:) / rho(:) ! Make mass ratio for vertical transport
-        q(:,nsp+2:) = q_1(:,:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, 2*nsp+1, q(:,nsp+1:))
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
+        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1) * rho(:) / nd_atm(:) ! Return to number density after vertical transport
-        q_1(:,:) = q(:,nsp+2:)
+        q_1(:,:) = q(:,nsp+2:2*nsp+1)
+        q_2(:,:) = q(:,2*nsp+2:)
 
         do i = 1, nlay
           rho_c_tot = sum(q_1(i,:))*rho(i)
@@ -350,14 +355,15 @@ program test_mini_cloud_2
       !! Seed particle mass (assume rho_d at first index)
       m_seed = V_seed * rho_d(1)
 
-      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q0(nsp*2+1), q(nlay,nsp*2+1))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay,nsp+1), r_c_old(nlay), del(nlay))
+      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q_2(nlay,nsp), q0(nsp*3+1), q(nlay,nsp*3+1))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay,2*nsp+1), r_c_old(nlay), del(nlay))
 
       !! Set everything to zero first
       do j = 1, nsp
         q_v(:,j) = 1e-30_dp
         q_0(:) = 1e-30_dp
         q_1(:,j) = 1e-30_dp
+        q_2(:,j) = 1e-30_dp
       end do
 
       !! Lower mass mixing ratio boundary conditions for vapour + cloud (VMR taken from Asplund et al. 2001)
@@ -380,62 +386,70 @@ program test_mini_cloud_2
         do i = 1, nlay
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i,1:2))
-            vf(i,3:) = vf(i,2)
+            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf(i,1:3))
+          vf(i,2:nsp+1) = vf(i,2)
+          vf(i,nsp+2:) = vf(i,3)
         end do
         !$omp end parallel do
 
         !! Combine everything q into a single 2D array for advection and diffusion
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:) 
-        q(:,nsp+2:) = q_1(:,:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
 
         !! Vertical advection (settling tracers)
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
 
         !! Vertical diffusion (diffused tracers)
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
-        q_1(:,:) = q(:,nsp+2:)
+        q_1(:,:) = q(:,nsp+2:2*nsp+1)
+        q_2(:,:) = q(:,2*nsp+2:)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Call mini-cloud and perform integrations for a single layer
           call mini_cloud_3_gamma_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
-            & nsp, q_v(i,:), q_0(i), q_1(i,:), dTdt(i))
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), dTdt(i))
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:) 
-        q(:,nsp+2:) = q_1(:,:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
 
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
-        q_1(:,:) = q(:,nsp+2:)
+        q_1(:,:) = q(:,nsp+2:2*nsp+1)
+        q_2(:,:) = q(:,2*nsp+2:)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), vf(i,1:2))
-          vf(i,3:) = vf(i,2)
+            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf(i,1:3))
+          vf(i,2:nsp+1) = vf(i,2)
+          vf(i,nsp+2:) = vf(i,3)
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:) 
-        q(:,nsp+2:) = q_1(:,:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
 
         q_v(:,:) = max(q(:,1:nsp),1e-30_dp)
         q_0(:) = max(q(:,nsp+1),1e-30_dp)
-        q_1(:,:) = max(q(:,nsp+2:),1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+2:2*nsp+1),1e-30_dp)
+        q_2(:,:) = max(q(:,2*nsp+2:),1e-30_dp)
 
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
@@ -514,21 +528,21 @@ contains
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_2_exp_mix/tracers.txt',action='readwrite')
+      open(newunit=u1,file='results_3_gamma_mix/tracers.txt',action='readwrite')
       write(u1,*) nsp
       write(u1,*) rho_d(:)
       write(u1,*) mol_w_sp(:)
-      open(newunit=u2,file='results_2_exp_mix/opac_k.txt',action='readwrite')
+      open(newunit=u2,file='results_3_gamma_mix/opac_k.txt',action='readwrite')
       write(u2,*) wl(:)
-      open(newunit=u3,file='results_2_exp_mix/opac_a.txt',action='readwrite')
+      open(newunit=u3,file='results_3_gamma_mix/opac_a.txt',action='readwrite')
       write(u3,*) wl(:)
-      open(newunit=u4,file='results_2_exp_mix/opac_g.txt',action='readwrite')
+      open(newunit=u4,file='results_3_gamma_mix/opac_g.txt',action='readwrite')
       write(u4,*) wl(:)            
       first_call = .False.
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), vf(i,1), dTdt(i)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), vf(i,:), dTdt(i)
       write(u2,*) t, time, pl(i), k_ext(i,:)
       write(u3,*) t, time, pl(i), ssa(i,:)
       write(u4,*) t, time, pl(i), g(i,:)

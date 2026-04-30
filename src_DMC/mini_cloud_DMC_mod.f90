@@ -54,6 +54,8 @@ module mini_cloud_DMC_mod
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
+  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
+
   public :: mini_cloud_DMC, RHS_bin, jac_dum
   private :: calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct

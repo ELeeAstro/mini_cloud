@@ -5,22 +5,23 @@ F90 = gfortran
 F90LINKER = $(F90)
 
 # Default build type is release
-FFLAGS = -O3 -pipe -fopenmp #Default release flags
+FFLAGS = -O3 -pipe #Default release flags
 
 # Debugging flags
-DEBUG_FLAGS = -O0 -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
+DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow
 
 # Source files (mix of .f and .f90 files)
 SRCS_F90 = \
+    cli_progress_mod.f90 \
     vert_diff_exp_mod.f90 \
     vert_diff_imp_mod.f90 \
     vert_adv_exp_mod.f90 \
     lxmie_mod.f90 \
-    gamma_mod.f90 \
     mini_cloud_opac_mie_mod.f90 \
     mini_cloud_vf_mod.f90 \
-    mini_cloud_3_gamma_mix_mod.f90 \
+    mini_cloud_3_lognormal_mod.f90 \
     test_main.f90
+
 
 SRCS_F = dlsode.f
 
@@ -28,7 +29,7 @@ SRCS_F = dlsode.f
 OBJECTS = $(SRCS_F90:.f90=.o) $(SRCS_F:.f=.o)
 
 # Executable
-EXECS = ../mini_cloud_3_gamma_mix
+EXECS = ../mini_cloud_3_lognormal
 
 #====================
 # Phony targets

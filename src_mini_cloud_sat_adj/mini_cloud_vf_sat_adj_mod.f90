@@ -32,6 +32,8 @@ module mini_cloud_vf_sat_adj_mod
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
+  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
+
   public :: mini_cloud_vf_sat_adj
   private :: eta_construct
 

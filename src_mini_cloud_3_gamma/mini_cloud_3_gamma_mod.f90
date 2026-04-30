@@ -55,6 +55,8 @@ module mini_cloud_3_gamma_mod
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
+  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
+
   public :: mini_cloud_3_gamma, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, surface_tension, eta_construct

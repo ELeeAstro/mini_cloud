@@ -3,18 +3,21 @@ import matplotlib.pylab as plt
 import seaborn as sns
 
 R = 8.31446261815324e7
-bar = 1e6
 kb = 1.380649e-16
 amu = 1.66053906660e-24
 r_seed = 1e-7
+V_seed = 4.0/3.0 * np.pi * r_seed**3
 
 fname = 'tracers.txt'
 
 ndust = 2
 rho_d = [1.99, 3.9]
 mol_w_sp = [74.5513, 97.4450]
+mol_w_v = [74.5513, 97.4450]
+sp = ['KCl','ZnS']
 
-Rd_v = [R/mol_w_sp[0],R/mol_w_sp[1]]
+Rd_v = [R/mol_w_v[0],R/mol_w_v[1]]
+m_seed = V_seed * rho_d[0]
 
 data = np.loadtxt(fname,skiprows=3)
 
@@ -26,7 +29,9 @@ VMR = data[:,6:8]
 q_v = data[:,8:10]
 q_0 = data[:,10]
 q_1 = data[:,11:13]
-vf = data[:,13:15]
+q_2 = data[:,13:15]
+vf = data[:,15:20]
+dTdt = data[:,20]
 
 nlay = len(pl)
 
@@ -46,12 +51,11 @@ for j in range(ndust):
   rho_c_t[:] = rho_c_t[:] + rho_c[:,j]
 
 m_c = np.zeros(nlay)
-m_c[:] = rho_c_t[:]/N_c[:]
+m_c[:] = np.maximum(rho_c_t[:]/N_c[:],m_seed)
 
 rho_d_m = np.zeros(nlay)
 for j in range(ndust):
   rho_d_m[:] = rho_d_m[:] + (rho_c[:,j])/rho_c_t[:] * rho_d[j]
-print(rho_d_m[:])
 
 r_c = np.zeros(nlay)
 r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d_m[:]))**(1.0/3.0),r_seed) * 1e4
@@ -65,11 +69,27 @@ q_s[:,1] = q_s[:,1]/rho[:]
 
 V_mix = np.zeros((nlay,ndust))
 for j in range(nlay):
-    V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
+  V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
 
 m_mix = np.zeros((nlay,ndust))
 for j in range(nlay):
-    m_mix[j,:] = rho_c[j,:]/sum(rho_c[j,:])
+  m_mix[j,:] = rho_c[j,:]/sum(rho_c[j,:])
+
+sig2 = np.zeros(nlay)
+sig2[:] = np.maximum(np.sum(q_2[:,:],axis=1)*rho[:]**2/N_c[:] - m_c[:]**2,m_seed**2)
+
+nu = np.zeros(nlay)
+nu[:] = m_c[:]**2/sig2[:]
+
+fig = plt.figure()
+
+col = sns.color_palette('colorblind')
+
+plt.plot(dTdt,pl,c=col[0])
+
+plt.yscale('log')
+
+plt.gca().invert_yaxis()
 
 fig = plt.figure()
 
@@ -100,7 +120,10 @@ fig = plt.figure()
 col = sns.color_palette('colorblind')
 
 plt.plot(vf[:,0],pl,c=col[0],label=r'$v_{{\rm f},0}$')
-plt.plot(vf[:,1],pl,c=col[1],label=r'$v_{{\rm f},1}$')
+plt.plot(vf[:,1],pl,c=col[1],label=r'$v_{{\rm f},1,{\rm KCl}}$')
+plt.plot(vf[:,2],pl,c=col[2],label=r'$v_{{\rm f},1,{\rm ZnS}}$')
+plt.plot(vf[:,3],pl,c=col[3],label=r'$v_{{\rm f},2,{\rm KCl}}$')
+plt.plot(vf[:,4],pl,c=col[4],label=r'$v_{{\rm f},2,{\rm ZnS}}$')
 
 plt.yscale('log')
 plt.xscale('log')
@@ -134,27 +157,36 @@ fig = plt.figure()
 
 col = sns.color_palette('colorblind')
 
-plt.plot(q_v[:,0],pl,c=col[0],label=r'q_{\rm v}')
-plt.plot(q_v[:,1],pl,c=col[1],label=r'q_{\rm v}')
+plt.plot(q_v[:,0],pl,c=col[0],label=sp[0]+r' $q_{\rm v}$')
+plt.plot(q_v[:,1],pl,c=col[1],label=sp[1]+r' $q_{\rm v}$')
 
-plt.plot(q_1[:,0],pl,c=col[0],label=r'q_{1}',ls='dashed')
-plt.plot(q_1[:,1],pl,c=col[1],label=r'q_{1}',ls='dashed')
+plt.plot(q_1[:,0],pl,c=col[0],label=r'$q_{1}$',ls='dashed')
+plt.plot(q_1[:,1],pl,c=col[1],ls='dashed')
 
-plt.plot(q_s[:,0],pl,c=col[0],label=r'q_{s}',ls='dotted')
-plt.plot(q_s[:,1],pl,c=col[1],label=r'q_{s}',ls='dotted')
+plt.plot(q_s[:,0],pl,c=col[0],label=r'$q_{\rm s}$',ls='dotted')
+plt.plot(q_s[:,1],pl,c=col[1],ls='dotted')
 
-plt.plot(q_0,pl,c=col[4],label=r'$q_{0}$',ls='dashdot')
+plt.plot(q_2[:,0],pl,c=col[0],ls='dashdot')
+plt.plot(q_2[:,1],pl,c=col[1],ls='dashdot')
+
+plt.plot(q_0,pl,c=col[4],label=r'$q_{0}$')
+
+plt.legend()
 
 plt.yscale('log')
 plt.xscale('log')
 
 plt.gca().invert_yaxis()
 
-#plt.xlim(1e-20,1)
+fig = plt.figure()
 
+col = sns.color_palette('colorblind')
 
+plt.plot(nu,pl,c=col[4],label=r'$\nu$')
 
+plt.yscale('log')
+plt.xscale('log')
+
+plt.gca().invert_yaxis()
 
 plt.show()
-
-

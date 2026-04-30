@@ -10,17 +10,17 @@ R_gas = 8.31446261815324
 fname = 'tracers_425.txt'
 data = np.loadtxt(fname)
 
-#t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0, q_1, v_f
+#t, time, T_in, P_in, grav_in, mu_in, VMR_in(:), q_v, q_0, q_1, q_2, v_f(:)
 time = data[:,1]
 T = data[:,2]
 P = data[:,3]
 grav = data[:,4]
 mu = data[:,5]
-q_v = data[:,-5]
-q_0 = data[:,-4]
-q_1 = data[:,-3]
-q_2 = data[:,-2]
-v_f = data[:,-1]
+q_v = data[:,-7]
+q_0 = data[:,-6]
+q_1 = data[:,-5]
+q_2 = data[:,-4]
+v_f = data[:,-3:]
 
 rho_d = 4.23
 nd_atm = P/(kb*T)  
@@ -49,7 +49,9 @@ ax1.set_ylabel('T [K]')
 ax1.set_xlabel('Time [s]')
 ax1.legend(loc=1)
 ax2 = ax1.twinx()
-ax2.plot(time, v_f, c='blue', label='v_f')
+ax2.plot(time, v_f[:,0], c='blue', label='v_f0')
+ax2.plot(time, v_f[:,1], c='orange', label='v_f1')
+ax2.plot(time, v_f[:,2], c='green', label='v_f2')
 ax2.set_ylabel('v_f [m s$^{-1}$]')
 ax2.legend(loc=2)
 plt.yscale('log')

@@ -109,8 +109,6 @@ module mini_cloud_vf_mod
     rho_c(:) = q_1(:)*rho
     rho_c_t = sum(rho_c(:))
 
-    !! Calculate vf from final results of interaction
-
     !! Mean mass of particle
     m_c = max(rho_c_t/N_c,m_seed)
 

@@ -30,11 +30,6 @@ module mini_cloud_vf_mod
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
-  !! Gamma constants for exponential distribution
-  real(dp), parameter :: g13 = gamma(1.0_dp/3.0_dp), g23 = gamma(2.0_dp/3.0_dp)
-  real(dp), parameter :: g43 = gamma(4.0_dp/3.0_dp), g53 = gamma(5.0_dp/3.0_dp)
-  real(dp), parameter :: g73 = gamma(7.0_dp/3.0_dp), g83 = gamma(8.0_dp/3.0_dp)
-
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
@@ -45,8 +40,8 @@ module mini_cloud_vf_mod
 
   contains
 
-  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, & 
-    & ndust, q_0, q_1, v_f)
+  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, &
+    & ndust, q_0, q_1, q_2, v_f)
     implicit none
 
     ! Input variables
@@ -54,16 +49,19 @@ module mini_cloud_vf_mod
     character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, q_0
     real(dp), dimension(:), intent(in) :: bg_VMR_in
-    real(dp), dimension(ndust), intent(in) :: rho_d, q_1
+    real(dp), dimension(ndust), intent(in) :: rho_d, q_1, q_2
 
-    real(dp), dimension(2), intent(out) :: v_f
+    real(dp), dimension(:), intent(out) :: v_f
 
     integer :: n_bg, j
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: Kn, Kn_b, Kn_n, Kn_m, vf_s, vf_e, Ep, St, Rey, gam_fac, fx
-    real(dp) :: m_c, r_c, r_n, N_c, rho_c_t, rho_d_m, m_seed
+    real(dp) :: N_c, sig2, lam, nu, Z_c_t
+    real(dp) :: m_c, r_c, m_c2, r_c2, r_n, m_seed, rho_c_t, rho_d_m
+    real(dp) :: vf_s, vf_e, fx, Rey, St, Ep, gam_fac, lgnu, lgnu1, lgnu2
     real(dp), dimension(ndust) :: rho_c
+
+    real(dp) :: nu_n, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
     real(dp), parameter :: A = 1.639_dp
 
@@ -76,7 +74,7 @@ module mini_cloud_vf_mod
 
     !! Zero velocity if little amount of clouds
     ! if (q_0*nd_atm < 1e-10_dp) then
-    !   v_f = 1.0e-10_dp
+    !   v_f(:) = 1.0e-10_dp
     !   return
     ! end if
 
@@ -102,17 +100,16 @@ module mini_cloud_vf_mod
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
-    !! Seed particle mass - assumed first index of rho_d
     m_seed = V_seed * rho_d(1)
 
-    N_c = q_0*nd_atm
-    rho_c(:) = q_1(:)*rho
+    N_c = q_0 * nd_atm
+    rho_c(:) = q_1(:) * rho
     rho_c_t = sum(rho_c(:))
-
-    !! Calculate vf from final results of interaction
-
+    Z_c_t = sum(q_2(:)) * rho**2
+    
     !! Mean mass of particle
     m_c = max(rho_c_t/N_c,m_seed)
+    m_c2 = max(Z_c_t/rho_c_t,m_seed)
 
     !! Average bulk density of particles
     rho_d_m = 0.0_dp
@@ -120,18 +117,37 @@ module mini_cloud_vf_mod
       rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * rho_d(j)
     end do
 
+    !! Calculate lambda and nu gamma distribution parameters
+    sig2 = max(Z_c_t/N_c - (rho_c_t/N_c)**2,m_seed**2)
+    nu = max(m_c**2/sig2,0.01_dp)
+    nu = min(nu,100.0_dp)
+    lam = m_c/nu
+
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
-    r_c = min(r_c,1.0_dp)
-    r_n = max(r_c * g43, r_seed)
 
-    !! Knudsen number
+    !! Mass^2 weighted mean radius of particle
+    r_c2 = max(((3.0_dp*m_c2)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
+
+    lgnu  = log_gamma(nu)
+    lgnu1 = log_gamma(nu + 1.0_dp)
+    lgnu2 = log_gamma(nu + 2.0_dp)
+
+    !! Number weighted mean radius
+    r_n = max(r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu), r_seed)
+
+    !! Monodisperse Knudsen number
     Kn = mfp/r_c
     Kn_b = min(Kn, 100.0_dp)
 
-    !! Number and mass weighted Knudsen number
-    Kn_n = Kn * g23
-    Kn_m = Kn * g53
+    !! Population averaged Knudsen number for n, m and m^2
+    nu_n = max(nu,0.3334_dp)
+    Kn_n = Kn * nu_n**(1.0_dp/3.0_dp) * &
+      & exp(log_gamma(nu_n - 1.0_dp/3.0_dp) - log_gamma(nu_n))
+    Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
+      & exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1)
+    Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
+      & exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu2)
 
     !! Now find moment dependent settling velocities
     St = (2.0_dp * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta) 
@@ -140,11 +156,12 @@ module mini_cloud_vf_mod
     !! Zeroth moment
     !! Settling velocity (Stokes regime)
     Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
-    gam_fac = g53 + A*Kn_b*g43
+    gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) & 
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
     vf_s = St * gam_fac * Rey
 
     !! Settling velocity (Epstein regime)
-    gam_fac = g43
+    gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
     vf_e = Ep * gam_fac
 
     !! tanh interpolation function
@@ -152,16 +169,17 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f(1) = fx*vf_s + (1.0_dp - fx)*vf_e
-    v_f(1) = max(v_f(1), 1e-30_dp)
+    v_f(1) = max(v_f(1),1e-30_dp)
 
-    !! First  moment
+    !! First moment
     !! Settling velocity (Stokes regime)
     Rey = (1.0_dp + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
-    gam_fac = g83 + A*Kn_b*g73
+    gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) & 
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
     vf_s = St * gam_fac * Rey
 
     !! Settling velocity (Epstein regime)
-    gam_fac = g73
+    gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
     vf_e = Ep * gam_fac
 
     !! tanh interpolation function
@@ -169,9 +187,27 @@ module mini_cloud_vf_mod
 
     !! Interpolation for settling velocity
     v_f(2) = fx*vf_s + (1.0_dp - fx)*vf_e
-    v_f(2) = max(v_f(2), 1e-30_dp)
+    v_f(2) = max(v_f(2),1e-30_dp)
 
-    deallocate(d_g, LJ_g, molg_g, eta_g)
+    !! Second moment
+    !! Settling velocity (Stokes regime)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_c2**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 8.0_dp/3.0_dp) - lgnu2) & 
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 7.0_dp/3.0_dp) - lgnu2))
+    vf_s = St * gam_fac * Rey
+
+    !! Settling velocity (Epstein regime)
+    gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 7.0_dp/3.0_dp) - lgnu2))
+    vf_e = Ep * gam_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m2)))
+
+    !! Interpolation for settling velocity
+    v_f(3) = fx*vf_s + (1.0_dp - fx)*vf_e
+    v_f(3) = max(v_f(3),1e-30_dp)
+
+    deallocate(d_g, LJ_g, molg_g, eta_g, VMR_bg)
 
   end subroutine mini_cloud_vf
 

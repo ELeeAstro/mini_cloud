@@ -19,7 +19,7 @@ VMR = data[:,6:7]
 q_v = data[:,8]
 q_0 = data[:,9]
 q_1 = data[:,10]
-vf = data[:,11]
+vf = data[:,11:13]
 
 nlay = len(pl)
 
@@ -46,12 +46,14 @@ fig = plt.figure()
 
 col = sns.color_palette('colorblind')
 
-plt.plot(vf,pl,c=col[3],label=r'v_{\rm f}')
+plt.plot(vf[:,0],pl,c=col[0],label=r'$v_{{\rm f},0}$')
+plt.plot(vf[:,1],pl,c=col[1],label=r'$v_{{\rm f},1}$')
 
 plt.yscale('log')
 plt.xscale('log')
 
 plt.gca().invert_yaxis()
+plt.legend()
 
 fig = plt.figure()
 
@@ -95,6 +97,5 @@ plt.gca().invert_yaxis()
 
 
 plt.show()
-
 
 

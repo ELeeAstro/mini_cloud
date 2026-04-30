@@ -4,8 +4,6 @@ import seaborn as sns
 
 
 R = 8.31446261815324e7
-bar = 1e6
-atm = 1.01325e6
 kb = 1.380649e-16
 amu = 1.66053906660e-24
 r_seed = 1e-7
@@ -21,7 +19,6 @@ mol_w_v = [79.8658, 26.98153860, 55.8450, 24.305]
 sp = ['TiO2','Al2O3','Fe','Mg2SiO4']
 
 Rd_v = [R/mol_w_v[0],R/mol_w_v[1],R/mol_w_v[2],R/mol_w_v[3]]
-
 m_seed = V_seed * rho_d[0]
 
 data = np.loadtxt(fname,skiprows=3)
@@ -34,8 +31,9 @@ VMR = data[:,6:8]
 q_v = data[:,8:12]
 q_0 = data[:,12]
 q_1 = data[:,13:17]
-vf = data[:,17:22]
-dTdt = data[:,22]
+q_2 = data[:,17:21]
+vf = data[:,21:30]
+dTdt = data[:,30]
 
 nlay = len(pl)
 
@@ -74,22 +72,25 @@ q_s[:,0] = q_s[:,0]/rho[:]
 q_s[:,1] = 1e6 * 10.0**(17.7 - 45892.6/Tl[:] - 1.66*met)
 q_s[:,1] = (q_s[:,1]/(Rd_v[1] * Tl[:]))/rho[:]
 
-q_s[:,2] =  1e6 * 10.0 ** (7.23 - 20995.0/Tl[:])
+q_s[:,2] = 1e6 * 10.0 ** (7.23 - 20995.0/Tl[:])
 q_s[:,2] = (q_s[:,2]/(Rd_v[2] * Tl[:]))/rho[:]
 
 q_s[:,3] = 1e6 * 10.0**(14.88 - 32488.0/Tl[:] - 1.4*met - 0.2*np.log10(pl[:]))
 q_s[:,3] = (q_s[:,3]/(Rd_v[3] * Tl[:]))/rho[:]
 
-
-
-
 V_mix = np.zeros((nlay,ndust))
 for j in range(nlay):
-    V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
+  V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
 
 m_mix = np.zeros((nlay,ndust))
 for j in range(nlay):
-    m_mix[j,:] = rho_c[j,:]/sum(rho_c[j,:])
+  m_mix[j,:] = rho_c[j,:]/sum(rho_c[j,:])
+
+sig2 = np.zeros(nlay)
+sig2[:] = np.maximum(np.sum(q_2[:,:],axis=1)*rho[:]**2/N_c[:] - m_c[:]**2,m_seed**2)
+
+nu = np.zeros(nlay)
+nu[:] = m_c[:]**2/sig2[:]
 
 fig = plt.figure()
 
@@ -98,7 +99,6 @@ col = sns.color_palette('colorblind')
 plt.plot(dTdt,pl,c=col[0])
 
 plt.yscale('log')
-
 plt.gca().invert_yaxis()
 
 fig = plt.figure()
@@ -110,7 +110,6 @@ for j in range(ndust):
 
 plt.yscale('log')
 plt.xscale('log')
-
 plt.gca().invert_yaxis()
 
 fig = plt.figure()
@@ -122,7 +121,6 @@ for j in range(ndust):
 
 plt.yscale('log')
 plt.xscale('log')
-
 plt.gca().invert_yaxis()
 
 fig = plt.figure()
@@ -134,10 +132,13 @@ plt.plot(vf[:,1],pl,c=col[1],label=r'$v_{{\rm f},1,{\rm TiO_2}}$')
 plt.plot(vf[:,2],pl,c=col[2],label=r'$v_{{\rm f},1,{\rm Al_2O_3}}$')
 plt.plot(vf[:,3],pl,c=col[3],label=r'$v_{{\rm f},1,{\rm Fe}}$')
 plt.plot(vf[:,4],pl,c=col[4],label=r'$v_{{\rm f},1,{\rm Mg_2SiO_4}}$')
+plt.plot(vf[:,5],pl,c=col[1],ls='dashed',label=r'$v_{{\rm f},2,{\rm TiO_2}}$')
+plt.plot(vf[:,6],pl,c=col[2],ls='dashed',label=r'$v_{{\rm f},2,{\rm Al_2O_3}}$')
+plt.plot(vf[:,7],pl,c=col[3],ls='dashed',label=r'$v_{{\rm f},2,{\rm Fe}}$')
+plt.plot(vf[:,8],pl,c=col[4],ls='dashed',label=r'$v_{{\rm f},2,{\rm Mg_2SiO_4}}$')
 
 plt.yscale('log')
 plt.xscale('log')
-
 plt.gca().invert_yaxis()
 plt.legend()
 
@@ -149,7 +150,6 @@ plt.plot(N_c,pl,c=col[0],label=r'N_{\rm c}')
 
 plt.yscale('log')
 plt.xscale('log')
-
 plt.gca().invert_yaxis()
 
 fig = plt.figure()
@@ -160,7 +160,6 @@ plt.plot(r_c,pl,c=col[1],label=r'r_{\rm c}')
 
 plt.yscale('log')
 plt.xscale('log')
-
 plt.gca().invert_yaxis()
 
 fig = plt.figure()
@@ -168,9 +167,9 @@ fig = plt.figure()
 col = sns.color_palette('colorblind')
 
 plt.plot(q_v[:,0],pl,c=col[0],label=sp[0]+r' $q_{\rm v}$')
-plt.plot(q_v[:,1],pl,c=col[1],label=sp[1])
-plt.plot(q_v[:,2],pl,c=col[2],label=sp[2])
-plt.plot(q_v[:,3],pl,c=col[3],label=sp[3])
+plt.plot(q_v[:,1],pl,c=col[1],label=sp[1]+r' $q_{\rm v}$')
+plt.plot(q_v[:,2],pl,c=col[2],label=sp[2]+r' $q_{\rm v}$')
+plt.plot(q_v[:,3],pl,c=col[3],label=sp[3]+r' $q_{\rm v}$')
 
 plt.plot(q_1[:,0],pl,c=col[0],label=r'$q_{1}$',ls='dashed')
 plt.plot(q_1[:,1],pl,c=col[1],ls='dashed')
@@ -182,18 +181,27 @@ plt.plot(q_s[:,1],pl,c=col[1],ls='dotted')
 plt.plot(q_s[:,2],pl,c=col[2],ls='dotted')
 plt.plot(q_s[:,3],pl,c=col[3],ls='dotted')
 
-plt.plot(q_0,pl,c=col[4],label=r'$q_{0}$',ls='dashdot')
+plt.plot(q_2[:,0],pl,c=col[0],ls='dashdot',label=r'$q_{2}$')
+plt.plot(q_2[:,1],pl,c=col[1],ls='dashdot')
+plt.plot(q_2[:,2],pl,c=col[2],ls='dashdot')
+plt.plot(q_2[:,3],pl,c=col[3],ls='dashdot')
+
+plt.plot(q_0,pl,c=col[4],label=r'$q_{0}$')
 
 plt.legend()
 
 plt.yscale('log')
 plt.xscale('log')
-
 plt.gca().invert_yaxis()
 
-#plt.xlim(1e-20,1)
+fig = plt.figure()
 
+col = sns.color_palette('colorblind')
+
+plt.plot(nu,pl,c=col[4],label=r'$\nu$')
+
+plt.yscale('log')
+plt.xscale('log')
+plt.gca().invert_yaxis()
 
 plt.show()
-
-

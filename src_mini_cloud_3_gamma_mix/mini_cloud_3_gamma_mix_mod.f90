@@ -1,5 +1,6 @@
 module mini_cloud_3_gamma_mix_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
+  use gamma_func_mod, only : up_inc_gam
   implicit none
 
   ! Fortran 2008 intrinsic precisions - recommended if possible
@@ -78,7 +79,7 @@ module mini_cloud_3_gamma_mix_mod
 
   !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
 
-  public :: mini_cloud_2_exp_mix, RHS_mom, jac_dum
+  public :: mini_cloud_3_gamma_mix, RHS_mom, jac_dum
   private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
     & p_vap_sp, sig_sp, l_heat_sp, eta_a_mix, kappa_a_mix
 
@@ -213,7 +214,7 @@ module mini_cloud_3_gamma_mix_mod
     y(1) = q_0
     y(2:2+ndust-1) = q_1(:)
     y(2+ndust:2+ndust+ndust-1) = q_2(:)
-    y(2+ndust+nudts:) = q_v(:)
+    y(2+ndust+ndust:) = q_v(:)
 
     !! Save initial value for q_1
     q_1_old(:) = q_1(:)
@@ -272,15 +273,18 @@ module mini_cloud_3_gamma_mix_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
-    real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_n, r_c, Kn, beta, vf, Kn_b, Kn_n, Kn_m
+    real(dp) :: f_coag0, f_coag2, f_coal0, f_coal2
+    real(dp) :: m_c, r_n, r_c, Kn, Kn_b, Kn_n, Kn_m, Kn_m2
+    real(dp), dimension(2) :: vf
 
     integer :: j
-    real(dp) :: N_c, rho_c_t, rho_d_m, V_tot
+    real(dp) :: N_c, rho_c_t, rho_d_m, V_tot, Z_c_t, x_seed
     real(dp) :: Ep, fx, gam_fac, Rey, St, vf_e, vf_s
-    real(dp), dimension(ndust) :: rho_c, rho_v, V_mix
+    real(dp), dimension(ndust) :: rho_c, rho_v, V_mix, Z_c
     real(dp), dimension(ndust) :: p_v, n_v
-    real(dp), dimension(ndust) :: f_nuc_hom, f_cond, f_seed_evap
+    real(dp), dimension(ndust) :: f_nuc_hom, f_cond1, f_cond2, f_seed_evap
+
+    real(dp) :: sig2, nu, lam, lgnu, lgnu1, lgnu2, gi_m1_3
 
     real(dp), parameter :: A = 1.639_dp
 
@@ -293,15 +297,21 @@ module mini_cloud_3_gamma_mix_mod
 
     !! Convert y to real physical numbers to calculate f
     N_c = y(1)*nd_atm ! Convert to real number density
-    rho_c(:) = y(2:2+ndust-1)*rho   ! Convert to real mass density
-    rho_v(:) = y(2+ndust:)*rho   ! Convert to real mass density
+    rho_c(:) = y(2:2+ndust-1)*rho         ! Convert to real mass density
+    Z_c(:) = y(2+ndust:2+2*ndust-1)*rho**2 ! Convert to real second mass moment density
+    rho_v(:) = y(2+2*ndust:)*rho          ! Convert to real mass density
 
     !! Find the true vapour VMR
     p_v(:) = rho_v(:) * cld(:)%Rd_v * T     !! Pressure of vapour
     n_v(:) = p_v(:)/(kb*T)        !! Number density of vapour
 
-    !! Mean mass of particle
+    !! Total condensed mass density
     rho_c_t = sum(rho_c(:))
+
+    !! Total 2ns moment
+    Z_c_t = sum(Z_c(:))
+
+    !! Mean mass of particle
     m_c = max(rho_c_t/N_c, cld(1)%m_seed)
 
     !! Net bulk density of the particles
@@ -310,21 +320,53 @@ module mini_cloud_3_gamma_mix_mod
       rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * cld(j)%rho_d
     end do
 
+    !! Calculate lambda and nu gamma distribution parameters
+    sig2 = max(Z_c_t/N_c - (rho_c_t/N_c)**2,cld(1)%m_seed**2)
+    nu = max(m_c**2/sig2,0.01_dp)
+    nu = min(nu,100.0_dp)
+    lam = max(cld(1)%m_seed,m_c/nu)
+
+
+    x_seed = cld(1)%m_seed
+
+
     !! Bulk material volume mixing ratio
     V_tot = sum(rho_c(:)/cld(:)%rho_d) ! Total condensed volume
     V_mix(:) = (rho_c(:)/cld(:)%rho_d)/V_tot ! Condensed volume mixing ratio
     !V_mix(:) = rho_c(:)/rho_c_t
 
-    !! Mass weighted mean radius of particle
+
+    lgnu  = log_gamma(nu)
+    lgnu1 = log_gamma(nu + 1.0_dp)
+    lgnu2 = log_gamma(nu + 2.0_dp)
+
+    !! Mass and number weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
-    r_n = r_c * g43
+    r_n = max(r_c * nu**(-1.0_dp/3.0_dp) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu), r_seed)
 
     !! Knudsen number
     Kn = mfp_a/r_c
-    Kn_n = Kn * g23
-    Kn_m = Kn * g53
+    Kn_b = min(Kn, 100.0_dp)
 
-    Kn_b = min(Kn_m, 100.0_dp)
+    !! Population averaged Knudsen number for n, m and m^2
+    if (nu > 1.0_dp/3.0_dp) then
+      ! Ok to use gamma function
+      Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
+        & exp(log_gamma(nu - 1.0_dp/3.0_dp) - lgnu)
+    else
+      ! Use incomplete gamma function recurrence relation to avoid negative arguments
+      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/3.0_dp)*exp(-x_seed))/(nu - 1.0_dp/3.0_dp)
+      Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
+      & exp(log(gi_m1_3) - lgnu)
+    end if
+    Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
+      & exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1)
+    Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 
+      & exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu2)
+
+    !! Now find moment dependent settling velocities
+    St = (2.0_dp * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta_a) 
+    Ep = (sqrt(pi)*grav*rho_d_m*r_c)/(2.0_dp*cT*rho)
 
     !! Now find moment dependent settling velocities
     St = (2.0_dp * grav * r_c**2 * (rho_d_m - rho))/(9.0_dp * eta_a) 
@@ -333,46 +375,69 @@ module mini_cloud_3_gamma_mix_mod
     !! Zeroth moment
     !! Settling velocity (Stokes regime)
     Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d_m)/(54.0_dp*eta_a**2))**(0.4_dp))**(-1.25_dp)
-    gam_fac = g53 + A*Kn_b*g43
+    gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) & 
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
     vf_s = St * gam_fac * Rey
 
     !! Settling velocity (Epstein regime)
-    gam_fac = g43
+    gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu))
     vf_e = Ep * gam_fac
 
     !! tanh interpolation function
     fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_n)))
 
     !! Interpolation for settling velocity
-    vf = fx*vf_s + (1.0_dp - fx)*vf_e
-    vf = max(vf, 1e-30_dp)
+    vf(1) = fx*vf_s + (1.0_dp - fx)*vf_e
+    vf(1) = max(vf(1),1e-30_dp)
+
+    !! First moment
+    !! Settling velocity (Stokes regime)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta_a**2))**(0.4_dp))**(-1.25_dp)
+    gam_fac = (nu**(-2.0/3.0) * exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) & 
+      & + A*Kn_b*nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
+    vf_s = St * gam_fac * Rey
+
+    !! Settling velocity (Epstein regime)
+    gam_fac =  (nu**(-1.0/3.0) * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1))
+    vf_e = Ep * gam_fac
+
+    !! tanh interpolation function
+    fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m)))
+
+    !! Interpolation for settling velocity
+    vf(2) = fx*vf_s + (1.0_dp - fx)*vf_e
+    vf(2) = max(vf(2),1e-30_dp)
 
     !! Find supersaturation ratio
     cld(:)%sat = p_v(:)/cld(:)%p_vap
 
     !! Calculate condensation rate
-    call calc_cond(ndust, r_c, Kn_m, n_v(:), V_mix(:), f_cond)
+    call calc_cond(ndust, r_c, Kn, Kn_m, Kn_m2, n_v, V_mix, nu, f_cond1, f_cond2)
 
     !! Calculate homogenous nucleation rate
-    call calc_hom_nuc(ndust, n_v(:), f_nuc_hom)
+    call calc_hom_nuc(ndust, n_v, f_nuc_hom)
 
     !! Calculate seed particle evaporation rate
-    call calc_seed_evap(ndust, N_c, m_c, f_seed_evap)
+    call calc_seed_evap(ndust, N_c, m_c, f_cond1, f_seed_evap)
 
     !! Calculate the coagulation rate
-    call calc_coag(m_c, r_c, Kn, f_coag)
+    call calc_coag(m_c, r_c, nu, Kn, x_seed, f_coag0, f_coag2)
 
     !! Calculate the coalescence rate
-    call calc_coal(r_c, r_n, Kn_n, vf, f_coal)
+    call calc_coal(r_c, r_n, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
 
     !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag + f_coal)*N_c**2
-    f(2:2+ndust-1) = cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) + f_cond(:)*N_c
-    f(2+ndust:) = -cld(:)%m_seed*(f_nuc_hom(:)  + f_seed_evap(:)) - cld(:)%v2c*f_cond(:)*N_c
+    f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag0 + f_coal0)*N_c**2
+    f(2:2+ndust-1) = x_seed*(f_nuc_hom(:) + f_seed_evap(:)) + f_cond1(:)*N_c
+    f(2+ndust:2+2*ndust-1) = x_seed**2*(f_nuc_hom(:) + f_seed_evap(:)) + &
+      & 2.0_dp*f_cond2(:)*rho_c(:) + (f_coag2 + f_coal2)*rho_c(:)**2
+    f(2+2*ndust:) = -x_seed*(f_nuc_hom(:) + f_seed_evap(:)) - cld(:)%v2c*f_cond1(:)*N_c
 
     !! Convert f to ratios
     f(1) = f(1)/nd_atm
-    f(2:) = f(2:)/rho
+    f(2:2+ndust-1) = f(2:2+ndust-1)/rho
+    f(2+ndust:2+2*ndust-1) = f(2+ndust:2+2*ndust-1)/rho**2
+    f(2+2*ndust:) = f(2+2*ndust:)/rho
 
     ! Check if condensation from vapour is viable
     do j = 1, ndust
@@ -380,6 +445,7 @@ module mini_cloud_3_gamma_mix_mod
         if (f(2+j-1) > 0.0_dp) then
           f(2+j-1) = 0.0_dp
           f(2+ndust+j-1) = 0.0_dp
+          f(2+2*ndust+j-1) = 0.0_dp
          !print*, j,'in'
         end if
       end if
@@ -388,9 +454,10 @@ module mini_cloud_3_gamma_mix_mod
     ! Check if evaporation from condensate is viable
     do j = 1, ndust
       if (rho_c(j)/rho <= 1e-28_dp) then
-        if (f(2+ndust+j-1) > 0.0_dp) then
+        if (f(2+2*ndust+j-1) > 0.0_dp) then
           f(2+j-1) = 0.0_dp
           f(2+ndust+j-1) = 0.0_dp
+          f(2+2*ndust+j-1) = 0.0_dp
          !print*, j,'in'
         end if
       end if
@@ -398,46 +465,68 @@ module mini_cloud_3_gamma_mix_mod
 
   end subroutine RHS_mom
 
-  !! Condensation and evaporation
-  subroutine calc_cond(ndust, r_c, Kn, n_v, V_mix, dmdt)
+ !! Condensation and evaporation
+  subroutine calc_cond(ndust, r_c, Kn, Kn_m, Kn_m2, n_v, V_mix, nu_in, dmdt1, dmdt2)
     implicit none
 
     integer, intent(in) :: ndust
-    real(dp), intent(in) :: r_c, Kn
+    real(dp), intent(in) :: r_c, Kn, Kn_m, Kn_m2, nu_in
     real(dp), dimension(ndust), intent(in) :: n_v, V_mix
 
-    real(dp), dimension(ndust), intent(out) :: dmdt
+    real(dp), dimension(ndust), intent(out) :: dmdt1, dmdt2
 
     integer :: j
-    real(dp) :: dmdt_low, dmdt_high, Knd, Kn_crit, fx
+    real(dp) :: dmdt_low1, dmdt_high1, dmdt_low2, dmdt_high2
+    real(dp) :: c_facl1, c_facg1, lgnu, lgnu1, nuth, nu2th
+    real(dp) :: nu, Knd_m, Knd_m2, fx_m, fx_m2, Kn_crit_m, Kn_crit_m2
+
+    !gnu = gamma(nu)
+    !gnu1 = gamma(nu+1.0_dp)
+
+    nu = nu_in
+
+    lgnu  = log_gamma(nu)
+    lgnu1 = log_gamma(nu + 1.0_dp)
+
+    nuth = nu**(-1.0_dp/3.0_dp)
+    nu2th = nu**(-2.0_dp/3.0_dp)
 
     do j = 1, ndust
 
       !! Diffusive limited regime (Kn << 1) [g s-1]
-      dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) &
-        & *  (1.0_dp - 1.0_dp/cld(j)%sat) * g53
+      c_facl1 = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) * (1.0_dp - 1.0_dp/cld(j)%sat)
+      dmdt_low1 = c_facl1 * nuth * exp(log_gamma(nu + 1.0_dp/3.0_dp) - lgnu)
+      dmdt_low2 = c_facl1 * nuth * exp(log_gamma(nu + 4.0_dp/3.0_dp) - lgnu1)
 
       !! Free molecular flow regime (Kn >> 1) [g s-1]
-      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp_c & 
-        & * (1.0_dp - 1.0_dp/cld(j)%sat) * g43
+      c_facg1 = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp_c * &
+        & (1.0_dp - 1.0_dp/cld(j)%sat)
+      dmdt_high1 = c_facg1 * nu2th * exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu)
+      dmdt_high2 = c_facg1 * nu2th * exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1)
 
       !! If evaporation, weight rate by current condensed volume ratio (Woitke et al. 2020)
       if (cld(j)%sat < 1.0_dp) then
-        dmdt_high = dmdt_high * V_mix(j) 
-        dmdt_low = dmdt_low * V_mix(j) 
+        dmdt_high1 = dmdt_high1 * V_mix(j)
+        dmdt_low1 = dmdt_low1 * V_mix(j)
+        dmdt_high2 = dmdt_high2 * V_mix(j)
+        dmdt_low2 = dmdt_low2 * V_mix(j)
       end if
 
       !! Critical Knudsen number
-      Kn_crit = Kn * (dmdt_high/dmdt_low)
+      Kn_crit_m = Kn*(dmdt_high1/dmdt_low1)
+      Kn_crit_m2 = Kn*(dmdt_high2/dmdt_low2)
 
       !! Kn' (Woitke & Helling 2003)
-      Knd = Kn/Kn_crit
+      Knd_m = Kn_m/Kn_crit_m
+      Knd_m2 = Kn_m2/Kn_crit_m2
 
       !! tanh interpolation function
-      fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
+      fx_m = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd_m)))
+      fx_m2 = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd_m2)))
 
       !! Mass change rate
-      dmdt(j) = dmdt_low * fx + dmdt_high * (1.0_dp - fx)
+      dmdt1(j) = dmdt_low1 * fx_m + dmdt_high1 * (1.0_dp - fx_m)
+      dmdt2(j) = dmdt_low2 * fx_m2 + dmdt_high2 * (1.0_dp - fx_m2)
     end do
 
   end subroutine calc_cond
@@ -467,9 +556,7 @@ module mini_cloud_3_gamma_mix_mod
       if (cld(j)%sat > 1.0_dp) then
 
         if (cld(j)%sp == 'SiO') then
-          !! Special nucleation rate for SiO (Gail et al. 2016)
           J_hom(j) = n_v(j)**2 * exp(1.33_dp - 4.40e12_dp / (T**3 * log(cld(j)%sat)**2))
-
         else
 
           ! Efficency Variables
@@ -481,7 +568,7 @@ module mini_cloud_3_gamma_mix_mod
           Nf = cld(j)%Nf
 
           !! Find Nstar, theta_inf -> Dg/RT (Eq. 11 Lee et al. (2015a))
-          theta_inf = (f0 * cld(j)%sig)/(kbT)  !Theta_infty eq.8 (Lee et al. (2015a)
+          theta_inf = (f0 * cld(j)%sig)/(kbT)
           N_inf = (((twothird) * theta_inf) / ln_ss)**3
 
           !! Gail et al. (2014) ! note, typo in Lee et al. (2015a)
@@ -506,7 +593,11 @@ module mini_cloud_3_gamma_mix_mod
           J_hom(j) = n_v(j) * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
         end if
 
-      else 
+        if (J_hom(j) < 1e-10_dp) then
+          J_hom(j) = 0.0_dp
+        end if
+
+      else
         !! Unsaturated, zero nucleation
         J_hom(j) = 0.0_dp
       end if
@@ -515,11 +606,13 @@ module mini_cloud_3_gamma_mix_mod
   end subroutine calc_hom_nuc
 
   !! Seed particle evaporation
-  subroutine calc_seed_evap(ndust, N_c, m_c, J_evap)
+  subroutine calc_seed_evap(ndust, N_c, m_c, f_cond, J_evap)
     implicit none
 
     integer, intent(in) :: ndust
-    real(dp), intent(in) :: N_c, m_c
+    real(dp), intent(in) :: N_c
+    real(dp), intent(in) :: m_c
+    real(dp), dimension(ndust), intent(in) :: f_cond
 
     real(dp), dimension(ndust), intent(out) :: J_evap
 
@@ -533,12 +626,12 @@ module mini_cloud_3_gamma_mix_mod
         cycle
       end if
 
-      if ((cld(j)%sat >= 1.0_dp)) then
+      if (f_cond(j) >= 0.0_dp) then
 
         !! If growing or too little number density then evaporation can't take place
         J_evap(j) = 0.0_dp
 
-      else 
+      else
 
         !! Check if average mass is around 0.1% the seed particle mass
         !! This means the core is (probably) exposed to the air and can evaporate freely
@@ -552,70 +645,175 @@ module mini_cloud_3_gamma_mix_mod
         end if
 
       end if
+
     end do
 
   end subroutine calc_seed_evap
 
   !! Particle-particle Brownian coagulation
-  subroutine calc_coag(m_c, r_c, Kn_in, f_coag)
+  subroutine calc_coag(m_c, r_c, nu_in, Kn_in, x_seed, f_coag0, f_coag2)
     implicit none
 
-    real(dp), intent(in) :: m_c, r_c, Kn_in
+    real(dp), intent(in) :: m_c, r_c, nu_in, Kn_in, x_seed
 
-    real(dp), intent(out) :: f_coag
+    real(dp), intent(out) :: f_coag0, f_coag2
 
-    real(dp) :: Kl0, Kh0, Kn
-    real(dp) :: Knd, phi
+    real(dp) :: nu, lgnu, lgnu1
+
+    real(dp) :: Knd0, phi0, Kl0, Kh0, nu_fac_l_0, nu_fac_h_0
+    real(dp) :: Knd2, phi2, Kl2, Kh2, nu_fac_l_2, nu_fac_h_2
+
+    real(dp) :: Kn
     real(dp), parameter :: A = 1.639_dp, H = 1.0_dp/sqrt(2.0_dp)
+
+    !! Efficency variables
+    real(dp) :: gi_m1_3, gi_m2_3, gi_m1_2, gi_m1_6
 
     !! Limit Kn to avoid large overshoot of Kn << 1 regime.
     Kn = min(Kn_in,100.0_dp)
 
-    !! Kn << 1 population averaged kernel
-    Kl0 = (4.0_dp*kb*T)/(3.0_dp*eta_a) * (1.0_dp + g43*g23 + &
-      & Kn * A * (g23 + g43*g13))
+    ! !! Particle diffusion rate
+    !D_r = (kb*T*beta)/(6.0_dp*pi*eta*r_c)
 
-    !! Kn >> 1 population averaged kernel
-    Kh0 = 2.0_dp * H * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * (g53*g12 + 2.0_dp*g43*g56 + g76)
+    !! Thermal velocity limit rate
+    !V_r = sqrt((8.0_dp*kb*T)/(pi*m_c))
+
+    nu = nu_in
+
+    lgnu  = log_gamma(nu)
+    lgnu1 = log_gamma(nu + 1.0_dp)
+
+    !! Kn << 1 regime
+    if (nu > 1.0_dp/3.0_dp) then
+      !! Use gamma function
+      gi_m1_3 = gamma(nu - 1.0_dp/3.0_dp)
+    else
+      !! Use incomplete gamma function
+      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/3.0_dp)*exp(-x_seed))/(nu - 1.0_dp/3.0_dp)
+    end if
+    if (nu > 2.0_dp/3.0_dp) then
+      !! Use gamma function
+      gi_m2_3 = gamma(nu - 2.0_dp/3.0_dp)
+    else
+      !! Use incomplete gamma function
+      gi_m2_3 = (up_inc_gam(nu-2.0/3.0_dp+1.0_dp,x_seed) - x_seed**(nu-2.0_dp/3.0_dp)*exp(-x_seed))/(nu - 2.0_dp/3.0_dp)
+    end if
+
+    nu_fac_l_0 = 1.0_dp + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log(gi_m1_3) - 2.0_dp * lgnu) & 
+      & + A*Kn*nu**(1.0_dp/3.0_dp) &
+      & * (exp(log(gi_m1_3) - lgnu) &
+      & + exp(log_gamma(nu + 1.0_dp/3.0_dp) + log(gi_m2_3) - 2.0_dp*lgnu))
+
+    nu_fac_l_2 = 1.0_dp + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 2.0_dp/3.0_dp) - 2.0_dp * lgnu1) &
+      & + A*Kn*nu**(1.0_dp/3.0_dp) &
+      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1) &
+      & + exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp*lgnu1))
+
+
+    !! Kn >> 1 regime
+    if (nu > 1.0_dp/2.0_dp) then
+      !! Use gamma function
+      gi_m1_2 = gamma(nu - 1.0_dp/2.0_dp)
+    else
+      !! Use incomplete gamma function
+      gi_m1_2 = (up_inc_gam(nu-1.0/2.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/2.0_dp)*exp(-x_seed))/(nu - 1.0_dp/2.0_dp)
+    end if
+    if (nu > 1.0_dp/6.0_dp) then
+      !! Use gamma function
+      gi_m1_6 = gamma(nu - 1.0_dp/6.0_dp)
+    else
+      !! Use incomplete gamma function
+      gi_m1_6 = (up_inc_gam(nu-1.0/6.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/6.0_dp)*exp(-x_seed))/(nu - 1.0_dp/6.0_dp)
+    end if
+
+    nu_fac_h_0 = H * nu**(-1.0_dp/6.0_dp)  &
+      & * (exp(log_gamma(nu + 2.0_dp/3.0_dp) + log(gi_m1_2) - 2.0_dp * lgnu)  &
+      & + 2.0*exp(log_gamma(nu + 1.0_dp/3.0_dp) + log(gi_m1_6) - 2.0_dp * lgnu) & 
+      & +  exp(log_gamma(nu + 1.0_dp/6.0_dp) - lgnu))
+
+    nu_fac_h_2 = H * nu**(-1.0_dp/6.0_dp)  &
+      & * (exp(log_gamma(nu + 5.0_dp/3.0_dp) + log_gamma(nu + 1.0_dp/2.0_dp) - 2.0_dp * lgnu1)  &
+      & + 2.0*exp(log_gamma(nu + 4.0_dp/3.0_dp) + log_gamma(nu + 5.0_dp/6.0_dp) - 2.0_dp * lgnu1) & 
+      & +  exp(log_gamma(nu + 7.0_dp/6.0_dp) - lgnu1))
+
+    Kl0 = (4.0_dp*kb*T)/(3.0_dp*eta_a) * nu_fac_l_0
+    Kl2 = (4.0_dp*kb*T)/(3.0_dp*eta_a) * nu_fac_l_2
+
+    Kh0 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac_h_0
+    Kh2 = 2.0_dp * sqrt((8.0_dp*pi*kb*T)/m_c) * r_c**2 * nu_fac_h_2
+
 
     !! Moran (2022) method using diffusive Knudsen number
-    Knd = (2.0_dp*sqrt(2.0_dp))/pi * (Kl0/Kh0)
-    
-    !! Interpolation factor
-    phi = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd**2)
+    Knd0 = (2.0_dp*sqrt(2.0_dp)/pi) * Kl0/Kh0
+    phi0 = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd0**2)
 
-    !! Coagulation rate
-    f_coag = -0.5_dp * Kl0 * phi 
+    Knd2 = (2.0_dp*sqrt(2.0_dp)/pi) * Kl2/Kh2
+    phi2 = 1.0_dp/sqrt(1.0_dp + pi**2/8.0_dp * Knd2**2)
+
+    f_coag0 = -0.5_dp * Kl0  * phi0
+    f_coag2 = Kl2 * phi2
 
   end subroutine calc_coag
 
   !! Particle-particle gravitational coalesence
-  subroutine calc_coal(r_c, r_n, Kn_n, vf, f_coal)
+  subroutine calc_coal(r_c, r_n, vf, nu_in, Kn_n, Kn_m, f_coal0, f_coal2)
     implicit none
 
-    real(dp), intent(in) :: r_c, r_n, Kn_n
-    real(dp), intent(in) :: vf
+    real(dp), intent(in) :: r_c, r_n, nu_in, Kn_n, Kn_m
+    real(dp), dimension(2), intent(in) :: vf
 
-    real(dp), intent(out) :: f_coal
+    real(dp), intent(out) :: f_coal0, f_coal2
 
-    real(dp) :: d_vf,  Stk, E
+    real(dp) :: nu, d_vf, Stk, E, nu_fac_0, nu_fac_2, lgnu, lgnu1, K0
     real(dp), parameter :: eps = 0.5_dp
 
     !! Estimate differential velocity
-    d_vf = eps * vf
+    d_vf = eps * vf(1)
 
-    !! Calculate E
+    nu = nu_in
+
+    lgnu  = log_gamma(nu)
+
+    !! Calculate E for number density change
     if (Kn_n >= 1.0_dp) then
       !! E = 1 when Kn > 1
       E = 1.0_dp
     else
       !! Calculate Stokes number
-      Stk = (vf * d_vf)/(grav * r_n)
+      Stk = (vf(1) * d_vf)/(grav * r_n)
       E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
     end if
 
+    nu_fac_0 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu) &
+      & + exp(2.0_dp * log_gamma(nu + 1.0_dp/3.0_dp) - 2.0_dp * lgnu))
+
+    K0 = 2.0_dp * pi * r_c**2 * d_vf
+
     !! Coalesence flux (Zeroth moment) [cm3 s-1]
-    f_coal = -pi*r_c**2*d_vf*E*(g53 + g43**2)
+    f_coal0 = -0.5_dp * K0 * E * nu_fac_0
+
+    !! Estimate differential velocity
+    d_vf = eps * vf(2)
+
+    lgnu1 = log_gamma(nu + 1.0_dp)
+
+   !! Calculate E for mass change
+    if (Kn_m >= 1.0_dp) then
+      !! E = 1 when Kn > 1
+      E = 1.0_dp
+    else
+      !! Calculate Stokes number
+      Stk = (vf(2) * d_vf)/(grav * r_c)
+      E = max(0.0_dp,1.0_dp - 0.42_dp*Stk**(-0.75_dp))
+    end if
+
+    nu_fac_2 = nu**(-2.0_dp/3.0_dp) * (exp(log_gamma(nu + 5.0_dp/3.0_dp) - lgnu1) &
+      & + exp(2.0_dp * log_gamma(nu + 4.0_dp/3.0_dp) - 2.0_dp * lgnu1))
+
+    K0 = 2.0_dp * pi * r_c**2 * d_vf
+
+    !! Coalesence flux (Second moment) [cm3 s-1]
+    f_coal2 = K0 * E * nu_fac_2
 
   end subroutine calc_coal
 
@@ -1758,4 +1956,4 @@ module mini_cloud_3_gamma_mix_mod
     real(dp), dimension(NROWPD, NEQ), intent(inout) :: PD
   end subroutine jac_dum
 
-end module mini_cloud_2_exp_mix_mod
+end module mini_cloud_3_gamma_mix_mod

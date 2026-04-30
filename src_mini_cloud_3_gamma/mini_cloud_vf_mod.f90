@@ -33,6 +33,8 @@ module mini_cloud_vf_mod
   !! Construct required arrays for calculating gas mixtures
   real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
 
+  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
+
   public :: mini_cloud_vf
   private :: eta_construct
 
