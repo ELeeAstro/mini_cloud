@@ -6,6 +6,7 @@ program test_mini_cloud_2
   use vert_diff_exp_mod, only : vert_diff_exp
   use vert_adv_exp_mod, only : vert_adv_exp
   use vert_diff_imp_mod, only : vert_diff_imp
+  use cli_progress
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -40,6 +41,8 @@ program test_mini_cloud_2
   real(dp) :: T_eff, k_ir, tau
 
   logical :: end
+
+  call progress_begin()
 
   !! time step
   t_step = 100.0_dp
@@ -241,7 +244,7 @@ program test_mini_cloud_2
         !! increment time
         time = time + t_step
 
-        print*, n, time, maxval(del(:)/t_step)
+        call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
 
         if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
@@ -480,7 +483,7 @@ program test_mini_cloud_2
         !! increment time
         time = time + t_step
 
-        print*, n, time, maxval(del(:)/t_step)
+        call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
 
         if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
@@ -503,6 +506,8 @@ program test_mini_cloud_2
       print*, 'Invalid test case example: ', example
       stop
     end select
+
+  call progress_end()
 
 contains
 

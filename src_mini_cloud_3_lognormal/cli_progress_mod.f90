@@ -41,7 +41,7 @@ contains
       remaining = -1_int32
     end if
 
-    write(u,'(a)',advance='no') achar(13)
+    write(u,'(a)',advance='no') achar(27)//'[2K'//achar(13)
     write(u,'("[",a,"] ",i3,"%",1x,"t=",f8.2," max=",es10.3,1x,"(eta ",a,")")',advance='no') &
         repeat("#", hashes)//repeat(".", dots), pct, sim_time, max_ratio, trim(eta_string(remaining))
     call flush(u)
@@ -61,7 +61,7 @@ contains
     character(len=*), parameter :: frames(4) = (/'|','/','-','\'/)
     integer :: u
     u = merge(error_unit, output_unit, present(to_stderr) .and. to_stderr)
-    write(u,'(a)',advance='no') achar(13)//frames(1+mod(step,4))//' working...'
+    write(u,'(a)',advance='no') achar(27)//'[2K'//achar(13)//frames(1+mod(step,4))//' working...'
     call flush(u)
   end subroutine spinner_tick
 

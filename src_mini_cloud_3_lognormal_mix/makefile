@@ -19,7 +19,7 @@ SRCS_F90 = \
     lxmie_mod.f90 \
     mini_cloud_opac_mie_mod.f90 \
     mini_cloud_vf_mod.f90 \
-    mini_cloud_3_lognormal_mod.f90 \
+    mini_cloud_3_lognormal_mix_mod.f90 \
     test_main.f90
 
 
@@ -29,7 +29,7 @@ SRCS_F = dlsode.f
 OBJECTS = $(SRCS_F90:.f90=.o) $(SRCS_F:.f=.o)
 
 # Executable
-EXECS = ../mini_cloud_3_lognormal
+EXECS = ../mini_cloud_3_lognormal_mix
 
 #====================
 # Phony targets

@@ -4,6 +4,7 @@ program main
   use mini_cloud_i_dlsode
   use mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
+  use cli_progress
   implicit none
 
   integer, parameter :: n_dust = 4
@@ -67,6 +68,8 @@ program main
   !! Select example
   example = 1
 
+  call progress_begin()
+
   ! Start time iteration
   do tt = 1, n_it
 
@@ -98,8 +101,7 @@ program main
       ! increment time
       time = time + t_step
 
-      ! Print to screen current progress
-      print*, tt, time, P_in * 1e-5_dp, 'bar', T_in, 'K'
+      call progress_update(tt, n_it, time, 0.0_dp, width=100)
     case(2)
       !! In this example, we timestep a call to mini-cloud
       !! and use a sawtooth pressure wave in log space for 4 oscilations between
@@ -110,6 +112,8 @@ program main
     end select
 
   end do
+
+  call progress_end()
 
 contains
 

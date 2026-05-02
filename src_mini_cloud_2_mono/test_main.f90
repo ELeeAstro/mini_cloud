@@ -6,6 +6,7 @@ program test_mini_cloud_2
   use vert_diff_exp_mod, only : vert_diff_exp
   use vert_adv_exp_mod, only : vert_adv_exp
   use vert_diff_imp_mod, only : vert_diff_imp
+  use cli_progress
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -38,6 +39,8 @@ program test_mini_cloud_2
   real(dp) :: m_seed
 
   logical :: end
+
+  call progress_begin()
 
   !! time step
   t_step = 100.0_dp
@@ -126,9 +129,6 @@ program test_mini_cloud_2
         !! increment time
         time = time + t_step
 
-        !! Print to screen current progress
-        print*, n, time, pl(1) * 1e-5_dp, 'bar ', Tl(1), 'K ', mu(1), 'g mol-1 ',  trim(sp)
-
         !! Mean mass of particle [g]
         m_c(1) = (q_1(1)*rho(1))/(q_0(1)*nd_atm(1))
 
@@ -138,6 +138,7 @@ program test_mini_cloud_2
         print*, 'q', n, q_v(1), q_0(1), q_1(1), vf(1,1)
         print*, 'r', n, m_c(1), r_c(1), rho_d
         print*, 'o', n, k_ext(1,1), ssa(1,1), g(1,1), k_ext(1,n_wl), ssa(1,n_wl), g(1,n_wl)
+        call progress_update(n, n_it, time, 0.0_dp, width=100)
 
         !! mini-cloud test output
         call output(n, time, nlay)
@@ -349,7 +350,7 @@ program test_mini_cloud_2
         !! increment time
         time = time + t_step
 
-        print*, n, time, maxval(del(:)/t_step)
+        call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
 
         if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
@@ -372,6 +373,8 @@ program test_mini_cloud_2
       print*, 'Invalid test case example: ', example
       stop
     end select
+
+  call progress_end()
 
 contains
 

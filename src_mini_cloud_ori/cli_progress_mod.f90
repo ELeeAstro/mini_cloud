@@ -20,8 +20,8 @@ contains
     integer(int32), intent(in) :: i, n
     integer,        intent(in), optional :: width
     logical,        intent(in), optional :: to_stderr
-    real(real64),   intent(in) :: sim_time      ! current time variable
-    real(real64),   intent(in) :: max_ratio     ! maxval(del(:)/t_step)
+    real(real64),   intent(in) :: sim_time
+    real(real64),   intent(in) :: max_ratio
     integer :: W, hashes, dots, pct
     integer(int32) :: c, elapsed, remaining
     integer        :: u
@@ -36,7 +36,7 @@ contains
     call system_clock(c)
     elapsed = c - t0
     if (i > 0_int32 .and. rate > 0_int32) then
-      remaining = int( (dble(n - i) / max(1.0d0, dble(i))) * dble(elapsed) )
+      remaining = int((dble(n - i) / max(1.0d0, dble(i))) * dble(elapsed))
     else
       remaining = -1_int32
     end if
@@ -51,7 +51,7 @@ contains
     logical, intent(in), optional :: to_stderr
     integer :: u
     u = merge(error_unit, output_unit, present(to_stderr) .and. to_stderr)
-    write(u,*)                              ! newline to finish the bar
+    write(u,*)
     call flush(u)
   end subroutine progress_end
 
@@ -66,7 +66,7 @@ contains
   end subroutine spinner_tick
 
   pure function eta_string(ticks) result(s)
-    integer(int32), intent(in) :: ticks  ! in system_clock ticks
+    integer(int32), intent(in) :: ticks
     character(len=16) :: s
     real(real64) :: secs
     if (ticks < 0_int32 .or. rate <= 0_int32) then

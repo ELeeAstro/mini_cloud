@@ -5,6 +5,7 @@ program test_DMC
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
   use vert_adv_exp_McCormack_mod, only : vert_adv_exp_McCormack
+  use cli_progress
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -40,6 +41,8 @@ program test_DMC
   real(dp) :: t0
 
   logical :: end
+
+  call progress_begin()
 
   !! time step
   t_step = 1000.0_dp
@@ -209,8 +212,6 @@ program test_DMC
         !! increment time
         time = time + t_step
 
-        print*, n, time
-
         end = .True.
 
         do i = 1, nlay
@@ -222,6 +223,8 @@ program test_DMC
         end do
         r_c_old(:) = r_c(:)
 
+        call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
+
         if ((end .eqv. .True.) .and. (n > int(1e7))) then
           print*, 'exit: ', n, n_it, end
           print*, del(:)
@@ -231,6 +234,8 @@ program test_DMC
 
 
       end do
+
+      call progress_end()
 
       print*, del(:)
       print*, del(:)/t_step

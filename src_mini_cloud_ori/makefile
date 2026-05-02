@@ -12,6 +12,7 @@ DEBUG_FLAGS = -Og -g -pipe -Wall -Wextra -fbacktrace -fcheck=all -ffpe-trap=inva
 
 # Source files (mix of .f and .f90 files)
 SRCS_F90 = \
+    cli_progress_mod.f90 \
     lxmie_mod.f90 \
     mini_cloud_precision.f90 \
     mini_cloud_class.f90 \
