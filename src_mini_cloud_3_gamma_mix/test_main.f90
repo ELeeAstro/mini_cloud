@@ -1,4 +1,4 @@
-program test_mini_cloud_2
+program test_mini_cloud_3
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   use mini_cloud_3_gamma_mix_mod, only : mini_cloud_3_gamma_mix
   use mini_cloud_vf_mod, only : mini_cloud_vf
@@ -39,6 +39,7 @@ program test_mini_cloud_2
 
   integer :: j, nsp
   real(dp) :: T_eff, k_ir, tau
+  real(dp), dimension(3) :: vf_tmp
 
   logical :: end
 
@@ -187,18 +188,19 @@ program test_mini_cloud_2
    
       do n = 1, n_it
 
-        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
 
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_3_gamma_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
+          call mini_cloud_3_gamma_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, &
             & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), dTdt(i))
 
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf(i,1:3))
-          vf(i,2:nsp+1) = vf(i,2)
-          vf(i,nsp+2:) = vf(i,3)
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
+            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
+          vf(i,1)       = vf_tmp(1)
+          vf(i,2:nsp+1) = vf_tmp(2)
+          vf(i,nsp+2:)  = vf_tmp(3)
 
           !! Calculate the opacity at the wavelength grid
           call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
@@ -385,19 +387,20 @@ program test_mini_cloud_2
       !! Start main iteration loops
       do n = 1, n_it
 
-        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf(i,1:3))
-          vf(i,2:nsp+1) = vf(i,2)
-          vf(i,nsp+2:) = vf(i,3)
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
+            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
+          vf(i,1)       = vf_tmp(1)
+          vf(i,2:nsp+1) = vf_tmp(2)
+          vf(i,nsp+2:)  = vf_tmp(3)
         end do
         !$omp end parallel do
 
         !! Combine everything q into a single 2D array for advection and diffusion
         q(:,1:nsp) = q_v(:,:)
-        q(:,nsp+1) = q_0(:) 
+        q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
         q(:,2*nsp+2:) = q_2(:,:)
 
@@ -415,13 +418,13 @@ program test_mini_cloud_2
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_3_gamma_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, & 
+          call mini_cloud_3_gamma_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, &
             & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), dTdt(i))
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
-        q(:,nsp+1) = q_0(:) 
+        q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
         q(:,2*nsp+2:) = q_2(:,:)
 
@@ -432,13 +435,14 @@ program test_mini_cloud_2
         q_1(:,:) = q(:,nsp+2:2*nsp+1)
         q_2(:,:) = q(:,2*nsp+2:)
 
-        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, & 
-            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf(i,1:3))
-          vf(i,2:nsp+1) = vf(i,2)
-          vf(i,nsp+2:) = vf(i,3)
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
+            &  nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
+          vf(i,1)       = vf_tmp(1)
+          vf(i,2:nsp+1) = vf_tmp(2)
+          vf(i,nsp+2:)  = vf_tmp(3)
         end do
         !$omp end parallel do
 
@@ -600,4 +604,4 @@ contains
 
   end subroutine linear_interp
 
-end program test_mini_cloud_2
+end program test_mini_cloud_3

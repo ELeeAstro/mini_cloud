@@ -1,9 +1,8 @@
 program test_mini_cloud_3
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_3_lognormal_mod, only : mini_cloud_3_lognormal, rho_d, mol_w_sp
+  use mini_cloud_3_lognormal_mix_mod, only : mini_cloud_3_lognormal_mix
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
-  use vert_diff_exp_mod, only : vert_diff_exp
   use vert_diff_exp_mod, only : vert_diff_exp
   use vert_adv_exp_mod, only : vert_adv_exp
   use vert_diff_imp_mod, only : vert_diff_imp
@@ -13,22 +12,21 @@ program test_mini_cloud_3
   integer, parameter :: dp = REAL64
 
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
-  real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
-  real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
-  real(dp), parameter :: R = 8.31446261815324e7_dp
+  real(dp), parameter :: kb = 1.380649e-16_dp
+  real(dp), parameter :: amu = 1.66053906660e-24_dp
   real(dp), parameter :: r_seed = 1e-7_dp
   real(dp), parameter :: V_seed = 4.0_dp/3.0_dp * pi * r_seed**3
 
   integer :: example, n_it
   real(dp) :: t_step, time
 
-  integer :: nlay, nlev, i, n, u, k
-  character(len=20) :: sp
+  integer :: nlay, nlev, i, n, u
+  character(len=20), allocatable, dimension(:) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
-  real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho
-  real(dp), allocatable, dimension(:) :: q_0, q_1, q_2, q_v, r_c, m_c, q0, r_c_old, del
-  real(dp), allocatable, dimension(:,:) :: VMR, q, vf_q
-  real(dp) :: grav
+  real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v, cp, dTdt
+  real(dp), allocatable, dimension(:) :: q_0, r_c, m_c, q0, r_c_old, del
+  real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1, q_2, vf
+  real(dp) :: grav, met
 
   integer :: n_wl
   real(dp), allocatable, dimension(:) :: wl_e, wl
@@ -36,126 +34,36 @@ program test_mini_cloud_3
 
   integer :: nlines, io, idx, idx1
   real(dp) :: p_bot, p_top
-  real(dp), allocatable, dimension(:) :: T_f, p_f, Kzz_f
-  real(dp) :: m_seed
+  real(dp), allocatable, dimension(:) :: T_f, p_f
+  real(dp) :: m_seed, Nc, rho_c_tot, rho_d_mean
 
-  integer :: nm
-  real(dp), allocatable, dimension(:) :: alte, q_a
-  real(dp) :: t0
+  integer :: j, nsp
+  real(dp) :: T_eff, k_ir, tau
+  real(dp), dimension(3) :: vf_tmp
 
   logical :: end
 
   call progress_begin()
 
   !! time step
-  t_step = 1000.0_dp
+  t_step = 100.0_dp
 
   !! Number of iterations
-  n_it = 100000
+  n_it = 10000
 
   !! Start time
-  time = 6840.0_dp
+  time = 0.0_dp
 
   !! example select
-  example = 2
+  example = 3
 
   select case (example)
 
-    case(1)
-
-      !! In this example, we timestep a call to mini-cloud while slowly increasing the temperature
-      nlay = 1
-
-      n_wl = 11
-      allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
-
-      !! Wavelengths to calculate opacity
-      wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
-      wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
-
-      !! Allocate all variables, set constant values
-      allocate(Tl(nlay), pl(nlay), mu(nlay), nd_atm(nlay), rho(nlay))
-
-      !! Pressure in pa
-      pl(1) = 1e5_dp
-
-      !! Assume constant H2, He and H background VMR @ approx solar
-      allocate(VMR(nlay,3),sp_bg(3))
-      sp_bg = (/'H2','He','H '/)
-      VMR(1,1) = 0.85_dp
-      VMR(1,2) = 0.15_dp
-      VMR(1,3) = 1e-6_dp
-
-      !! Assume constant background gas mean molecular weight [g mol-1] @ approx solar
-      mu(1) = 2.33_dp
-
-      !! Assume constant gravity [m s-2]
-      grav = 10.0_dp
-
-      !! Assumed condensate species
-      sp = 'KCl'
-      rho_d = 1.99_dp
-      mol_w_sp = 74.551_dp
-
-      allocate(q_v(nlay), q_0(nlay), q_1(nlay), q_2(nlay))
-      allocate(r_c(nlay), m_c(nlay), vf_q(nlay,3))
-
-      !! Initial conditions
-      q_v(1) = 1.17e-7_dp  ! ~K abundance ratio at Solar (VMR)
-      q_0(1) = 1.0e-30_dp    ! ~Zero clouds at start 
-      q_1(1) = 1.0e-30_dp
-      q_2(1) = 1.0e-30_dp
-
-
-      !! Change vapur VMR to mass density ratio
-      q_v(1) = q_v(1) * mol_w_sp/mu(1)
-
-      m_seed = V_seed * rho_d
-
-      do n = 1, n_it
-
-        !! Start sinusoid temperature variation [K]
-        Tl(1) = 1600.0_dp + 1000.0_dp * sin(2.0_dp * 3.14_dp * 0.01_dp *  time)
-
-        !! Number density [cm-3] of layer
-        nd_atm(1) = (pl(1)*10.0_dp)/(kb*Tl(1))  
-
-        !! Mass density of layer
-        rho(1) = (pl(1)*10.0_dp*mu(1)*amu)/(kb * Tl(1)) ! Mass density [g cm-3]
-
-        !! Call mini-cloud and perform integrations for a single layer
-        call mini_cloud_3_lognormal(1, Tl(1), pl(1), grav, mu(1), VMR(1,:), t_step, sp, sp_bg, q_v(1), q_0(1), q_1(1), q_2(1))
-
-        !! Calculate settling velocity for this layer
-        call mini_cloud_vf(Tl(1), pl(1), grav, mu(1), VMR(1,:), rho_d, sp_bg, q_0(1), q_1(1), q_2(i), vf_q(1,:))
-
-        !! Calculate the opacity at the weavelength grid
-        call opac_mie(1, sp, Tl(1), mu(1), pl(1), q_0(1), q_1(1), rho_d, n_wl, wl(:), k_ext(1,:), ssa(1,:), g(1,:))
-
-        !! increment time
-        time = time + t_step
-
-        !! Print to screen current progress
-        print*, n, time, pl(1) * 1e-5_dp, 'bar ', Tl(1), 'K ', mu(1), 'g mol-1 ',  trim(sp)
-
-        !! Mean mass of particle [g]
-        m_c(1) = (q_1(1)*rho(1))/(q_0(1)*nd_atm(1))
-
-        !! Mass weighted mean radius of particle [um]
-        r_c(1) = ((3.0_dp*m_c(1))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp) * 1e4_dp
-
-        print*, 'q', n, q_v(1), q_0(1), q_1(1), q_2(1), vf_q(1,:)
-        print*, 'r', n, m_c(1), r_c(1), rho_d
-        print*, 'o', n, k_ext(1,1), ssa(1,1), g(1,1), k_ext(1,n_wl), ssa(1,n_wl), g(1,n_wl)
-
-        !! mini-cloud test output
-        call output(n, time, nlay)
-
-      end do
-
     case(2)
 
-      !! In this example we perform a 1D test of mini_cloud with diffusion and settling included
+      !! Y-dwarf test case: KCl + ZnS
+
+      nsp = 2
 
       nlay = 192
       nlev = nlay + 1
@@ -163,53 +71,41 @@ program test_mini_cloud_3
       n_wl = 11
       allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
 
-      !! Wavelengths to calculate opacity
       wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
-      wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
+      wl(:) = (wl_e(2:n_wl+1) + wl_e(1:n_wl))/ 2.0_dp
 
-      !! Allocate all variables, set constant values
-      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay))
+      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay), cp(nlay), dTdt(nlay))
 
-      !! Find pressure level grid - logspaced between p_top and p_bot
       p_top = 3e-3_dp * 1e5_dp
       p_bot = 300.0_dp * 1e5_dp
 
       p_top = log10(p_top)
       p_bot = log10(p_bot)
       do i = 1, nlev
-        pe(i) = 10.0_dp**((p_bot-p_top) * real(i-1,dp) / real(nlev-1,dp) + p_top) 
+        pe(i) = 10.0_dp**((p_bot-p_top) * real(i-1,dp) / real(nlev-1,dp) + p_top)
       end do
       do i = 1, nlay
-      pl(i) = (pe(i+1) - pe(i)) / log(pe(i+1)/pe(i))
+        pl(i) = (pe(i+1) - pe(i)) / log(pe(i+1)/pe(i))
       end do
       p_top = 10.0_dp**p_top
       p_bot = 10.0_dp**p_bot
 
-      !! Read T-p file and interpolate T
-      open(newunit=u,file='Y_400K_paper/Gao_2018_400_325.txt',action='read')
-      ! Read header
+      open(newunit=u,file='Y_400K_paper/Gao_2018_400_425.txt',action='read')
       read(u,*) ; read(u,*)
-    ! Find number of lines in file
       nlines = 0
       do
         read(u,*,iostat=io)
-        if (io /= 0) then 
-            exit
-        end if
+        if (io /= 0) exit
         nlines = nlines + 1
       end do
-      ! Allocate values for T-p profile
       allocate(T_f(nlines),p_f(nlines))
-      ! Rewind file
       rewind(u)
-      ! Read header again
       read(u,*); read(u,*)
       do i = 1, nlines
         read(u,*) T_f(i), p_f(i)
       end do
-      p_f(:) = p_f(:)*1e5_dp ! Convert to pa
+      p_f(:) = p_f(:)*1e5_dp
       close(u)
-      ! Interpolate to pressure grid
       do i = 1, nlay
         call locate(p_f(:), nlines, pl(i), idx)
         if (idx < 1) then
@@ -222,168 +118,349 @@ program test_mini_cloud_3
         end if
       end do
 
-      close(u)
-
-      !! Assume constant Kzz [cm2 s-1]
       Kzz(:) = 1e8_dp
+      mu(:) = 2.33_dp
+      grav = (10.0_dp**(4.25_dp))/100.0_dp
+      met = 0.0_dp
+      cp(:) = 1.3e4_dp
+      dTdt(:) = 0.0_dp
 
-      !! Print T-p-Kzz profile
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:))
+
       print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
       do i = 1, nlay
         print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i)
       end do
 
-      !! Assume constant background gas mean molecular weight [g mol-1] @ approx solar
-      mu(:) = 2.33_dp
-
-      !! Assume constant gravity [m s-2]
-      grav = (10.0_dp**(3.25_dp))/100.0_dp
-
-      !! Number density [cm-3] of layer
-      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))  
-
-      !! Mass density of layer
-      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:)) ! Mass density [g cm-3]
-
-      !! Assume constant H2, He and H background VMR @ approx solar
       allocate(VMR(nlay,2),sp_bg(2))
       sp_bg = (/'H2','He'/)
       VMR(:,1) = 0.85_dp
       VMR(:,2) = 0.15_dp
 
-      !! Assumed condensate species
-      sp = 'KCl'
-      rho_d = 1.99_dp
-      mol_w_sp = 74.5513_dp
+      allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp), mol_w_v(nsp))
+      sp = (/'KCl', 'ZnS'/)
+      rho_d = (/1.99_dp, 4.09_dp/)
+      mol_w_sp = (/74.551_dp, 97.445_dp/)
+      mol_w_v = (/74.551_dp, 65.38_dp/)
 
-      allocate(q_v(nlay), q_0(nlay), q_1(nlay), q_2(nlay), q0(4), q(nlay,4))
-      allocate(r_c(nlay), m_c(nlay), vf_q(nlay,3), r_c_old(nlay), del(nlay))
+      m_seed = V_seed * rho_d(1)
 
-      q_v(:) = 1e-30_dp
+      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q_2(nlay,nsp), q0(nsp*3+1), q(nlay,nsp*3+1))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay,2*nsp+1), r_c_old(nlay), del(nlay))
+
+      q_v(:,:) = 1e-30_dp
       q_0(:) = 1e-30_dp
-      q_1(:) = 1e-30_dp
-      q_2(:) = 1e-30_dp
+      q_1(:,:) = 1e-30_dp
+      q_2(:,:) = 1e-30_dp
 
-      q0(1) = 1.17e-7_dp * mol_w_sp/mu(nlay)
-      q0(2) = 1e-30_dp
-      q0(3) = 1e-30_dp
-      q0(4) = 1e-30_dp
-
-      m_seed = V_seed * rho_d
+      q0(1) = 1.17e-7_dp * mol_w_v(1)/mu(nlay)
+      q0(2) = 3.63e-8_dp * mol_w_v(2)/mu(nlay)
+      q0(3:) = 1e-30_dp
 
       time = 0.0_dp
       n = 0
-
-      r_c_old(:) = r_seed * 1e-4_dp
+      r_c_old(:) = r_seed * 1e4_dp
 
       do n = 1, n_it
 
-        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
-          !! Calculate settling velocity for this layer
-          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), q_2(i), vf_q(i,:))
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
+            & nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
+          vf(i,1)       = vf_tmp(1)
+          vf(i,2:nsp+1) = vf_tmp(2)
+          vf(i,nsp+2:)  = vf_tmp(3)
         end do
         !$omp end parallel do
 
-        q(:,1) = q_v(:)
-        q(:,2) = q_0(:)
-        q(:,3) = q_1(:)
-        q(:,4) = q_2(:)
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf_q(:,:), 3, q(:,2:4))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
 
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 4, q(:,:), q0(:))
-
-        q_v(:) = q(:,1)
-        q_0(:) = q(:,2)
-        q_1(:) = q(:,3)
-        q_2(:) = q(:,4)
-
-        !$omp parallel do default(shared), private(i), schedule(dynamic)
-        do i = 1, nlay
-          !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_3_lognormal(i, Tl(i), pl(i), grav, mu(i), VMR(i,:), t_step, sp, sp_bg, q_v(i), q_0(i), q_1(i), q_2(i))
-        end do
-        !$omp end parallel do
-
-        q(:,1) = q_v(:)
-        q(:,2) = q_0(:)
-        q(:,3) = q_1(:)
-        q(:,4) = q_2(:)
-
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 4, q(:,:), q0(:))
-
-        q_v(:) = q(:,1)
-        q_0(:) = q(:,2)
-        q_1(:) = q(:,3)
-        q_2(:) = q(:,4)
+        q_v(:,:) = q(:,1:nsp)
+        q_0(:) = q(:,nsp+1)
+        q_1(:,:) = q(:,nsp+2:2*nsp+1)
+        q_2(:,:) = q(:,2*nsp+2:)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
-          !! Re-calculate settling velocity for this layer
-          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, q_0(i), q_1(i), q_2(i), vf_q(i,:))
+          call mini_cloud_3_lognormal_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, &
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), dTdt(i))
         end do
         !$omp end parallel do
 
-        q(:,1) = q_v(:)
-        q(:,2) = q_0(:)
-        q(:,3) = q_1(:)
-        q(:,4) = q_2(:)
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf_q(:,:), 3, q(:,2:4))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
 
-        q_v(:) = q(:,1)
-        q_0(:) = q(:,2)
-        q_1(:) = q(:,3)
-        q_2(:) = q(:,4)
+        q_v(:,:) = q(:,1:nsp)
+        q_0(:) = q(:,nsp+1)
+        q_1(:,:) = q(:,nsp+2:2*nsp+1)
+        q_2(:,:) = q(:,2*nsp+2:)
 
-        !! Mean mass of particle [g]
-        m_c(:) = max((q_1(:)*rho)/(q_0(:)*nd_atm),m_seed)
+        !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
+        do i = 1, nlay
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
+            & nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
+          vf(i,1)       = vf_tmp(1)
+          vf(i,2:nsp+1) = vf_tmp(2)
+          vf(i,nsp+2:)  = vf_tmp(3)
+        end do
+        !$omp end parallel do
 
-        !! Mass weighted mean radius of particle [um]
-        r_c(:) = max(((3.0_dp*m_c(:))/(4.0_dp*pi*rho_d))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
+
+        q_v(:,:) = max(q(:,1:nsp),1e-30_dp)
+        q_0(:) = max(q(:,nsp+1),1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+2:2*nsp+1),1e-30_dp)
+        q_2(:,:) = max(q(:,2*nsp+2:),1e-30_dp)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+        end do
+        !$omp end parallel do
+
+        do i = 1, nlay
+          rho_c_tot = sum(q_1(i,:))*rho(i)
+          Nc = q_0(i)*nd_atm(i)
+          m_c(i) = max(rho_c_tot/Nc, m_seed)
+          rho_d_mean = 0.0_dp
+          do j = 1, nsp
+            rho_d_mean = rho_d_mean + (q_1(i,j)*rho(i))/rho_c_tot * rho_d(j)
+          end do
+          r_c(i) = max(((3.0_dp*m_c(i))/(4.0_dp*pi*rho_d_mean))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
+        end do
 
         end = .True.
-
         do i = 1, nlay
           del(i) = abs(r_c_old(i) - r_c(i))/r_c_old(i)
-          if ((del(i) > 1e-4_dp) .or.  (del(i)/t_step > 1e-4_dp)) then
-            end = .False.
-            exit
-          end if
+          if ((del(i) > 1e-4_dp) .or. (del(i)/t_step > 1e-4_dp)) end = .False.
         end do
         r_c_old(:) = r_c(:)
 
-        !! increment time
         time = time + t_step
 
-        !print*, n, time, maxval(del(:)/t_step)
+        call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
 
-        if ((end .eqv. .True.) .and. (n > int(1e7))) then
+        if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
-          print*, del(:)
-          print*, del(:)/t_step
           exit
         end if
 
-        if (mod(n,1) == 0) then 
-          call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
-        end if
-
-
       end do
-
-      print*, del(:)
-      print*, del(:)/t_step
 
       do i = 1, nlay
-        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_0(i), q_1(i), q_2(i), r_c(i), vf_q(i,:), q_0(i)*nd_atm(i)
+        print*, i, pl(i)/1e5_dp, Tl(i), q_v(i,:), q_0(i), q_1(i,:), r_c(i), vf(i,1), q_0(i)*nd_atm(i)
       end do
 
-      !! mini-cloud test output
       call output(n, time, nlay)
 
-    case default 
+    case(3)
+
+      !! L-T transition dwarf case: TiO2, Al2O3, Fe, Mg2SiO4
+
+      nsp = 4
+
+      nlay = 192
+      nlev = nlay + 1
+
+      n_wl = 11
+      allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
+
+      wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
+      wl(:) = (wl_e(2:n_wl+1) + wl_e(1:n_wl))/ 2.0_dp
+
+      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay), cp(nlay), dTdt(nlay))
+
+      p_top = 1e-4_dp * 1e5_dp
+      p_bot = 1000.0_dp * 1e5_dp
+
+      p_top = log10(p_top)
+      p_bot = log10(p_bot)
+      do i = 1, nlev
+        pe(i) = 10.0_dp**((p_bot-p_top) * real(i-1,dp) / real(nlev-1,dp) + p_top)
+      end do
+      do i = 1, nlay
+        pl(i) = (pe(i+1) - pe(i)) / log(pe(i+1)/pe(i))
+      end do
+      p_top = 10.0_dp**p_top
+      p_bot = 10.0_dp**p_bot
+
+      mu(:) = 2.33_dp
+      met = 0.0_dp
+      grav = (10.0_dp**(4.5_dp))/100.0_dp
+
+      T_eff = 1300.0_dp
+      k_ir = 1e-2_dp
+      do i = 1, nlay
+        tau = (k_ir * (pl(i) * 10.0_dp))/(grav*100.0_dp)
+        Tl(i) = (3.0_dp/4.0_dp * T_eff**4 * (2.0_dp/3.0_dp + tau))**(1.0_dp/4.0_dp)
+      end do
+
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:))
+
+      Kzz(:) = 1e8_dp
+      cp(:) = 1.3e4_dp
+      dTdt(:) = 0.0_dp
+
+      print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
+      do i = 1, nlay
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i)
+      end do
+
+      allocate(VMR(nlay,2),sp_bg(2))
+      sp_bg = (/'H2','He'/)
+      VMR(:,1) = 0.85_dp
+      VMR(:,2) = 0.15_dp
+
+      allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp), mol_w_v(nsp))
+      sp = (/'TiO2   ', 'Al2O3  ', 'Fe     ', 'Mg2SiO4'/)
+      rho_d = (/4.23_dp, 3.986_dp, 7.874_dp, 3.21_dp/)
+      mol_w_sp = (/79.866_dp, 101.961_dp, 55.845_dp, 140.693_dp/)
+      mol_w_v = (/79.866_dp, 26.98153860_dp, 55.845_dp, 24.305_dp/)
+
+      m_seed = V_seed * rho_d(1)
+
+      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q_2(nlay,nsp), q0(nsp*3+1), q(nlay,nsp*3+1))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay,2*nsp+1), r_c_old(nlay), del(nlay))
+
+      q_v(:,:) = 1e-30_dp
+      q_0(:) = 1e-30_dp
+      q_1(:,:) = 1e-30_dp
+      q_2(:,:) = 1e-30_dp
+
+      q0(1) = 9.33e-8_dp * mol_w_v(1)/mu(nlay)
+      q0(2) = 2.69e-6_dp * mol_w_v(2)/mu(nlay)
+      q0(3) = 2.88e-5_dp * mol_w_v(3)/mu(nlay)
+      q0(4) = 3.55e-5_dp * mol_w_v(4)/mu(nlay)
+      q0(5:) = 1e-30_dp
+
+      time = 0.0_dp
+      n = 0
+      r_c_old(:) = r_seed * 1e4_dp
+
+      do n = 1, n_it
+
+        !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
+        do i = 1, nlay
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
+            & nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
+          vf(i,1)       = vf_tmp(1)
+          vf(i,2:nsp+1) = vf_tmp(2)
+          vf(i,nsp+2:)  = vf_tmp(3)
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
+
+        q_v(:,:) = q(:,1:nsp)
+        q_0(:) = q(:,nsp+1)
+        q_1(:,:) = q(:,nsp+2:2*nsp+1)
+        q_2(:,:) = q(:,2*nsp+2:)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          call mini_cloud_3_lognormal_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, &
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), dTdt(i))
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
+
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
+
+        q_v(:,:) = q(:,1:nsp)
+        q_0(:) = q(:,nsp+1)
+        q_1(:,:) = q(:,nsp+2:2*nsp+1)
+        q_2(:,:) = q(:,2*nsp+2:)
+
+        !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
+        do i = 1, nlay
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
+            & nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
+          vf(i,1)       = vf_tmp(1)
+          vf(i,2:nsp+1) = vf_tmp(2)
+          vf(i,nsp+2:)  = vf_tmp(3)
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2:) = q_2(:,:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
+
+        q_v(:,:) = max(q(:,1:nsp),1e-30_dp)
+        q_0(:) = max(q(:,nsp+1),1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+2:2*nsp+1),1e-30_dp)
+        q_2(:,:) = max(q(:,2*nsp+2:),1e-30_dp)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+        end do
+        !$omp end parallel do
+
+        do i = 1, nlay
+          rho_c_tot = sum(q_1(i,:))*rho(i)
+          Nc = q_0(i)*nd_atm(i)
+          m_c(i) = max(rho_c_tot/Nc, m_seed)
+          rho_d_mean = 0.0_dp
+          do j = 1, nsp
+            rho_d_mean = rho_d_mean + (q_1(i,j)*rho(i))/rho_c_tot * rho_d(j)
+          end do
+          r_c(i) = max(((3.0_dp*m_c(i))/(4.0_dp*pi*rho_d_mean))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
+        end do
+
+        end = .True.
+        do i = 1, nlay
+          del(i) = abs(r_c_old(i) - r_c(i))/r_c_old(i)
+          if ((del(i) > 1e-4_dp) .or. (del(i)/t_step > 1e-4_dp)) end = .False.
+        end do
+        r_c_old(:) = r_c(:)
+
+        time = time + t_step
+
+        call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
+
+        if ((end .eqv. .True.) .and. (n > int(1e5))) then
+          print*, 'exit: ', n, n_it, end
+        end if
+
+      end do
+
+      do i = 1, nlay
+        print*, i, pl(i)/1e5_dp, Tl(i), q_v(i,:), q_0(i), q_1(i,:), r_c(i), vf(i,1), q_0(i)*nd_atm(i)
+      end do
+
+      call output(n, time, nlay)
+
+    case default
       print*, 'Invalid test case example: ', example
       stop
     end select
@@ -396,19 +473,28 @@ contains
     implicit none
     integer, intent(in) :: t, nlay
     double precision, intent(in) :: time
-    integer, save :: u1, u2
+    integer, save :: u1, u2, u3, u4
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_3_lognormal/tracers.txt',action='readwrite')
-      open(newunit=u2,file='results_3_lognormal/opac.txt',action='readwrite')
+      open(newunit=u1,file='results_3_lognormal_mix/tracers.txt',action='readwrite')
+      write(u1,*) nsp
+      write(u1,*) rho_d(:)
+      write(u1,*) mol_w_sp(:)
+      open(newunit=u2,file='results_3_lognormal_mix/opac_k.txt',action='readwrite')
       write(u2,*) wl(:)
+      open(newunit=u3,file='results_3_lognormal_mix/opac_a.txt',action='readwrite')
+      write(u3,*) wl(:)
+      open(newunit=u4,file='results_3_lognormal_mix/opac_g.txt',action='readwrite')
+      write(u4,*) wl(:)
       first_call = .False.
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_0(i), q_1(i), q_2(i), vf_q(i,:)
-      write(u2,*) t, time, k_ext(i,:), ssa(i,:), g(i,:)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), vf(i,:), dTdt(i)
+      write(u2,*) t, time, pl(i), k_ext(i,:)
+      write(u3,*) t, time, pl(i), ssa(i,:)
+      write(u4,*) t, time, pl(i), g(i,:)
     end do
 
   end subroutine output
@@ -419,11 +505,8 @@ contains
     integer, intent(in) :: n
     integer, intent(out) :: idx
     real(dp), dimension(n), intent(in) :: arr
-    real(dp),intent(in) ::  var
+    real(dp), intent(in) :: var
     integer :: jl, jm, ju
-
-    ! Search an array using bi-section (numerical methods)
-    ! Then return array index that is lower than var in arr
 
     jl = 0
     ju = n+1
@@ -453,7 +536,6 @@ contains
     end if
 
     norm = 1.0_dp / (x2 - x1)
-
     yval = (y1 * (x2 - xval) + y2 * (xval - x1)) * norm
 
   end subroutine linear_interp

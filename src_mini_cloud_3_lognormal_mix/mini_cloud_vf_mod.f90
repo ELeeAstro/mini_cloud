@@ -40,22 +40,26 @@ module mini_cloud_vf_mod
 
   contains
 
-  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, q_0, q_1, q_2, v_f)
+  subroutine mini_cloud_vf(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, &
+    & ndust, q_0, q_1, q_2, v_f)
     implicit none
 
     ! Input variables
+    integer, intent(in) :: ndust
     character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, rho_d, q_0, q_1, q_2
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, q_0
     real(dp), dimension(:), intent(in) :: bg_VMR_in
+    real(dp), dimension(ndust), intent(in) :: rho_d, q_1, q_2
 
-    real(dp), dimension(3), intent(out) :: v_f
+    real(dp), dimension(:), intent(out) :: v_f
 
-    integer :: n_bg
+    integer :: n_bg, j
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
-    real(dp) :: N_c, rho_c, Z_c, lnsig2, lnsig, sig
-    real(dp) :: m_med, m_c, m_n, r_med, r_c, m_c2, r_c2, r_n, m_seed
+    real(dp) :: N_c, lnsig, lnsig2, sig_g, Z_c_t
+    real(dp) :: m_med, m_c, m_c2, r_med, r_c, r_c2, r_n, m_seed, rho_c_t, rho_d_m
     real(dp) :: vf_s, vf_e, fx, Rey, St, Ep, exp_fac
+    real(dp), dimension(ndust) :: rho_c
 
     real(dp) :: Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
@@ -66,13 +70,7 @@ module mini_cloud_vf_mod
     p = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
 
     !! Number density [cm-3] of layer
-    nd_atm = p/(kb*T)  
-
-    !! Zero velocity if little amount of clouds
-    ! if (q_0*nd_atm < 1e-10_dp) then
-    !   v_f = 0.0_dp
-    !   return
-    ! end if
+    nd_atm = p/(kb*T)
 
     n_bg = size(bg_VMR_in)
     allocate(VMR_bg(n_bg))
@@ -90,104 +88,83 @@ module mini_cloud_vf_mod
     !! Thermal velocity
     cT = sqrt((2.0_dp * kb * T) / (mu * amu))
 
-    !! Calculate dynamical viscosity for this layer - do square root mixing law from Rosner 2012
+    !! Calculate dynamical viscosity for this layer
     call eta_construct(n_bg, sp_bg, VMR_bg, T, eta)
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
 
-    m_seed = V_seed * rho_d
+    m_seed = V_seed * rho_d(1)
 
     N_c = q_0 * nd_atm
-    rho_c = q_1 * rho
-    Z_c = q_2 * rho**2
+    rho_c(:) = q_1(:) * rho
+    rho_c_t = sum(rho_c(:))
+    Z_c_t = sum(q_2(:)) * rho**2
 
-    !! Calculate vf from final results of interaction
-    !! Mean mass of particle
-    m_c = rho_c/N_c
-    m_c2 = Z_c/rho_c
+    !! Mean mass and mass^2-weighted mean mass
+    m_c  = max(rho_c_t/N_c, m_seed)
+    m_c2 = max(Z_c_t/rho_c_t, m_seed)
 
-    !! Calculate log(sigma_g)**2
-    lnsig = sqrt(max(log((N_c*Z_c)/(rho_c**2)),0.0_dp))
-    sig = max(exp(lnsig),1.01_dp)
-    sig = min(sig,3.0_dp)
+    !! Volume-fraction weighted bulk density
+    rho_d_m = 0.0_dp
+    do j = 1, ndust
+      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * rho_d(j)
+    end do
 
-    lnsig2 = log(sig)**2
+    !! Lognormal distribution parameters from total moments
+    lnsig = sqrt(max(log((N_c * Z_c_t) / rho_c_t**2), 0.0_dp))
+    sig_g = max(exp(lnsig), 1.01_dp)
+    sig_g = min(sig_g, 3.0_dp)
+    lnsig2 = log(sig_g)**2
 
-    !! Mean mass of particle
-    m_c = max(rho_c/N_c, m_seed)
-    m_med = max(m_c * exp(-0.5_dp * lnsig2),m_seed)
-    m_c2 = max(Z_c/rho_c, m_seed)
+    !! Median mass and radii
+    m_med = max(m_c * exp(-0.5_dp * lnsig2), m_seed)
+    r_med = max(((3.0_dp*m_med)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
+    r_n   = max(r_med * exp(1.0_dp/18.0_dp * lnsig2), r_seed)
+    r_c   = max(((3.0_dp*m_c  )/(4.0_dp*pi*rho_d_m))**(third), r_seed)
+    r_c2  = max(((3.0_dp*m_c2 )/(4.0_dp*pi*rho_d_m))**(third), r_seed)
 
-    !! Mass weighted mean radii of particle
-    r_med = max(((3.0_dp*m_med)/(4.0_dp*pi*rho_d))**(third), r_seed)
-    r_n =  max(r_med * exp(1.0_dp/18.0_dp * lnsig2), r_seed)
-    r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d))**(third), r_seed)
-    r_c2 = max(((3.0_dp*m_c2)/(4.0_dp*pi*rho_d))**(third), r_seed)
-
-
-    !! Monodisperse Knudsen number
-    Kn = mfp/r_med
+    !! Monodisperse Knudsen number (based on median radius)
+    Kn   = mfp/r_med
     Kn_b = min(Kn, 100.0_dp)
 
-    !! Population averaged Knudsen number for n, m and m^2
-    Kn_n = Kn * exp(1.0_dp/18.0_dp * lnsig2)
-    Kn_m = Kn * exp(-5.0_dp/18.0_dp * lnsig2)
+    !! Population-averaged Knudsen numbers for each moment
+    Kn_n  = Kn * exp( 1.0_dp/18.0_dp * lnsig2)
+    Kn_m  = Kn * exp(-5.0_dp/18.0_dp * lnsig2)
     Kn_m2 = Kn * exp(-11.0_dp/18.0_dp * lnsig2)
 
-    !! Now find moment dependent settling velocities
-    St = (2.0_dp * grav * r_med**2 * (rho_d - rho))/(9.0_dp * eta) 
-    Ep = (sqrt(pi)*grav*rho_d*r_med)/(2.0_dp*cT*rho)
+    !! Stokes and Epstein velocity scale factors (use median radius and rho_d_m)
+    St = (2.0_dp * grav * r_med**2 * (rho_d_m - rho))/(9.0_dp * eta)
+    Ep = (sqrt(pi)*grav*rho_d_m*r_med)/(2.0_dp*cT*rho)
 
-    !! Zeroth moment
-    !! Settling velocity (Stokes regime)
-    Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    !! Zeroth moment (q_0 — number density)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_n**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
     exp_fac = exp(2.0_dp/9.0_dp * lnsig2) + A*Kn_b*exp(1.0_dp/18.0_dp * lnsig2)
     vf_s = St * exp_fac * Rey
-
-    !! Settling velocity (Epstein regime)
     exp_fac = exp(1.0_dp/18.0_dp * lnsig2)
     vf_e = Ep * exp_fac
-
-    !! tanh interpolation function
     fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_n)))
+    v_f(1) = max(fx*vf_s + (1.0_dp - fx)*vf_e, 1e-30_dp)
 
-    !! Interpolation for settling velocity
-    v_f(1) = fx*vf_s + (1.0_dp - fx)*vf_e
-
-    !! First moment
-    !! Settling velocity (Stokes regime)
-    Rey = (1.0_dp + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    !! First moment (q_1)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_c**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
     exp_fac = exp(8.0_dp/9.0_dp * lnsig2) + A*Kn_b*exp(7.0_dp/18.0_dp * lnsig2)
     vf_s = St * exp_fac * Rey
-
-    !! Settling velocity (Epstein regime)
     exp_fac = exp(7.0_dp/18.0_dp * lnsig2)
     vf_e = Ep * exp_fac
-
-    !! tanh interpolation function
     fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m)))
+    v_f(2) = max(fx*vf_s + (1.0_dp - fx)*vf_e, 1e-30_dp)
 
-    !! Interpolation for settling velocity
-    v_f(2) = fx*vf_s + (1.0_dp - fx)*vf_e
-
-    !! Second moment
-    !! Settling velocity (Stokes regime)
-    Rey = (1.0_dp + ((0.45_dp*grav*r_c2**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+    !! Second moment (q_2)
+    Rey = (1.0_dp + ((0.45_dp*grav*r_c2**3*rho*rho_d_m)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
     exp_fac = exp(14.0_dp/9.0_dp * lnsig2) + A*Kn_b*exp(13.0_dp/18.0_dp * lnsig2)
     vf_s = St * exp_fac * Rey
-
-    !! Settling velocity (Epstein regime)
     exp_fac = exp(13.0_dp/18.0_dp * lnsig2)
     vf_e = Ep * exp_fac
-
-    !! tanh interpolation function
     fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Kn_m2)))
+    v_f(3) = max(fx*vf_s + (1.0_dp - fx)*vf_e, 1e-30_dp)
 
-    !! Interpolation for settling velocity
-    v_f(3) = fx*vf_s + (1.0_dp - fx)*vf_e
-
-    deallocate(d_g, LJ_g, molg_g, eta_g)
+    deallocate(d_g, LJ_g, molg_g, eta_g, VMR_bg)
 
   end subroutine mini_cloud_vf
 
