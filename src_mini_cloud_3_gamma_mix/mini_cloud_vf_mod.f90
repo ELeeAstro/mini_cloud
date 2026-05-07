@@ -47,9 +47,9 @@ module mini_cloud_vf_mod
     ! Input variables
     integer, intent(in) :: ndust
     character(len=20), dimension(:), intent(in) :: sp_bg
-    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, q_0
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, q_0, q_2
     real(dp), dimension(:), intent(in) :: bg_VMR_in
-    real(dp), dimension(ndust), intent(in) :: rho_d, q_1, q_2
+    real(dp), dimension(ndust), intent(in) :: rho_d, q_1
 
     real(dp), dimension(:), intent(out) :: v_f
 
@@ -57,7 +57,7 @@ module mini_cloud_vf_mod
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
     real(dp) :: N_c, sig2, lam, nu, Z_c_t
-    real(dp) :: m_c, r_c, m_c2, r_c2, r_n, m_seed, rho_c_t, rho_d_m
+    real(dp) :: m_c, r_c, m_c2, r_c2, r_n, m_seed, rho_c_t, rho_d_m, V_tot
     real(dp) :: vf_s, vf_e, fx, Rey, St, Ep, gam_fac, lgnu, lgnu1, lgnu2
     real(dp), dimension(ndust) :: rho_c
 
@@ -105,17 +105,19 @@ module mini_cloud_vf_mod
     N_c = q_0 * nd_atm
     rho_c(:) = q_1(:) * rho
     rho_c_t = sum(rho_c(:))
-    Z_c_t = sum(q_2(:)) * rho**2
+    Z_c_t = q_2 * rho**2
     
     !! Mean mass of particle
     m_c = max(rho_c_t/N_c,m_seed)
     m_c2 = max(Z_c_t/rho_c_t,m_seed)
 
-    !! Average bulk density of particles
-    rho_d_m = 0.0_dp
-    do j = 1, ndust
-      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * rho_d(j)
-    end do
+    !! Average bulk density of mixed particles from additive material volumes
+    V_tot = sum(rho_c(:)/rho_d(:))
+    if (V_tot > 0.0_dp) then
+      rho_d_m = rho_c_t/V_tot
+    else
+      rho_d_m = rho_d(1)
+    end if
 
     !! Calculate lambda and nu gamma distribution parameters
     sig2 = max(Z_c_t/N_c - (rho_c_t/N_c)**2,m_seed**2)

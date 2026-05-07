@@ -1,58 +1,62 @@
-import numpy as np
-import matplotlib.pylab as plt
+import argparse
+import os
+
+import matplotlib.pyplot as plt
 import seaborn as sns
 
+from common import load_opacity
 
-wl = np.loadtxt('opac_k.txt',max_rows=1)
-nwl = len(wl)
 
-data_k = np.loadtxt('opac_k.txt',skiprows=1)
-pl_k = data_k[:,2]/1e6
-k_ext = data_k[:,3:]
+def main():
+    parser = argparse.ArgumentParser(description="Plot opacity tables.")
+    parser.add_argument("--dir", default=".", help="Directory containing opac_k/a/g.txt")
+    parser.add_argument("--prefix", default="opac", help="Opacity file prefix")
+    args = parser.parse_args()
 
-data_a = np.loadtxt('opac_a.txt',skiprows=1)
-pl_a = data_a[:,2]/1e6
-ssa = data_a[:,3:]
+    cwd = os.getcwd()
+    os.chdir(args.dir)
+    try:
+        opac = load_opacity(args.prefix)
+    finally:
+        os.chdir(cwd)
 
-data_g = np.loadtxt('opac_g.txt',skiprows=1)
-pl_g = data_g[:,2]/1e6
-g = data_g[:,3:]
+    wl = opac["wl"]
+    pl = opac["pl"]
+    nwl = len(wl)
 
-fig = plt.figure()
+    fig = plt.figure()
+    col = sns.color_palette("husl", nwl)
+    for i in range(nwl):
+        plt.plot(opac["k_ext"][:, i], pl, c=col[i], label=f"{wl[i]:.2f}")
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.gca().invert_yaxis()
+    plt.xlabel(r"$\kappa_{\rm ext}$")
+    plt.ylabel(r"$p$ [bar]")
+    plt.legend()
 
-col = sns.color_palette("husl", nwl)
+    fig = plt.figure()
+    col = sns.color_palette("husl", nwl)
+    for i in range(nwl):
+        plt.plot(opac["ssa"][:, i], pl, c=col[i], label=f"{wl[i]:.2f}")
+    plt.yscale("log")
+    plt.gca().invert_yaxis()
+    plt.xlabel("single-scattering albedo")
+    plt.ylabel(r"$p$ [bar]")
+    plt.legend()
 
-for i in range(nwl):
-  plt.plot(k_ext[:,i],pl_k[:],c=col[i],label='{:.2f}'.format(wl[i]))
+    fig = plt.figure()
+    col = sns.color_palette("husl", nwl)
+    for i in range(nwl):
+        plt.plot(opac["g"][:, i], pl, c=col[i], label=f"{wl[i]:.2f}")
+    plt.yscale("log")
+    plt.gca().invert_yaxis()
+    plt.xlabel(r"$g$")
+    plt.ylabel(r"$p$ [bar]")
+    plt.legend()
 
-plt.yscale('log')
-plt.xscale('log')
+    plt.show()
 
-plt.gca().invert_yaxis()
-plt.legend()
 
-fig = plt.figure()
-
-col = sns.color_palette("husl", nwl)
-
-for i in range(nwl):
-  plt.plot(ssa[:,i],pl_a[:],c=col[i],label='{:.2f}'.format(wl[i]))
-
-plt.yscale('log')
-
-plt.gca().invert_yaxis()
-plt.legend()
-
-fig = plt.figure()
-
-col = sns.color_palette("husl", nwl)
-
-for i in range(nwl):
-  plt.plot(g[:,i],pl_g[:],c=col[i],label='{:.2f}'.format(wl[i]))
-
-plt.yscale('log')
-
-plt.gca().invert_yaxis()
-plt.legend()
-
-plt.show()
+if __name__ == "__main__":
+    main()

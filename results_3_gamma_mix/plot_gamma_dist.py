@@ -1,118 +1,105 @@
-import numpy as np
-import matplotlib.pylab as plt
-import seaborn as sns
+import argparse
+import os
+
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
-from scipy.special import gamma
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from scipy.special import gammaln
+
+from common import load_tracers, compute_bulk
 
 
-kb = 1.380649e-16
-amu = 1.66053906660e-24
-r_seed = 1e-7
-V_seed = 4.0/3.0 * np.pi * r_seed**3
+def gamma_distribution(tr, bulk, n_radius=1000, r_min_um=1.0e-3, r_max_um=1.0e2):
+    r_cm = np.logspace(np.log10(r_min_um), np.log10(r_max_um), n_radius) * 1.0e-4
+    r_um = r_cm * 1.0e4
 
-fname = 'tracers.txt'
+    rho_d_m = bulk["rho_d_m"]
+    N_c = bulk["N_c"]
+    nu = bulk["nu"]
+    lam = bulk["lam"]
+    rho_c_t = bulk["rho_c_t"]
 
-ndust = 4
-rho_d = [4.23, 3.986, 7.874, 3.21]
-m_seed = V_seed * rho_d[0]
+    m = 4.0 / 3.0 * np.pi * r_cm[:, None] ** 3 * rho_d_m[None, :]
 
-fig, ax =  plt.subplots()
+    valid = (N_c > 0.0) & (rho_c_t > 0.0) & (nu > 0.0) & (lam > 0.0)
+    mf = np.full_like(m, np.nan)
 
-na = 1000
+    if np.any(valid):
+        log_m = np.log(np.maximum(m[:, valid], 1.0e-300))
+        nu_v = nu[valid][None, :]
+        lam_v = lam[valid][None, :]
+        log_fx = (
+            np.log(np.maximum(N_c[valid], 1.0e-300))[None, :]
+            - nu_v * np.log(lam_v)
+            - gammaln(nu_v)
+            + (nu_v - 1.0) * log_m
+            - m[:, valid] / lam_v
+            + log_m
+        )
+        mf[:, valid] = np.exp(log_fx)
 
-r_min = r_seed
-r_max = 100.0 * 1e-4
+    return r_um, mf, valid
 
-m_min = 4.0/3.0 * np.pi * r_min**3 * rho_d[0]
-m_max = 4.0/3.0 * np.pi * r_max**3 * rho_d[0]
 
-m = np.logspace(np.log10(m_min),np.log10(m_max),na)
+def main():
+    parser = argparse.ArgumentParser(
+        description="Plot gamma particle mass distributions from scalar-q2 mixed-cloud output."
+    )
+    parser.add_argument("file", nargs="?", default=None)
+    parser.add_argument("--dir", default=".", help="Directory containing tracers.txt")
+    parser.add_argument("--stride", type=int, default=5, help="Plot every Nth pressure layer")
+    parser.add_argument("--output", "-o", default=None)
+    parser.add_argument("--rmin", type=float, default=1.0e-3, help="Minimum radius [micron]")
+    parser.add_argument("--rmax", type=float, default=1.0e2, help="Maximum radius [micron]")
+    parser.add_argument("--ymin", type=float, default=1.0e-3)
+    parser.add_argument("--ymax", type=float, default=1.0e1)
+    args = parser.parse_args()
 
-data = np.loadtxt(fname,skiprows=3)
+    path = args.file or os.path.join(args.dir, "tracers.txt")
+    tr = load_tracers(path)
+    bulk = compute_bulk(tr, nu_max=10.0)
+    pl = tr["P_bar"]
 
-Tl = data[:,2]
-pl = data[:,3]/1e5
-grav = data[:,4]
-mu = data[:,5]
-VMR = data[:,6:8]
-q_v = data[:,8:12]
-q_0 = data[:,12]
-q_1 = data[:,13:17]
-q_2 = data[:,17:21]
-vf = data[:,21:30]
-dTdt = data[:,30]
+    r_um, mf, valid = gamma_distribution(
+        tr,
+        bulk,
+        n_radius=1000,
+        r_min_um=args.rmin,
+        r_max_um=args.rmax,
+    )
 
-nlay = len(pl)
+    fig, ax = plt.subplots()
+    logp = np.log10(pl)
+    normalize = mcolors.Normalize(vmin=np.nanmin(logp), vmax=np.nanmax(logp))
+    cmap = sns.color_palette("crest", as_cmap=True)
 
-nd_atm = np.zeros(nlay)
-nd_atm[:] = (pl[:]*1e6)/(kb*Tl[:])
+    for i in range(0, len(pl), args.stride):
+        if valid[i] and np.any(np.isfinite(mf[:, i])):
+            ax.plot(r_um, mf[:, i], c=cmap(normalize(np.log10(pl[i]))))
 
-nd = np.zeros(nlay)
-nd[:] = q_0[:]*nd_atm[:]
+    scalarmappable = cm.ScalarMappable(norm=normalize, cmap=cmap)
+    cbar = fig.colorbar(scalarmappable, ax=ax)
+    cticks = np.linspace(np.nanmin(logp), np.nanmax(logp), 10)
+    cbar.set_ticks(cticks)
+    cbar.ax.tick_params(labelsize=12)
+    cbar.ax.set_ylabel(r"$\log_{10}$ $p$ [bar]", fontsize=14)
 
-rho = np.zeros(nlay)
-rho[:] = (pl[:]*1e6*mu[:]*amu)/(kb * Tl[:])
+    ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.tick_params(axis="both", which="major", labelsize=14)
+    ax.set_xlabel(r"$r$ [$\mu$m]", fontsize=16)
+    ax.set_ylabel(r"$m \cdot f(m)$ [cm$^{-3}$]", fontsize=16)
+    ax.set_ylim(args.ymin, args.ymax)
+    ax.set_xlim(args.rmin, args.rmax)
 
-rho_c = np.zeros((nlay,ndust))
-rho_c_t = np.zeros(nlay)
-for j in range(ndust):
-  rho_c[:,j] = q_1[:,j]*rho[:]
-  rho_c_t[:] = rho_c_t[:] + rho_c[:,j]
+    fig.tight_layout(pad=1.05)
+    if args.output:
+        fig.savefig(args.output, dpi=200, bbox_inches="tight")
+    else:
+        plt.show()
 
-m_c = np.zeros(nlay)
-m_c[:] = np.maximum(rho_c_t[:]/q_0[:]/nd_atm[:],m_seed)
 
-rho_d_m = np.zeros(nlay)
-for j in range(ndust):
-  rho_d_m[:] = rho_d_m[:] + (rho_c[:,j])/rho_c_t[:] * rho_d[j]
-
-r_c = np.zeros(nlay)
-r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d_m[:]))**(1.0/3.0),r_seed) * 1e4
-
-sig2 = np.zeros(nlay)
-sig2[:] = np.maximum(np.sum(q_2[:,:],axis=1)*rho[:]**2/q_0[:]/nd_atm[:] - m_c[:]**2,m_seed**2)
-
-nu = np.zeros(nlay)
-nu[:] = m_c[:]**2/sig2[:]
-nu[:] = np.minimum(nu[:],10.0)
-
-lam = np.zeros(nlay)
-lam[:] = m_c[:]/nu[:]
-
-fx = np.zeros((na,nlay))
-rr = np.zeros((na,nlay))
-for n in range(na):
-  fx[n,:] = nd[:]/(lam[:]**nu[:]*gamma(nu[:])) * m[n]**(nu[:] - 1.0) * np.exp(-m[n]/lam[:]) * m[n]
-  rr[n,:] = ((3.0*m[n])/(4.0*np.pi*rho_d_m[:]))**(1.0/3.0)
-
-normalize = mcolors.Normalize(vmin=np.log10(pl[0]), vmax=np.log10(pl[-1]))
-cmap = sns.color_palette("crest", as_cmap=True)
-
-for i in range(0,nlay,5):
-  if nu[i] >= 0.001:
-    plt.plot(rr[:,i]*1e4,fx[:,i],c=cmap(normalize(np.log10(pl[i]))))
-
-scalarmappaple = cm.ScalarMappable(norm=normalize, cmap=cmap)
-scalarmappaple.set_array(np.log10(pl))
-cbar = plt.colorbar(scalarmappaple,ax=ax)
-
-cticks = np.linspace(np.log10(pl[0]),np.log10(pl[-1]),10)
-cbar.set_ticks(cticks)
-cbar.ax.tick_params(labelsize=12)
-cbar.ax.set_ylabel(r'$\log_{10}$ $p$ [bar]',fontsize=14)
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.tick_params(axis='both',which='major',labelsize=14)
-
-plt.xlabel(r'$r$ [$\mu$m]',fontsize=16)
-plt.ylabel(r'$m$ $\cdot$ $f(m)$ [cm$^{-3}$]',fontsize=16)
-
-plt.ylim(1e-3,1e1)
-plt.xlim(1e-3,1e2)
-
-plt.tight_layout(pad=1.05, h_pad=None, w_pad=None, rect=None)
-
-plt.show()
+if __name__ == "__main__":
+    main()

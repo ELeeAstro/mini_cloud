@@ -97,8 +97,8 @@ module mini_cloud_3_gamma_mix_mod
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
     ! Input/Output tracer values
-    real(dp), intent(inout) :: q_0
-    real(dp), dimension(n_in), intent(inout) :: q_v, q_1, q_2
+    real(dp), intent(inout) :: q_0, q_2
+    real(dp), dimension(n_in), intent(inout) :: q_v, q_1
     real(dp), intent(out) :: dTdt
 
     integer :: ncall
@@ -125,7 +125,7 @@ module mini_cloud_3_gamma_mix_mod
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
-    n_eq = ndust*3+1
+    n_eq = 2*ndust + 2
 
     !! Find the number density of the atmosphere
     T = T_in             ! Convert temperature to K
@@ -211,10 +211,11 @@ module mini_cloud_3_gamma_mix_mod
     allocate(y(n_eq))
 
     !! Give tracer values to y
+    !! y = [q_0, q_1(:), q_2, q_v(:)]
     y(1) = q_0
     y(2:2+ndust-1) = q_1(:)
-    y(2+ndust:2+ndust+ndust-1) = q_2(:)
-    y(2+ndust+ndust:) = q_v(:)
+    y(2+ndust) = q_2
+    y(3+ndust:2+2*ndust) = q_v(:)
 
     !! Save initial value for q_1
     q_1_old(:) = q_1(:)
@@ -254,8 +255,8 @@ module mini_cloud_3_gamma_mix_mod
     !! Give y values to tracers
     q_0 = y(1)
     q_1(:) = y(2:2+ndust-1)
-    q_2(:) = y(2+ndust:2+ndust+ndust-1)
-    q_v(:) = y(2+ndust+ndust:)
+    q_2 = y(2+ndust)
+    q_v(:) = y(3+ndust:2+2*ndust)
 
     !! We can now calculate the temperature tendency from the change in condensed mass of each material
     Q_latent = sum(cld(:)%lh * (q_1_old(:) - q_1(:)))
@@ -278,13 +279,13 @@ module mini_cloud_3_gamma_mix_mod
     real(dp), dimension(2) :: vf
 
     integer :: j
-    real(dp) :: N_c, rho_c_t, rho_d_m, V_tot, Z_c_t, x_seed
+    real(dp) :: N_c, rho_c_t, rho_d_m, V_tot, Z_c_t, x_seed, J_seed
     real(dp) :: Ep, fx, gam_fac, Rey, St, vf_e, vf_s
-    real(dp), dimension(ndust) :: rho_c, rho_v, V_mix, Z_c
+    real(dp), dimension(ndust) :: rho_c, rho_v, V_mix
     real(dp), dimension(ndust) :: p_v, n_v
     real(dp), dimension(ndust) :: f_nuc_hom, f_cond1, f_cond2, f_seed_evap
 
-    real(dp) :: sig2, nu, lam, lgnu, lgnu1, lgnu2, gi_m1_3
+    real(dp) :: sig2, nu, lam, lgnu, lgnu1, lgnu2, gi_m1_3, dZ_nuc, dZ_cond, dZ_coll
 
     real(dp), parameter :: A = 1.639_dp
 
@@ -294,12 +295,13 @@ module mini_cloud_3_gamma_mix_mod
 
     !! Limit y values
     y(:) = max(y(:),1e-30_dp)
+    f(:) = 0.0_dp
 
     !! Convert y to real physical numbers to calculate f
     N_c = y(1)*nd_atm ! Convert to real number density
     rho_c(:) = y(2:2+ndust-1)*rho         ! Convert to real mass density
-    Z_c(:) = y(2+ndust:2+2*ndust-1)*rho**2 ! Convert to real second mass moment density
-    rho_v(:) = y(2+2*ndust:)*rho          ! Convert to real mass density
+    Z_c_t = y(2+ndust)*rho**2             ! Convert to real total second mass moment density
+    rho_v(:) = y(3+ndust:2+2*ndust)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
     p_v(:) = rho_v(:) * cld(:)%Rd_v * T     !! Pressure of vapour
@@ -308,17 +310,21 @@ module mini_cloud_3_gamma_mix_mod
     !! Total condensed mass density
     rho_c_t = sum(rho_c(:))
 
-    !! Total 2ns moment
-    Z_c_t = sum(Z_c(:))
+    !! Total 2nd moment is carried by the single mixed particle distribution
 
     !! Mean mass of particle
     m_c = max(rho_c_t/N_c, cld(1)%m_seed)
 
-    !! Net bulk density of the particles
-    rho_d_m = 0.0_dp
-    do j = 1, ndust
-      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * cld(j)%rho_d
-    end do
+    !! Net bulk density of the mixed particles from additive material volumes
+    V_tot = sum(rho_c(:)/cld(:)%rho_d) ! Total condensed volume
+    if (V_tot > 0.0_dp) then
+      rho_d_m = rho_c_t/V_tot
+      V_mix(:) = (rho_c(:)/cld(:)%rho_d)/V_tot ! Condensed volume mixing ratio
+    else
+      rho_d_m = cld(1)%rho_d
+      V_mix(:) = 0.0_dp
+      V_mix(1) = 1.0_dp
+    end if
 
     !! Calculate lambda and nu gamma distribution parameters
     sig2 = max(Z_c_t/N_c - (rho_c_t/N_c)**2,cld(1)%m_seed**2)
@@ -426,26 +432,13 @@ module mini_cloud_3_gamma_mix_mod
     !! Calculate the coalescence rate
     call calc_coal(r_c, r_n, vf, nu, Kn_n, Kn_m, f_coal0, f_coal2)
 
-    !! Calculate final net flux rate for each moment and vapour
-    f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag0 + f_coal0)*N_c**2
-    f(2:2+ndust-1) = x_seed*(f_nuc_hom(:) + f_seed_evap(:)) + f_cond1(:)*N_c
-    f(2+ndust:2+2*ndust-1) = x_seed**2*(f_nuc_hom(:) + f_seed_evap(:)) + &
-      & 2.0_dp*f_cond2(:)*rho_c(:) + (f_coag2 + f_coal2)*rho_c(:)**2
-    f(2+2*ndust:) = -x_seed*(f_nuc_hom(:) + f_seed_evap(:)) - cld(:)%v2c*f_cond1(:)*N_c
-
-    !! Convert f to ratios
-    f(1) = f(1)/nd_atm
-    f(2:2+ndust-1) = f(2:2+ndust-1)/rho
-    f(2+ndust:2+2*ndust-1) = f(2+ndust:2+2*ndust-1)/rho**2
-    f(2+2*ndust:) = f(2+2*ndust:)/rho
-
     ! Check if condensation from vapour is viable
     do j = 1, ndust
       if (rho_v(j)/rho <= 1e-28_dp) then
-        if (f(2+j-1) > 0.0_dp) then
-          f(2+j-1) = 0.0_dp
-          f(2+ndust+j-1) = 0.0_dp
-          f(2+2*ndust+j-1) = 0.0_dp
+        if (f_cond1(j) > 0.0_dp) then
+          f_cond1(j) = 0.0_dp
+          f_cond2(j) = 0.0_dp
+          f_nuc_hom(j) = 0.0_dp
          !print*, j,'in'
         end if
       end if
@@ -454,14 +447,37 @@ module mini_cloud_3_gamma_mix_mod
     ! Check if evaporation from condensate is viable
     do j = 1, ndust
       if (rho_c(j)/rho <= 1e-28_dp) then
-        if (f(2+2*ndust+j-1) > 0.0_dp) then
-          f(2+j-1) = 0.0_dp
-          f(2+ndust+j-1) = 0.0_dp
-          f(2+2*ndust+j-1) = 0.0_dp
+        if (f_cond1(j) < 0.0_dp) then
+          f_cond1(j) = 0.0_dp
+          f_cond2(j) = 0.0_dp
+          f_seed_evap(j) = 0.0_dp
          !print*, j,'in'
         end if
       end if
     end do
+
+    !! Calculate final net flux rate for each moment and vapour
+    !! Species 1 is the seed material that creates/removes particles.
+    J_seed = f_nuc_hom(1) + f_seed_evap(1)
+
+    f(1) = J_seed + (f_coag0 + f_coal0)*N_c**2
+
+    f(2:2+ndust-1) = f_cond1(:)*N_c
+    f(2) = f(2) + x_seed*J_seed
+
+    dZ_nuc = x_seed**2 * J_seed
+    dZ_cond = 2.0_dp * rho_c_t * sum(f_cond2(:))
+    dZ_coll = (f_coag2 + f_coal2)*rho_c_t**2
+    f(2+ndust) = dZ_nuc + dZ_cond + dZ_coll
+
+    f(3+ndust:2+2*ndust) = -cld(:)%v2c*f_cond1(:)*N_c
+    f(3+ndust) = f(3+ndust) - x_seed*J_seed
+
+    !! Convert f to ratios
+    f(1) = f(1)/nd_atm
+    f(2:2+ndust-1) = f(2:2+ndust-1)/rho
+    f(2+ndust) = f(2+ndust)/rho**2
+    f(3+ndust:2+2*ndust) = f(3+ndust:2+2*ndust)/rho
 
   end subroutine RHS_mom
 

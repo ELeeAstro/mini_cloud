@@ -1,129 +1,113 @@
-import numpy as np
-import matplotlib.pylab as plt
+import argparse
+import os
+
+import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
+
+from common import load_tracers, compute_bulk, vapour_mol_weights, equilibrium_mass_fraction
 
 
-R = 8.31446261815324e7
-kb = 1.380649e-16
-amu = 1.66053906660e-24
-r_seed = 1e-7
-V_seed = 4.0/3.0 * np.pi * r_seed**3
+def main():
+    parser = argparse.ArgumentParser(description="Plot scalar-q2 gamma mixed-cloud results.")
+    parser.add_argument("file", nargs="?", default=None)
+    parser.add_argument("--dir", default=".", help="Directory containing tracers.txt")
+    parser.add_argument("--met", type=float, default=0.0, help="Metallicity used in some saturation fits")
+    args = parser.parse_args()
 
-fname = 'tracers.txt'
+    path = args.file or os.path.join(args.dir, "tracers.txt")
+    tr = load_tracers(path)
+    bulk = compute_bulk(tr)
 
-ndust = int(np.loadtxt(fname, max_rows=1))
-rho_d = np.loadtxt(fname, skiprows=1, max_rows=1)
-mol_w_sp = np.loadtxt(fname, skiprows=2, max_rows=1)
-data = np.loadtxt(fname, skiprows=3)
+    T = tr["T"]
+    pl = tr["P_bar"]
+    q_v = tr["q_v"]
+    q_0 = tr["q_0"]
+    q_1 = tr["q_1"]
+    q_2 = tr["q_2"]
+    dTdt = tr["dTdt"]
+    vf = tr["v_f"]
+    ndust = tr["ndust"]
+    sp_tex = tr["species_tex"]
 
-Tl = data[:,2]
-pl = data[:,3]/1e5
-grav = data[:,4]
-mu = data[:,5]
-VMR = data[:,6:8]
-q_v = data[:,8:8+ndust]
-q_0 = data[:,8+ndust]
-q_1 = data[:,9+ndust:9+2*ndust]
-q_2 = data[:,9+2*ndust:9+3*ndust]
-vf = data[:,9+3*ndust:10+5*ndust]
-dTdt = data[:,10+5*ndust]
+    mol_w_v = vapour_mol_weights(tr["species"], tr["mol_w_sp"])
+    q_s = equilibrium_mass_fraction(tr["species"], T, pl, bulk["rho"], mol_w_v, met=args.met)
 
-nlay = len(pl)
+    col = sns.color_palette("colorblind", max(8, ndust + 3))
 
-nd_atm = np.zeros(nlay)
-nd_atm[:] = (pl[:]*1e6)/(kb*Tl[:])
+    # --- Mixing ratios ---
+    plt.figure()
+    for j in range(ndust):
+        plt.plot(q_v[:, j], pl, c=col[j], label=sp_tex[j] + r" $q_{\rm v}$")
+        plt.plot(q_1[:, j], pl, c=col[j], ls="dashed", label=sp_tex[j] + r" $q_1$")
+        if np.any(np.isfinite(q_s[:, j])):
+            plt.plot(q_s[:, j], pl, c=col[j], ls="dotted", label=sp_tex[j] + r" $q_{\rm s}$")
+    plt.plot(q_0, pl, c=col[ndust], ls="dashdot", label=r"$q_0$")
+    plt.plot(q_2, pl, c=col[ndust + 1], ls=":", label=r"$q_2$ total")
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.gca().invert_yaxis()
+    plt.xlabel(r"$q$")
+    plt.ylabel(r"$p$ [bar]")
+    plt.legend(fontsize=8)
 
-rho = np.zeros(nlay)
-rho[:] = (pl[:]*1e6*mu[:]*amu)/(kb * Tl[:])
+    # --- Number density and radius ---
+    plt.figure()
+    plt.plot(bulk["N_c"], pl, c=col[0], label=r"$N_{\rm c}$")
+    plt.plot(bulk["r_c"], pl, c=col[1], label=r"$r_{\rm c}$ [$\mu$m]")
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.gca().invert_yaxis()
+    plt.xlabel(r"$N_{\rm c}$ [cm$^{-3}$] / $r_{\rm c}$ [$\mu$m]")
+    plt.ylabel(r"$p$ [bar]")
+    plt.legend()
 
-N_c = np.zeros(nlay)
-N_c[:] = q_0[:]*nd_atm[:]
+    # --- Volume fractions ---
+    plt.figure()
+    for j in range(ndust):
+        plt.plot(bulk["V_mix"][:, j], pl, c=col[j], label=sp_tex[j])
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.gca().invert_yaxis()
+    plt.xlabel(r"$V_{\rm mix}$")
+    plt.ylabel(r"$p$ [bar]")
+    plt.legend()
 
-rho_c = np.zeros((nlay,ndust))
-rho_c_t = np.zeros(nlay)
-for j in range(ndust):
-  rho_c[:,j] = q_1[:,j]*rho[:]
-  rho_c_t[:] = rho_c_t[:] + rho_c[:,j]
+    # --- Settling velocities ---
+    plt.figure()
+    plt.plot(vf[:, 0], pl, c=col[0], label=r"$v_{{\rm f},0}$")
+    for j in range(ndust):
+        plt.plot(vf[:, 1 + j], pl, c=col[j + 1], label=sp_tex[j] + r" $q_1$")
+    plt.plot(vf[:, ndust + 1], pl, c=col[ndust + 1], ls="dashed", label=r"$q_2$ total")
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.gca().invert_yaxis()
+    plt.xlabel(r"$v_{\rm f}$ [cm s$^{-1}$]")
+    plt.ylabel(r"$p$ [bar]")
+    plt.legend(fontsize=8)
 
-m_seed = V_seed * rho_d[0]
+    # --- Gamma shape parameter ---
+    plt.figure()
+    plt.plot(bulk["nu"], pl, c=col[0], label=r"$\nu$")
+    plt.plot(bulk["lam"], pl, c=col[1], label=r"$\lambda$ [g]")
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.gca().invert_yaxis()
+    plt.xlabel(r"$\nu$ / $\lambda$")
+    plt.ylabel(r"$p$ [bar]")
+    plt.legend()
 
-m_c = np.zeros(nlay)
-m_c[:] = np.maximum(rho_c_t[:]/N_c[:],m_seed)
+    if dTdt is not None:
+        plt.figure()
+        plt.plot(dTdt, pl, c=col[0], label=r"$dT/dt$")
+        plt.yscale("log")
+        plt.gca().invert_yaxis()
+        plt.xlabel(r"$dT/dt$ [K s$^{-1}$]")
+        plt.ylabel(r"$p$ [bar]")
+        plt.legend()
 
-rho_d_m = np.zeros(nlay)
-for j in range(ndust):
-  rho_d_m[:] = rho_d_m[:] + (rho_c[:,j])/rho_c_t[:] * rho_d[j]
+    plt.show()
 
-r_c = np.zeros(nlay)
-r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d_m[:]))**(1.0/3.0),r_seed) * 1e4
 
-V_mix = np.zeros((nlay,ndust))
-for j in range(nlay):
-  V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
-
-sig2 = np.zeros(nlay)
-sig2[:] = np.maximum(np.sum(q_2[:,:],axis=1)*rho[:]**2/N_c[:] - m_c[:]**2,m_seed**2)
-
-nu = np.zeros(nlay)
-nu[:] = m_c[:]**2/sig2[:]
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-for j in range(ndust):
-  plt.plot(q_v[:,j],pl,c=col[j])
-  plt.plot(q_1[:,j],pl,c=col[j],ls='dashed')
-  plt.plot(q_2[:,j],pl,c=col[j],ls='dotted')
-plt.plot(q_0,pl,c=col[ndust],ls='dashdot')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(N_c,pl,c=col[0],label=r'N_{\rm c}')
-plt.plot(r_c,pl,c=col[1],label=r'r_{\rm c}')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-for j in range(ndust):
-  plt.plot(V_mix[:,j],pl,c=col[j])
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(nu,pl,c=col[0],label=r'$\nu$')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(dTdt,pl,c=col[0],label=r'$dTdt$')
-
-plt.yscale('log')
-plt.gca().invert_yaxis()
-
-plt.show()
+if __name__ == "__main__":
+    main()
