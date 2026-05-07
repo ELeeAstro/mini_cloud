@@ -1,128 +1,87 @@
-import numpy as np
-import matplotlib.pylab as plt
-import seaborn as sns
+#!/usr/bin/env python3
+"""Generic diagnostic plotting script for scalar-q_2 mixed-grain results."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+
+from common import compute_bulk, finish_figure, load_tracers, setup_pressure_axis, species_label
 
 
-R = 8.31446261815324e7
-kb = 1.380649e-16
-amu = 1.66053906660e-24
-r_seed = 1e-7
-V_seed = 4.0/3.0 * np.pi * r_seed**3
+def _save_path(save_dir: Path | None, name: str) -> Path | None:
+    return None if save_dir is None else save_dir / name
 
-fname = 'tracers.txt'
 
-ndust = int(np.loadtxt(fname, max_rows=1))
-rho_d = np.loadtxt(fname, skiprows=1, max_rows=1)
-mol_w_sp = np.loadtxt(fname, skiprows=2, max_rows=1)
-data = np.loadtxt(fname, skiprows=3)
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file", default="tracers.txt", help="Path to tracers.txt")
+    parser.add_argument("--save-dir", default=None, help="Directory for PNG output")
+    parser.add_argument("--no-show", action="store_true")
+    args = parser.parse_args()
 
-Tl = data[:,2]
-pl = data[:,3]/1e5
-grav = data[:,4]
-mu = data[:,5]
-VMR = data[:,6:8]
-q_v = data[:,8:8+ndust]
-q_0 = data[:,8+ndust]
-q_1 = data[:,9+ndust:9+2*ndust]
-q_2 = data[:,9+2*ndust:9+3*ndust]
-vf = data[:,9+3*ndust:10+5*ndust]
-dTdt = data[:,10+5*ndust]
+    tr = load_tracers(args.file)
+    bulk = compute_bulk(tr)
+    p = tr["p_bar"]
+    species = tr["species"]
+    save_dir = Path(args.save_dir) if args.save_dir else None
+    show = not args.no_show
+    colours = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
-nlay = len(pl)
+    fig, ax = plt.subplots()
+    for j, name in enumerate(species):
+        c = colours[j % len(colours)]
+        ax.plot(tr["q_v"][:, j], p, color=c, label=rf"{species_label(name)} $q_{{\rm v}}$")
+        ax.plot(tr["q_1"][:, j], p, color=c, linestyle="--", label=rf"{species_label(name)} $q_1$")
+    ax.plot(tr["q_0"], p, color=colours[len(species) % len(colours)], linestyle="-.", label=r"$q_0$")
+    if tr["q_2"] is not None:
+        ax.plot(tr["q_2"], p, color=colours[(len(species)+1) % len(colours)], linestyle=":", label=r"$q_{2,\rm tot}$")
+    setup_pressure_axis(ax, p)
+    ax.set_xscale("log")
+    ax.set_xlabel("mixing ratio / moment variable")
+    ax.legend(fontsize=8)
+    finish_figure(fig, _save_path(save_dir, "generic_tracers.png"), show)
 
-nd_atm = np.zeros(nlay)
-nd_atm[:] = (pl[:]*1e6)/(kb*Tl[:])
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twiny()
+    p1, = ax1.plot(bulk["r_c"], p, color=colours[0], label=r"$r_{\rm c}$")
+    p2, = ax2.plot(bulk["N_c"], p, color=colours[1], linestyle="--", label=r"$N_{\rm c}$")
+    setup_pressure_axis(ax1, p)
+    ax1.set_xscale("log")
+    ax2.set_xscale("log")
+    ax1.set_xlabel(r"$r_{\rm c}$ [$\mu$m]")
+    ax2.set_xlabel(r"$N_{\rm c}$ [cm$^{-3}$]")
+    ax1.legend([p1, p2], [p1.get_label(), p2.get_label()], loc="best")
+    finish_figure(fig, _save_path(save_dir, "generic_radius_number.png"), show)
 
-rho = np.zeros(nlay)
-rho[:] = (pl[:]*1e6*mu[:]*amu)/(kb * Tl[:])
+    fig, ax = plt.subplots()
+    for j, name in enumerate(species):
+        ax.plot(bulk["V_mix"][:, j], p, color=colours[j % len(colours)], label=species_label(name))
+    setup_pressure_axis(ax, p)
+    ax.set_xscale("log")
+    ax.set_xlabel("volume fraction")
+    ax.legend()
+    finish_figure(fig, _save_path(save_dir, "generic_volume_fraction.png"), show)
 
-N_c = np.zeros(nlay)
-N_c[:] = q_0[:]*nd_atm[:]
+    if "sig_g" in bulk:
+        fig, ax = plt.subplots()
+        ax.plot(bulk["sig_g"], p, color=colours[0], label=r"$\sigma_g$")
+        setup_pressure_axis(ax, p)
+        ax.set_xscale("log")
+        ax.set_xlabel(r"$\sigma_g$")
+        ax.legend()
+        finish_figure(fig, _save_path(save_dir, "generic_sigma_g.png"), show)
 
-rho_c = np.zeros((nlay,ndust))
-rho_c_t = np.zeros(nlay)
-for j in range(ndust):
-  rho_c[:,j] = q_1[:,j]*rho[:]
-  rho_c_t[:] = rho_c_t[:] + rho_c[:,j]
+    if tr["dTdt"] is not None:
+        fig, ax = plt.subplots()
+        ax.plot(tr["dTdt"], p, color=colours[0], label=r"$dT/dt$")
+        setup_pressure_axis(ax, p)
+        ax.set_xlabel(r"$dT/dt$ [K s$^{-1}$]")
+        ax.legend()
+        finish_figure(fig, _save_path(save_dir, "generic_dTdt.png"), show)
 
-m_seed = V_seed * rho_d[0]
 
-m_c = np.zeros(nlay)
-m_c[:] = np.maximum(rho_c_t[:]/N_c[:],m_seed)
-
-rho_d_m = np.zeros(nlay)
-for j in range(ndust):
-  rho_d_m[:] = rho_d_m[:] + (rho_c[:,j])/rho_c_t[:] * rho_d[j]
-
-r_c = np.zeros(nlay)
-r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d_m[:]))**(1.0/3.0),r_seed) * 1e4
-
-V_mix = np.zeros((nlay,ndust))
-for j in range(nlay):
-  V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
-
-Z_c_t = np.sum(q_2[:,:],axis=1)*rho[:]**2
-lnsig_raw = np.sqrt(np.maximum(np.log(N_c[:] * Z_c_t[:] / rho_c_t[:]**2), 0.0))
-sig_g = np.clip(np.exp(lnsig_raw), 1.01, 3.0)
-lnsig2 = np.log(sig_g)**2
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-for j in range(ndust):
-  plt.plot(q_v[:,j],pl,c=col[j])
-  plt.plot(q_1[:,j],pl,c=col[j],ls='dashed')
-  plt.plot(q_2[:,j],pl,c=col[j],ls='dotted')
-plt.plot(q_0,pl,c=col[ndust],ls='dashdot')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(N_c,pl,c=col[0],label=r'$N_{\rm c}$')
-plt.plot(r_c,pl,c=col[1],label=r'$r_{\rm c}$')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-for j in range(ndust):
-  plt.plot(V_mix[:,j],pl,c=col[j])
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(sig_g,pl,c=col[0],label=r'$\sigma_g$')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(dTdt,pl,c=col[0],label=r'$dT/dt$')
-
-plt.yscale('log')
-plt.gca().invert_yaxis()
-
-plt.show()
+if __name__ == "__main__":
+    main()

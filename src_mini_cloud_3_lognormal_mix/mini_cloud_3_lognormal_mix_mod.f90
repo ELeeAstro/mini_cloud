@@ -90,11 +90,12 @@ module mini_cloud_3_lognormal_mix_mod
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, t_end, met_in, cp_in
     real(dp), dimension(:), intent(in) :: bg_VMR_in
 
-    real(dp), intent(inout) :: q_0
-    real(dp), dimension(n_in), intent(inout) :: q_v, q_1, q_2
+    real(dp), intent(inout) :: q_0, q_2
+    real(dp), dimension(n_in), intent(inout) :: q_v, q_1
     real(dp), intent(out) :: dTdt
 
     integer :: ncall
+    integer :: i_q0, i_q1_s, i_q1_e, i_q2, i_qv_s, i_qv_e
 
     real(dp) :: t_now
 
@@ -113,7 +114,19 @@ module mini_cloud_3_lognormal_mix_mod
 
     ndust = n_in
 
-    n_eq = ndust*3 + 1
+    ! State vector for one internally mixed grain population:
+    !   y(1)              = q_0, total particle number mixing ratio
+    !   y(2:1+ndust)     = q_1(:), per-material condensed mass mixing ratios
+    !   y(2+ndust)       = q_2, total mixed-particle second mass moment / rho**2
+    !   y(3+ndust:...)   = q_v(:), per-material vapour mass mixing ratios
+    n_eq = 2*ndust + 2
+
+    i_q0   = 1
+    i_q1_s = 2
+    i_q1_e = 1 + ndust
+    i_q2   = 2 + ndust
+    i_qv_s = 3 + ndust
+    i_qv_e = 2 + 2*ndust
 
     T = T_in
     p = P_in * 10.0_dp
@@ -167,10 +180,10 @@ module mini_cloud_3_lognormal_mix_mod
 
     allocate(y(n_eq))
 
-    y(1) = q_0
-    y(2:2+ndust-1) = q_1(:)
-    y(2+ndust:2+ndust+ndust-1) = q_2(:)
-    y(2+ndust+ndust:) = q_v(:)
+    y(i_q0) = q_0
+    y(i_q1_s:i_q1_e) = q_1(:)
+    y(i_q2) = q_2
+    y(i_qv_s:i_qv_e) = q_v(:)
 
     q_1_old(:) = q_1(:)
 
@@ -198,10 +211,10 @@ module mini_cloud_3_lognormal_mix_mod
 
     y(:) = max(y(:),1e-30_dp)
 
-    q_0 = y(1)
-    q_1(:) = y(2:2+ndust-1)
-    q_2(:) = y(2+ndust:2+ndust+ndust-1)
-    q_v(:) = y(2+ndust+ndust:)
+    q_0 = y(i_q0)
+    q_1(:) = y(i_q1_s:i_q1_e)
+    q_2 = y(i_q2)
+    q_v(:) = y(i_qv_s:i_qv_e)
 
     Q_latent = sum(cld(:)%lh * (q_1_old(:) - q_1(:)))
     dTdt = -Q_latent/(cp*t_end)
@@ -218,48 +231,63 @@ module mini_cloud_3_lognormal_mix_mod
     real(dp), dimension(n_eq), intent(inout) :: y
     real(dp), dimension(n_eq), intent(inout) :: f
 
+    integer :: j
+    integer :: i_q0, i_q1_s, i_q1_e, i_q2, i_qv_s, i_qv_e
+
     real(dp) :: f_coag0, f_coag2, f_coal0, f_coal2
     real(dp) :: m_c, m_med, m_n, r_c, r_med, r_n
     real(dp) :: beta, vf_s, vf_e, vf, fx
-
-    integer :: j
     real(dp) :: N_c, rho_c_t, rho_d_m, Z_c_t, x_seed
     real(dp) :: lnsig, lnsig2, sig_g
     real(dp) :: Kn, Kn_b, Kn_n, Kn_m, Kn_m2
-    real(dp), dimension(ndust) :: rho_c, rho_v, V_mix, Z_c
+    real(dp) :: vol_sum, J_seed, dZ_nuc, dZ_cond, dZ_coll
+
+    real(dp), dimension(ndust) :: rho_c, rho_v, V_mix
     real(dp), dimension(ndust) :: p_v, n_v
     real(dp), dimension(ndust) :: f_nuc_hom, f_cond1, f_cond2, f_seed_evap
 
-    y(:) = max(y(:),1e-30_dp)
+    i_q0   = 1
+    i_q1_s = 2
+    i_q1_e = 1 + ndust
+    i_q2   = 2 + ndust
+    i_qv_s = 3 + ndust
+    i_qv_e = 2 + 2*ndust
 
-    N_c = y(1)*nd_atm
-    rho_c(:) = y(2:2+ndust-1)*rho
-    Z_c(:) = y(2+ndust:2+2*ndust-1)*rho**2
-    rho_v(:) = y(2+2*ndust:)*rho
+    y(:) = max(y(:),1e-30_dp)
+    f(:) = 0.0_dp
+
+    N_c      = y(i_q0)*nd_atm
+    rho_c(:) = y(i_q1_s:i_q1_e)*rho
+    Z_c_t    = y(i_q2)*rho**2
+    rho_v(:) = y(i_qv_s:i_qv_e)*rho
 
     p_v(:) = rho_v(:) * cld(:)%Rd_v * T
     n_v(:) = p_v(:)/(kb*T)
 
     rho_c_t = sum(rho_c(:))
-    Z_c_t = sum(Z_c(:))
+    x_seed = cld(1)%m_seed
 
-    m_c = max(rho_c_t/N_c, cld(1)%m_seed)
+    m_c = max(rho_c_t/N_c, x_seed)
 
-    rho_d_m = 0.0_dp
-    do j = 1, ndust
-      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * cld(j)%rho_d
-    end do
+    ! Additive-volume mixed-material density for compact internally mixed grains.
+    vol_sum = sum(rho_c(:)/cld(:)%rho_d)
+    if (vol_sum > 0.0_dp) then
+      rho_d_m = rho_c_t / vol_sum
+      V_mix(:) = (rho_c(:)/cld(:)%rho_d) / vol_sum
+    else
+      rho_d_m = cld(1)%rho_d
+      V_mix(:) = 0.0_dp
+      V_mix(1) = 1.0_dp
+    end if
 
-    V_mix(:) = (rho_c(:)/cld(:)%rho_d) / sum(rho_c(:)/cld(:)%rho_d)
-
-    !! Lognormal sigma_g from moments
+    ! Lognormal sigma_g from the total mixed-particle mass moments.
     lnsig = sqrt(max(log((N_c*Z_c_t)/(rho_c_t**2)),0.0_dp))
     sig_g = max(exp(lnsig),1.01_dp)
     sig_g = min(sig_g,3.0_dp)
     lnsig2 = log(sig_g)**2
 
-    m_med = max(m_c * exp(-0.5_dp * lnsig2), cld(1)%m_seed)
-    m_n   = max(m_med * exp(0.5_dp * lnsig2), cld(1)%m_seed)
+    m_med = max(m_c * exp(-0.5_dp * lnsig2), x_seed)
+    m_n   = max(m_med * exp(0.5_dp * lnsig2), x_seed)
 
     r_med = max(((3.0_dp*m_med)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
     r_n   = max(((3.0_dp*m_n)  /(4.0_dp*pi*rho_d_m))**(third), r_seed)
@@ -286,6 +314,19 @@ module mini_cloud_3_lognormal_mix_mod
 
     call calc_cond(ndust, r_med, Kn, Kn_m, Kn_m2, n_v, V_mix, lnsig2, f_cond1, f_cond2)
 
+    ! Prevent unphysical growth from depleted vapour and unphysical evaporation
+    ! of a material that is absent from the mixed grains.
+    do j = 1, ndust
+      if ((rho_v(j)/rho <= 1e-28_dp) .and. (f_cond1(j) > 0.0_dp)) then
+        f_cond1(j) = 0.0_dp
+        f_cond2(j) = 0.0_dp
+      end if
+      if ((rho_c(j)/rho <= 1e-28_dp) .and. (f_cond1(j) < 0.0_dp)) then
+        f_cond1(j) = 0.0_dp
+        f_cond2(j) = 0.0_dp
+      end if
+    end do
+
     call calc_hom_nuc(ndust, n_v, f_nuc_hom)
 
     call calc_seed_evap(ndust, N_c, m_c, f_cond1, f_seed_evap)
@@ -294,41 +335,30 @@ module mini_cloud_3_lognormal_mix_mod
 
     call calc_coal(r_med, r_n, r_c, vf, lnsig2, Kn_n, Kn_m, f_coal0, f_coal2)
 
-    x_seed = cld(1)%m_seed
+    ! This mixed-grain closure assumes species 1 is the unique seed-forming
+    ! material. Other materials change the composition of the same particle
+    ! population by surface growth/evaporation.
+    J_seed = f_nuc_hom(1) + f_seed_evap(1)
 
-    f(1) = (f_nuc_hom(1) + f_seed_evap(1)) + (f_coag0 + f_coal0)*N_c**2
-    f(2:2+ndust-1) = x_seed*(f_nuc_hom(:) + f_seed_evap(:)) + f_cond1(:)*N_c
-    f(2+ndust:2+2*ndust-1) = x_seed**2*(f_nuc_hom(:) + f_seed_evap(:)) + &
-      & 2.0_dp*f_cond2(:)*rho_c(:) + (f_coag2 + f_coal2)*rho_c(:)**2
-    f(2+2*ndust:) = -x_seed*(f_nuc_hom(:) + f_seed_evap(:)) - cld(:)%v2c*f_cond1(:)*N_c
+    f(i_q0) = J_seed + (f_coag0 + f_coal0)*N_c**2
 
-    f(1) = f(1)/nd_atm
-    f(2:2+ndust-1) = f(2:2+ndust-1)/rho
-    f(2+ndust:2+2*ndust-1) = f(2+ndust:2+2*ndust-1)/rho**2
-    f(2+2*ndust:) = f(2+2*ndust:)/rho
+    f(i_q1_s:i_q1_e) = f_cond1(:)*N_c
+    f(i_q1_s) = f(i_q1_s) + x_seed*J_seed
 
-    do j = 1, ndust
-      if (rho_v(j)/rho <= 1e-28_dp) then
-        if (f(2+j-1) > 0.0_dp) then
-          f(2+j-1) = 0.0_dp
-          f(2+ndust+j-1) = 0.0_dp
-          f(2+2*ndust+j-1) = 0.0_dp
-        end if
-      end if
-    end do
+    dZ_nuc  = x_seed**2 * J_seed
+    dZ_cond = 2.0_dp * rho_c_t * sum(f_cond2(:))
+    dZ_coll = (f_coag2 + f_coal2) * rho_c_t**2
+    f(i_q2) = dZ_nuc + dZ_cond + dZ_coll
 
-    do j = 1, ndust
-      if (rho_c(j)/rho <= 1e-28_dp) then
-        if (f(2+2*ndust+j-1) > 0.0_dp) then
-          f(2+j-1) = 0.0_dp
-          f(2+ndust+j-1) = 0.0_dp
-          f(2+2*ndust+j-1) = 0.0_dp
-        end if
-      end if
-    end do
-    
+    f(i_qv_s:i_qv_e) = -cld(:)%v2c*f_cond1(:)*N_c
+    f(i_qv_s) = f(i_qv_s) - x_seed*J_seed
+
+    f(i_q0) = f(i_q0)/nd_atm
+    f(i_q1_s:i_q1_e) = f(i_q1_s:i_q1_e)/rho
+    f(i_q2) = f(i_q2)/rho**2
+    f(i_qv_s:i_qv_e) = f(i_qv_s:i_qv_e)/rho
+
   end subroutine RHS_mom
-
   subroutine calc_cond(ndust, r_med, Kn, Kn_m, Kn_m2, n_v, V_mix, lnsig2, dmdt1, dmdt2)
     implicit none
 

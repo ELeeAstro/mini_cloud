@@ -1,191 +1,137 @@
+#!/usr/bin/env python3
+"""Diagnostic plots for the two-species KCl/ZnS mixed-grain case.
+
+Updated for the scalar total q_2 layout produced by the single-distribution
+lognormal mixed-grain model.
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.pylab as plt
-import seaborn as sns
 
-R = 8.31446261815324e7
-kb = 1.380649e-16
-amu = 1.66053906660e-24
-r_seed = 1e-7
-V_seed = 4.0/3.0 * np.pi * r_seed**3
-
-fname = 'tracers.txt'
-
-ndust = 2
-rho_d = [1.99, 3.9]
-mol_w_sp = [74.5513, 97.4450]
-mol_w_v = [74.5513, 97.4450]
-sp = ['KCl','ZnS']
-
-Rd_v = [R/mol_w_v[0],R/mol_w_v[1]]
-m_seed = V_seed * rho_d[0]
-
-data = np.loadtxt(fname,skiprows=3)
-
-Tl = data[:,2]
-pl = data[:,3]/1e5
-grav = data[:,4]
-mu = data[:,5]
-VMR = data[:,6:8]
-q_v = data[:,8:10]
-q_0 = data[:,10]
-q_1 = data[:,11:13]
-q_2 = data[:,13:15]
-vf = data[:,15:20]
-dTdt = data[:,20]
-
-nlay = len(pl)
-
-nd_atm = np.zeros(nlay)
-nd_atm[:] = (pl[:]*1e6)/(kb*Tl[:])
-
-rho = np.zeros(nlay)
-rho[:] = (pl[:]*1e6*mu[:]*amu)/(kb * Tl[:])
-
-N_c = np.zeros(nlay)
-N_c[:] = q_0[:]*nd_atm[:]
-
-rho_c = np.zeros((nlay,ndust))
-rho_c_t = np.zeros(nlay)
-for j in range(ndust):
-  rho_c[:,j] = q_1[:,j]*rho[:]
-  rho_c_t[:] = rho_c_t[:] + rho_c[:,j]
-
-m_c = np.zeros(nlay)
-m_c[:] = np.maximum(rho_c_t[:]/N_c[:],m_seed)
-
-rho_d_m = np.zeros(nlay)
-for j in range(ndust):
-  rho_d_m[:] = rho_d_m[:] + (rho_c[:,j])/rho_c_t[:] * rho_d[j]
-
-r_c = np.zeros(nlay)
-r_c[:] = np.maximum(((3.0*m_c[:])/(4.0*np.pi*rho_d_m[:]))**(1.0/3.0),r_seed) * 1e4
-
-q_s = np.zeros((nlay,ndust))
-q_s[:,0] = np.exp(-2.69250e4/Tl[:] + 3.39574e+1 - 2.04903e-3*Tl[:]  -2.83957e-7*Tl[:]**2 + 1.82974e-10*Tl[:]**3)/(Rd_v[0] * Tl[:])
-q_s[:,0] = q_s[:,0]/rho[:]
-
-q_s[:,1] = np.exp(-4.75507888e4/Tl[:] + 3.66993865e1 - 2.49490016e-3*Tl[:] + 7.29116854e-7*Tl[:]**2 - 1.12734453e-10*Tl[:]**3)/(Rd_v[1] * Tl[:])
-q_s[:,1] = q_s[:,1]/rho[:]
-
-V_mix = np.zeros((nlay,ndust))
-for j in range(nlay):
-  V_mix[j,:] = rho_c[j,:]/rho_d[:]/(sum(rho_c[j,:]/rho_d[:]))
-
-m_mix = np.zeros((nlay,ndust))
-for j in range(nlay):
-  m_mix[j,:] = rho_c[j,:]/sum(rho_c[j,:])
-
-Z_c_t = np.sum(q_2[:,:],axis=1)*rho[:]**2
-lnsig_raw = np.sqrt(np.maximum(np.log(N_c[:] * Z_c_t[:] / rho_c_t[:]**2), 0.0))
-sig_g = np.clip(np.exp(lnsig_raw), 1.01, 3.0)
-lnsig2 = np.log(sig_g)**2
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(dTdt,pl,c=col[0])
-
-plt.yscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-for j in range(ndust):
-  plt.plot(m_mix[:,j],pl,c=col[j])
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-for j in range(ndust):
-  plt.plot(V_mix[:,j],pl,c=col[j])
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(vf[:,0],pl,c=col[0],label=r'$v_{{\rm f},0}$')
-plt.plot(vf[:,1],pl,c=col[1],label=r'$v_{{\rm f},1,{\rm KCl}}$')
-plt.plot(vf[:,2],pl,c=col[2],label=r'$v_{{\rm f},1,{\rm ZnS}}$')
-plt.plot(vf[:,3],pl,c=col[3],label=r'$v_{{\rm f},2,{\rm KCl}}$')
-plt.plot(vf[:,4],pl,c=col[4],label=r'$v_{{\rm f},2,{\rm ZnS}}$')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-plt.legend()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(N_c,pl,c=col[0],label=r'$N_{\rm c}$')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(r_c,pl,c=col[1],label=r'$r_{\rm c}$')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(q_v[:,0],pl,c=col[0],label=sp[0]+r' $q_{\rm v}$')
-plt.plot(q_v[:,1],pl,c=col[1],label=sp[1]+r' $q_{\rm v}$')
-
-plt.plot(q_1[:,0],pl,c=col[0],label=r'$q_{1}$',ls='dashed')
-plt.plot(q_1[:,1],pl,c=col[1],ls='dashed')
-
-plt.plot(q_s[:,0],pl,c=col[0],label=r'$q_{\rm s}$',ls='dotted')
-plt.plot(q_s[:,1],pl,c=col[1],ls='dotted')
-
-plt.plot(q_2[:,0],pl,c=col[0],ls='dashdot')
-plt.plot(q_2[:,1],pl,c=col[1],ls='dashdot')
-
-plt.plot(q_0,pl,c=col[4],label=r'$q_{0}$')
-
-plt.legend()
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-fig = plt.figure()
-
-col = sns.color_palette('colorblind')
-
-plt.plot(sig_g,pl,c=col[4],label=r'$\sigma_g$')
-
-plt.yscale('log')
-plt.xscale('log')
-
-plt.gca().invert_yaxis()
-
-plt.show()
+from common import (
+    compute_bulk,
+    equilibrium_mass_fraction,
+    finish_figure,
+    load_tracers,
+    setup_pressure_axis,
+    species_label,
+    vapour_mol_weights,
+)
+
+
+def _save_path(save_dir: Path | None, name: str) -> Path | None:
+    return None if save_dir is None else save_dir / name
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file", default="tracers.txt", help="Path to tracers.txt")
+    parser.add_argument("--save-dir", default=None, help="Directory for PNG output")
+    parser.add_argument("--no-show", action="store_true", help="Save/construct plots without opening windows")
+    args = parser.parse_args()
+
+    save_dir = Path(args.save_dir) if args.save_dir else None
+    show = not args.no_show
+
+    tr = load_tracers(args.file)
+    if tr["ndust"] != 2:
+        raise ValueError(f"plot_example_2.py expects ndust=2, got ndust={tr['ndust']}")
+
+    bulk = compute_bulk(tr)
+    p = tr["p_bar"]
+    species = tr["species"]
+    q_s = equilibrium_mass_fraction(
+        species,
+        tr["T"],
+        tr["p_bar"],
+        bulk["rho"],
+        vapour_mol_weights(species, tr["mol_w_sp"]),
+    )
+
+    colours = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+    fig, ax = plt.subplots()
+    ax.plot(tr["dTdt"], p, color=colours[0])
+    setup_pressure_axis(ax, p)
+    ax.set_xlabel(r"$dT/dt$ [K s$^{-1}$]")
+    finish_figure(fig, _save_path(save_dir, "case2_dTdt.png"), show)
+
+    fig, ax = plt.subplots()
+    for j, name in enumerate(species):
+        ax.plot(bulk["m_mix"][:, j], p, label=species_label(name), color=colours[j])
+    setup_pressure_axis(ax, p)
+    ax.set_xscale("log")
+    ax.set_xlabel("mass fraction")
+    ax.legend()
+    finish_figure(fig, _save_path(save_dir, "case2_mass_fraction.png"), show)
+
+    fig, ax = plt.subplots()
+    for j, name in enumerate(species):
+        ax.plot(bulk["V_mix"][:, j], p, label=species_label(name), color=colours[j])
+    setup_pressure_axis(ax, p)
+    ax.set_xscale("log")
+    ax.set_xlabel("volume fraction")
+    ax.legend()
+    finish_figure(fig, _save_path(save_dir, "case2_volume_fraction.png"), show)
+
+    fig, ax = plt.subplots()
+    vf = tr["v_f"]
+    ax.plot(vf[:, 0], p, color=colours[0], label=r"$v_{\rm f,0}$")
+    for j, name in enumerate(species):
+        ax.plot(vf[:, 1 + j], p, color=colours[1 + j], label=r"$v_{\rm f,1}$ " + species_label(name))
+    ax.plot(vf[:, 1 + len(species)], p, color=colours[3], linestyle="--", label=r"$v_{\rm f,2}$")
+    setup_pressure_axis(ax, p)
+    ax.set_xscale("log")
+    ax.set_xlabel(r"settling velocity [cm s$^{-1}$]")
+    ax.legend()
+    finish_figure(fig, _save_path(save_dir, "case2_settling_velocity.png"), show)
+
+    fig, ax = plt.subplots()
+    ax.plot(bulk["N_c"], p, color=colours[0], label=r"$N_{\rm c}$")
+    setup_pressure_axis(ax, p)
+    ax.set_xscale("log")
+    ax.set_xlabel(r"$N_{\rm c}$ [cm$^{-3}$]")
+    ax.legend()
+    finish_figure(fig, _save_path(save_dir, "case2_number_density.png"), show)
+
+    fig, ax = plt.subplots()
+    ax.plot(bulk["r_c"], p, color=colours[1], label=r"$r_{\rm c}$")
+    if "r_med" in bulk:
+        ax.plot(bulk["r_med"], p, color=colours[2], linestyle="--", label=r"$r_{\rm med}$")
+    setup_pressure_axis(ax, p)
+    ax.set_xscale("log")
+    ax.set_xlabel(r"radius [$\mu$m]")
+    ax.legend()
+    finish_figure(fig, _save_path(save_dir, "case2_radius.png"), show)
+
+    fig, ax = plt.subplots()
+    for j, name in enumerate(species):
+        label = species_label(name)
+        ax.plot(tr["q_v"][:, j], p, color=colours[j], label=rf"{label} $q_{{\rm v}}$")
+        ax.plot(tr["q_1"][:, j], p, color=colours[j], linestyle="--", label=rf"{label} $q_1$")
+        ax.plot(q_s[:, j], p, color=colours[j], linestyle=":", label=rf"{label} $q_{{\rm s}}$")
+    ax.plot(tr["q_0"], p, color=colours[4], linestyle="-.", label=r"$q_0$")
+    ax.plot(tr["q_2"], p, color=colours[5], linestyle=(0, (3, 1, 1, 1)), label=r"$q_{2,{\rm tot}}$")
+    setup_pressure_axis(ax, p)
+    ax.set_xscale("log")
+    ax.set_xlabel("mixing ratio / moment variable")
+    ax.legend(fontsize=8)
+    finish_figure(fig, _save_path(save_dir, "case2_tracers.png"), show)
+
+    if "sig_g" in bulk:
+        fig, ax = plt.subplots()
+        ax.plot(bulk["sig_g"], p, color=colours[4], label=r"$\sigma_g$")
+        setup_pressure_axis(ax, p)
+        ax.set_xscale("log")
+        ax.set_xlabel(r"$\sigma_g$")
+        ax.legend()
+        finish_figure(fig, _save_path(save_dir, "case2_sigma_g.png"), show)
+
+
+if __name__ == "__main__":
+    main()

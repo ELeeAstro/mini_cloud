@@ -25,7 +25,8 @@ program test_mini_cloud_3
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, Kzz, pe, nd_atm, rho, rho_d, mol_w_sp, mol_w_v, cp, dTdt
   real(dp), allocatable, dimension(:) :: q_0, r_c, m_c, q0, r_c_old, del
-  real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1, q_2, vf
+  real(dp), allocatable, dimension(:,:) :: VMR, q, q_v, q_1, vf
+  real(dp), allocatable, dimension(:) :: q_2
   real(dp) :: grav, met
 
   integer :: n_wl
@@ -146,17 +147,17 @@ program test_mini_cloud_3
 
       m_seed = V_seed * rho_d(1)
 
-      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q_2(nlay,nsp), q0(nsp*3+1), q(nlay,nsp*3+1))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay,2*nsp+1), r_c_old(nlay), del(nlay))
-
+      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q_2(nlay), q0(2*nsp+2), q(nlay,2*nsp+2))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay,nsp+2), r_c_old(nlay), del(nlay))
+      
       q_v(:,:) = 1e-30_dp
       q_0(:) = 1e-30_dp
       q_1(:,:) = 1e-30_dp
-      q_2(:,:) = 1e-30_dp
+      q_2(:) = 1e-30_dp
 
+      q0(:) = 1e-30_dp
       q0(1) = 1.17e-7_dp * mol_w_v(1)/mu(nlay)
       q0(2) = 3.63e-8_dp * mol_w_v(2)/mu(nlay)
-      q0(3:) = 1e-30_dp
 
       time = 0.0_dp
       n = 0
@@ -167,66 +168,66 @@ program test_mini_cloud_3
         !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
-            & nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
-          vf(i,1)       = vf_tmp(1)
+            & nsp, q_0(i), q_1(i,:), q_2(i), vf_tmp)
+          vf(i,1) = vf_tmp(1)
           vf(i,2:nsp+1) = vf_tmp(2)
-          vf(i,nsp+2:)  = vf_tmp(3)
+          vf(i,nsp+2) = vf_tmp(3)
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
-        q(:,2*nsp+2:) = q_2(:,:)
+        q(:,2*nsp+2) = q_2(:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+2, q(:,nsp+1:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 2*nsp+2, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
         q_1(:,:) = q(:,nsp+2:2*nsp+1)
-        q_2(:,:) = q(:,2*nsp+2:)
+        q_2(:) = q(:,2*nsp+2)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           call mini_cloud_3_lognormal_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, &
-            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), dTdt(i))
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i), dTdt(i))
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
-        q(:,2*nsp+2:) = q_2(:,:)
+        q(:,2*nsp+2) = q_2(:)
 
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 2*nsp+2, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
         q_1(:,:) = q(:,nsp+2:2*nsp+1)
-        q_2(:,:) = q(:,2*nsp+2:)
+        q_2(:) = q(:,2*nsp+2)
 
         !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
-            & nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
-          vf(i,1)       = vf_tmp(1)
+            & nsp, q_0(i), q_1(i,:), q_2(i), vf_tmp)
+          vf(i,1) = vf_tmp(1)
           vf(i,2:nsp+1) = vf_tmp(2)
-          vf(i,nsp+2:)  = vf_tmp(3)
+          vf(i,nsp+2) = vf_tmp(3)
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
-        q(:,2*nsp+2:) = q_2(:,:)
+        q(:,2*nsp+2) = q_2(:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+2, q(:,nsp+1:))
 
-        q_v(:,:) = max(q(:,1:nsp),1e-30_dp)
-        q_0(:) = max(q(:,nsp+1),1e-30_dp)
-        q_1(:,:) = max(q(:,nsp+2:2*nsp+1),1e-30_dp)
-        q_2(:,:) = max(q(:,2*nsp+2:),1e-30_dp)
+        q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
+        q_0(:) = max(q(:,nsp+1), 1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+2:2*nsp+1), 1e-30_dp)
+        q_2(:) = max(q(:,2*nsp+2), 1e-30_dp)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
@@ -238,10 +239,11 @@ program test_mini_cloud_3
           rho_c_tot = sum(q_1(i,:))*rho(i)
           Nc = q_0(i)*nd_atm(i)
           m_c(i) = max(rho_c_tot/Nc, m_seed)
-          rho_d_mean = 0.0_dp
-          do j = 1, nsp
-            rho_d_mean = rho_d_mean + (q_1(i,j)*rho(i))/rho_c_tot * rho_d(j)
-          end do
+          if (rho_c_tot > 1e-30_dp) then
+            rho_d_mean = rho_c_tot / sum((q_1(i,:) * rho(i)) / rho_d(:))
+          else
+            rho_d_mean = rho_d(1)
+          end if
           r_c(i) = max(((3.0_dp*m_c(i))/(4.0_dp*pi*rho_d_mean))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
         end do
 
@@ -336,19 +338,19 @@ program test_mini_cloud_3
 
       m_seed = V_seed * rho_d(1)
 
-      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q_2(nlay,nsp), q0(nsp*3+1), q(nlay,nsp*3+1))
-      allocate(r_c(nlay), m_c(nlay), vf(nlay,2*nsp+1), r_c_old(nlay), del(nlay))
+      allocate(q_v(nlay,nsp), q_0(nlay), q_1(nlay,nsp), q_2(nlay), q0(2*nsp+2), q(nlay,2*nsp+2))
+      allocate(r_c(nlay), m_c(nlay), vf(nlay,nsp+2), r_c_old(nlay), del(nlay))
 
       q_v(:,:) = 1e-30_dp
       q_0(:) = 1e-30_dp
       q_1(:,:) = 1e-30_dp
-      q_2(:,:) = 1e-30_dp
+      q_2(:) = 1e-30_dp
 
+      q0(:) = 1e-30_dp
       q0(1) = 9.33e-8_dp * mol_w_v(1)/mu(nlay)
       q0(2) = 2.69e-6_dp * mol_w_v(2)/mu(nlay)
       q0(3) = 2.88e-5_dp * mol_w_v(3)/mu(nlay)
       q0(4) = 3.55e-5_dp * mol_w_v(4)/mu(nlay)
-      q0(5:) = 1e-30_dp
 
       time = 0.0_dp
       n = 0
@@ -359,66 +361,66 @@ program test_mini_cloud_3
         !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
-            & nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
-          vf(i,1)       = vf_tmp(1)
+            & nsp, q_0(i), q_1(i,:), q_2(i), vf_tmp)
+          vf(i,1) = vf_tmp(1)
           vf(i,2:nsp+1) = vf_tmp(2)
-          vf(i,nsp+2:)  = vf_tmp(3)
+          vf(i,nsp+2) = vf_tmp(3)
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
-        q(:,2*nsp+2:) = q_2(:,:)
+        q(:,2*nsp+2) = q_2(:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+2, q(:,nsp+1:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 2*nsp+2, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
         q_1(:,:) = q(:,nsp+2:2*nsp+1)
-        q_2(:,:) = q(:,2*nsp+2:)
+        q_2(:) = q(:,2*nsp+2)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           call mini_cloud_3_lognormal_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, &
-            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), dTdt(i))
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i), dTdt(i))
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
-        q(:,2*nsp+2:) = q_2(:,:)
+        q(:,2*nsp+2) = q_2(:)
 
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*3+1, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 2*nsp+2, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
         q_0(:) = q(:,nsp+1)
         q_1(:,:) = q(:,nsp+2:2*nsp+1)
-        q_2(:,:) = q(:,2*nsp+2:)
+        q_2(:) = q(:,2*nsp+2)
 
         !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
-            & nsp, q_0(i), q_1(i,:), q_2(i,:), vf_tmp)
-          vf(i,1)       = vf_tmp(1)
+            & nsp, q_0(i), q_1(i,:), q_2(i), vf_tmp)
+          vf(i,1) = vf_tmp(1)
           vf(i,2:nsp+1) = vf_tmp(2)
-          vf(i,nsp+2:)  = vf_tmp(3)
+          vf(i,nsp+2) = vf_tmp(3)
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
-        q(:,2*nsp+2:) = q_2(:,:)
+        q(:,2*nsp+2) = q_2(:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), 2*nsp+1, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+2, q(:,nsp+1:))
 
-        q_v(:,:) = max(q(:,1:nsp),1e-30_dp)
-        q_0(:) = max(q(:,nsp+1),1e-30_dp)
-        q_1(:,:) = max(q(:,nsp+2:2*nsp+1),1e-30_dp)
-        q_2(:,:) = max(q(:,2*nsp+2:),1e-30_dp)
+        q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
+        q_0(:) = max(q(:,nsp+1), 1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+2:2*nsp+1), 1e-30_dp)
+        q_2(:) = max(q(:,2*nsp+2), 1e-30_dp)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
@@ -430,10 +432,11 @@ program test_mini_cloud_3
           rho_c_tot = sum(q_1(i,:))*rho(i)
           Nc = q_0(i)*nd_atm(i)
           m_c(i) = max(rho_c_tot/Nc, m_seed)
-          rho_d_mean = 0.0_dp
-          do j = 1, nsp
-            rho_d_mean = rho_d_mean + (q_1(i,j)*rho(i))/rho_c_tot * rho_d(j)
-          end do
+          if (rho_c_tot > 1e-30_dp) then
+            rho_d_mean = rho_c_tot / sum((q_1(i,:) * rho(i)) / rho_d(:))
+          else
+            rho_d_mean = rho_d(1)
+          end if
           r_c(i) = max(((3.0_dp*m_c(i))/(4.0_dp*pi*rho_d_mean))**(1.0_dp/3.0_dp),r_seed) * 1e4_dp
         end do
 
@@ -491,7 +494,7 @@ contains
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), q_2(i,:), vf(i,:), dTdt(i)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_0(i), q_1(i,:), q_2(i), vf(i,:), dTdt(i)
       write(u2,*) t, time, pl(i), k_ext(i,:)
       write(u3,*) t, time, pl(i), ssa(i,:)
       write(u4,*) t, time, pl(i), g(i,:)

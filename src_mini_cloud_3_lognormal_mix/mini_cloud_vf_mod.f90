@@ -49,7 +49,8 @@ module mini_cloud_vf_mod
     character(len=20), dimension(:), intent(in) :: sp_bg
     real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, q_0
     real(dp), dimension(:), intent(in) :: bg_VMR_in
-    real(dp), dimension(ndust), intent(in) :: rho_d, q_1, q_2
+    real(dp), dimension(ndust), intent(in) :: rho_d, q_1
+    real(dp), intent(in) :: q_2
 
     real(dp), dimension(:), intent(out) :: v_f
 
@@ -99,18 +100,19 @@ module mini_cloud_vf_mod
     N_c = q_0 * nd_atm
     rho_c(:) = q_1(:) * rho
     rho_c_t = sum(rho_c(:))
-    Z_c_t = sum(q_2(:)) * rho**2
+    Z_c_t = q_2 * rho**2
 
     !! Mean mass and mass^2-weighted mean mass
     m_c  = max(rho_c_t/N_c, m_seed)
     m_c2 = max(Z_c_t/rho_c_t, m_seed)
 
     !! Volume-fraction weighted bulk density
-    rho_d_m = 0.0_dp
-    do j = 1, ndust
-      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * rho_d(j)
-    end do
-
+    if (rho_c_t > 0.0_dp) then
+      rho_d_m = rho_c_t / sum(rho_c(:) / rho_d(:))
+    else
+      rho_d_m = rho_d(1)
+    end if
+    
     !! Lognormal distribution parameters from total moments
     lnsig = sqrt(max(log((N_c * Z_c_t) / rho_c_t**2), 0.0_dp))
     sig_g = max(exp(lnsig), 1.01_dp)
