@@ -1,7 +1,7 @@
 program test_mini_cloud_3
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   use mini_cloud_3_gamma_mix_mod, only : mini_cloud_3_gamma_mix
-  use mini_cloud_vf_mod, only : mini_cloud_vf
+  use mini_cloud_vf_num_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_diff_exp_mod, only : vert_diff_exp
   use vert_adv_exp_mod, only : vert_adv_exp
@@ -135,6 +135,15 @@ program test_mini_cloud_3
       !! Assume constant Kzz [cm2 s-1]
       Kzz(:) = 1e8_dp
 
+      !! Approx [M/H] log10 Solar metallicity of atmosphere
+      met = 0.0_dp
+
+      !! Heat capacity of atmosphere [J kg-1 K-1]
+      cp(:) = 1.3e4_dp
+
+      !! Change in temperature due to latent heat
+      dTdt(:) = 0.0_dp
+
       !! Print T-p-Kzz profile
       print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
       do i = 1, nlay
@@ -185,16 +194,10 @@ program test_mini_cloud_3
 
       r_c_old(:) = r_seed * 1e4_dp
 
-   
       do n = 1, n_it
 
         !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
         do i = 1, nlay
-
-          !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_3_gamma_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, &
-            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i), dTdt(i))
-
           !! Calculate settling velocity for this layer
           call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
             &  nsp, q_0(i), q_1(i,:), q_2(i), vf_tmp)
@@ -202,24 +205,72 @@ program test_mini_cloud_3
           vf(i,2:nsp+1) = vf_tmp(2)
           vf(i,nsp+2)   = vf_tmp(3)
 
-          !! Calculate the opacity at the wavelength grid
-          call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
         end do
         !$omp end parallel do
 
         q(:,1:nsp) = q_v(:,:)
-        q(:,nsp+1) = q_0(:) * nd_atm(:) / rho(:) ! Make mass ratio for vertical transport
+        q(:,nsp+1) = q_0(:)
         q(:,nsp+2:2*nsp+1) = q_1(:,:)
         q(:,2*nsp+2) = q_2(:)
 
-        call vert_adv_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+2, q(:,nsp+1:))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+2, q(:,nsp+1:))
 
-        call vert_diff_exp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, 2*nsp+2, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 2*nsp+2, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
-        q_0(:) = q(:,nsp+1) * rho(:) / nd_atm(:) ! Return to number density after vertical transport
+        q_0(:) = q(:,nsp+1)
         q_1(:,:) = q(:,nsp+2:2*nsp+1)
         q_2(:) = q(:,2*nsp+2)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Call mini-cloud and perform integrations for a single layer
+          call mini_cloud_3_gamma_mix(i, Tl(i), pl(i), grav, mu(i), met, cp(i), VMR(i,:), t_step, sp, sp_bg, &
+            & nsp, q_v(i,:), q_0(i), q_1(i,:), q_2(i), dTdt(i))
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2) = q_2(:)
+
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, 2*nsp+2, q(:,:), q0(:))
+
+        q_v(:,:) = q(:,1:nsp)
+        q_0(:) = q(:,nsp+1)
+        q_1(:,:) = q(:,nsp+2:2*nsp+1)
+        q_2(:) = q(:,2*nsp+2)
+
+        !$omp parallel do default(shared), private(i, vf_tmp), schedule(dynamic)
+        do i = 1, nlay
+          !! Calculate settling velocity for this layer
+          call mini_cloud_vf(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(:), sp_bg, &
+            &  nsp, q_0(i), q_1(i,:), q_2(i), vf_tmp)
+          vf(i,1)       = vf_tmp(1)
+          vf(i,2:nsp+1) = vf_tmp(2)
+          vf(i,nsp+2)   = vf_tmp(3)
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1) = q_0(:)
+        q(:,nsp+2:2*nsp+1) = q_1(:,:)
+        q(:,2*nsp+2) = q_2(:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+2, q(:,nsp+1:))
+
+        q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
+        q_0(:) = max(q(:,nsp+1), 1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+2:2*nsp+1), 1e-30_dp)
+        q_2(:) = max(q(:,2*nsp+2), 1e-30_dp)
+
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        do i = 1, nlay
+          !! Calculate the opacity at the wavelength grid
+          call opac_mie(nsp, sp, Tl(i), mu(i), pl(i), q_0(i), q_1(i,:), rho_d(:), n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:))
+        end do
+        !$omp end parallel do
 
         do i = 1, nlay
           rho_c_tot = sum(q_1(i,:))*rho(i)

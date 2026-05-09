@@ -1,5 +1,6 @@
 module mini_cloud_vf_mod
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
+  use gamma_func_mod, only : up_inc_gam
   implicit none
 
   integer, parameter :: dp = REAL64
@@ -53,15 +54,15 @@ module mini_cloud_vf_mod
 
     real(dp), dimension(:), intent(out) :: v_f
 
-    integer :: n_bg, j
+    integer :: n_bg
     real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
     real(dp), allocatable, dimension(:) :: VMR_bg
     real(dp) :: N_c, sig2, lam, nu, Z_c_t
     real(dp) :: m_c, r_c, m_c2, r_c2, r_n, m_seed, rho_c_t, rho_d_m, V_tot
-    real(dp) :: vf_s, vf_e, fx, Rey, St, Ep, gam_fac, lgnu, lgnu1, lgnu2
+    real(dp) :: vf_s, vf_e, fx, Rey, St, Ep, gam_fac, lgnu, lgnu1, lgnu2, gi_m1_3
     real(dp), dimension(ndust) :: rho_c
 
-    real(dp) :: nu_n, Kn, Kn_m, Kn_m2, Kn_b, Kn_n
+    real(dp) :: Kn, Kn_m, Kn_m2, Kn_b, Kn_n
 
     real(dp), parameter :: A = 1.639_dp
 
@@ -102,14 +103,16 @@ module mini_cloud_vf_mod
 
     m_seed = V_seed * rho_d(1)
 
-    N_c = q_0 * nd_atm
+    N_c = max(q_0 * nd_atm, 1.0e-300_dp)
     rho_c(:) = q_1(:) * rho
     rho_c_t = sum(rho_c(:))
+    rho_c_t = max(rho_c_t, N_c*m_seed)
     Z_c_t = q_2 * rho**2
+    Z_c_t = max(Z_c_t, rho_c_t**2/N_c)
     
     !! Mean mass of particle
-    m_c = max(rho_c_t/N_c,m_seed)
-    m_c2 = max(Z_c_t/rho_c_t,m_seed)
+    m_c = max(rho_c_t/N_c, m_seed)
+    m_c2 = max(Z_c_t/rho_c_t, m_seed)
 
     !! Average bulk density of mixed particles from additive material volumes
     V_tot = sum(rho_c(:)/rho_d(:))
@@ -123,7 +126,7 @@ module mini_cloud_vf_mod
     sig2 = max(Z_c_t/N_c - (rho_c_t/N_c)**2,m_seed**2)
     nu = max(m_c**2/sig2,0.01_dp)
     nu = min(nu,100.0_dp)
-    lam = m_c/nu
+    lam = max(m_seed, m_c/nu)
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
@@ -143,9 +146,15 @@ module mini_cloud_vf_mod
     Kn_b = min(Kn, 100.0_dp)
 
     !! Population averaged Knudsen number for n, m and m^2
-    nu_n = max(nu,0.3334_dp)
-    Kn_n = Kn * nu_n**(1.0_dp/3.0_dp) * &
-      & exp(log_gamma(nu_n - 1.0_dp/3.0_dp) - log_gamma(nu_n))
+    if (nu > 1.0_dp/3.0_dp) then
+      Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
+        & exp(log_gamma(nu - 1.0_dp/3.0_dp) - lgnu)
+    else
+      gi_m1_3 = (up_inc_gam(nu-1.0_dp/3.0_dp+1.0_dp, m_seed) &
+        & - m_seed**(nu-1.0_dp/3.0_dp)*exp(-m_seed))/(nu - 1.0_dp/3.0_dp)
+      gi_m1_3 = max(gi_m1_3, 1.0e-300_dp)
+      Kn_n = Kn * nu**(1.0_dp/3.0_dp) * exp(log(gi_m1_3) - lgnu)
+    end if
     Kn_m = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log_gamma(nu + 2.0_dp/3.0_dp) - lgnu1)
     Kn_m2 = Kn * nu**(1.0_dp/3.0_dp) * & 

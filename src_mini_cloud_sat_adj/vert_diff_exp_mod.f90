@@ -136,16 +136,12 @@ contains
         err(n) = maxval(abs(q_new(:,n) - q_em(:,n)))
         tol(n) = atol + rtol * maxval(abs(q_new(:,n)))
 
-        if (n == 1) then
-          ierr = 1
-        else if (err(n) > err(n-1)) then
+        if (n == 1 .or. err(n)/max(tol(n), tiny(1.0_dp)) > err(ierr)/max(tol(ierr), tiny(1.0_dp))) then
           ierr = n
         end if
 
         if (err(n) > tol(n)) then
           accept = -1
-          ierr = n
-          exit
         end if
 
       end do
@@ -157,11 +153,11 @@ contains
         n_it = n_it + 1
 
         ! Adjust timestep with safety factor
-        dt = safe * dt * (tol(ierr) / err(ierr))**pow
+        dt = safe * dt * (tol(ierr) / max(err(ierr), tiny(1.0_dp)))**pow
         dt = min(dt, dt_max)
       else
         ! Reject the step and reduce timestep
-        dt = safe * dt * (tol(ierr) / err(ierr))**pow
+        dt = safe * dt * (tol(ierr) / max(err(ierr), tiny(1.0_dp)))**pow
       end if
 
       ! Escape condition for small timestep
@@ -215,4 +211,3 @@ contains
   end subroutine compute_fluxes
 
 end module vert_diff_exp_mod
-

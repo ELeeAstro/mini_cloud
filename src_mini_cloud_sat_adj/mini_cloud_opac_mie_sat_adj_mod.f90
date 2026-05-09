@@ -20,6 +20,7 @@ module mini_cloud_opac_mie_sat_adj_mod
   end type nk_table  
 
   character(len=50) :: p_2_nk
+  !$omp threadprivate (p_2_nk)
 
   type(nk_table), allocatable, dimension(:)  :: nk
   !$omp threadprivate (nk)
@@ -30,8 +31,8 @@ module mini_cloud_opac_mie_sat_adj_mod
   real(dp), parameter :: r_seed = 1e-7_dp
 
   public :: opac_mie_sat_adj
-  private :: locate, linear_log_interp, m2e, e2m, &
-    & read_nk_tables, read_and_interp_nk_table
+  private :: locate, linear_log_interp, &
+    & load_nk_table, set_nk_filename, read_and_interp_nk_table
 
 contains
 
@@ -46,22 +47,23 @@ contains
 
     real(dp), dimension(n_wl), intent(out) :: k_ext, alb, gg
 
-    integer :: l, n
-    real(dp) :: rho, amean, n_d
+    integer :: l, nk_idx
+    real(dp) :: rho, r_eff, n_d
     real(dp) :: x, xsec, q_ext, q_sca, q_abs, g
-    real(dp), dimension(n_dust) :: b_mix
-    complex(dp) :: e_eff, e_eff0
     complex(dp) :: N_eff
-    complex(dp), dimension(n_dust) :: N_inc, e_inc
 
     real(dp) :: A, B
 
+    if (n_dust /= 1) then
+      print*, 'opac_mie_sat_adj expects one condensate species when effective medium theory is disabled.'
+      stop
+    end if
 
     if (first_call .eqv. .True.) then
       p_2_nk = 'nk_tables/'
-      call read_nk_tables(n_dust, sp, n_wl, wl)
       first_call = .False.
     end if
+    call load_nk_table(sp(1), n_wl, wl, nk_idx)
 
     if (q_c < 1e-10_dp) then
       k_ext(:) = 0.0_dp
@@ -77,36 +79,29 @@ contains
       ! lognormal total number density - r_c is the median particle size
       n_d = (3.0_dp * q_c * rho)/(4.0_dp*pi*rho_d*r_c**3) * exp(-9.0_dp/2.0_dp * log(sigma)**2)
       ! Find effective particle size [cm]
-      amean = max(r_c * exp(5.0_dp/2.0_dp * log(sigma)**2), r_seed)
+      r_eff = max(r_c * exp(5.0_dp/2.0_dp * log(sigma)**2), r_seed)
     else if (dist == 2) then
       ! gamma total number density - r_c is the number weighted particle size
       A = inv_trigamma_pos(log(sigma)**2)
       B = A/r_c
       n_d = (3.0_dp * q_c * rho)/(4.0_dp*pi*rho_d)
       ! Find effective particle size [cm]
-      amean = max((A + 2.0_dp)/B, r_seed)
+      r_eff = max((A + 2.0_dp)/B, r_seed)
+    else
+      print*, 'opac_mie_sat_adj invalid dist: ', dist
+      stop
     end if
     
 
-    xsec = pi * amean**2
+    xsec = pi * r_eff**2
     
-    b_mix(:) = 1.0_dp
-
     do l = 1, n_wl
 
       !! Size parameter 
-      x = (2.0_dp * pi * amean) / (wl(l) * 1e-4_dp)
+      x = (2.0_dp * pi * r_eff) / (wl(l) * 1e-4_dp)
 
-      !! Refractive index
-      !! Use Landau-Lifshitz-Looyenga (LLL) method
-      e_eff0 = cmplx(0.0_dp,0.0_dp,dp)
-      do n = 1, n_dust
-        N_inc(n) = cmplx(nk(n)%n(l),nk(n)%k(l),dp)
-        e_inc(n) = m2e(N_inc(n))
-        e_eff0 = e_eff0 + b_mix(n)*e_inc(n)**(1.0_dp/3.0_dp)
-      end do
-      e_eff = e_eff0**3
-      N_eff = e2m(e_eff)
+      !! Refractive index for the single condensate species.
+      N_eff = cmplx(nk(nk_idx)%n(l), nk(nk_idx)%k(l), dp)
 
       if (x < 0.01_dp) then
         !! Use Rayleigh approximation
@@ -122,7 +117,7 @@ contains
 
       !! Calculate the opacity, abledo and mean cosine angle (asymmetry factor)
       k_ext(l) = (q_ext * xsec * n_d)/rho
-      alb(l) = max(q_sca/q_ext, 0.95_dp)
+      alb(l) = max(q_sca/q_ext, 0.99_dp)
       gg(l) = max(g, 0.0_dp)
 
       if (.not. ieee_is_finite(k_ext(l))) k_ext(l) = 0.0_dp
@@ -213,80 +208,109 @@ contains
 
   end subroutine madt
 
-  subroutine read_nk_tables(n_dust, sp, n_wl, wl)
+  subroutine load_nk_table(sp, n_wl, wl, idx)
     implicit none
 
-    integer, intent(in) :: n_dust, n_wl
+    character(len=11), intent(in) :: sp
+    integer, intent(in) :: n_wl
     real(dp), dimension(n_wl), intent(in) :: wl
-    character(len=11), dimension(n_dust), intent(in) :: sp
+    integer, intent(out) :: idx
 
-    integer :: n
+    integer :: n, n_old
+    type(nk_table), allocatable, dimension(:) :: nk_old
 
-    allocate(nk(n_dust))
+    idx = 0
+    if (allocated(nk)) then
+      do n = 1, size(nk)
+        if (trim(nk(n)%name) == trim(sp)) then
+          idx = n
+          return
+        end if
+      end do
 
-    do n = 1, n_dust
+      n_old = size(nk)
+      call move_alloc(nk, nk_old)
+      allocate(nk(n_old+1))
 
-      allocate(nk(n)%n(n_wl), nk(n)%k(n_wl))
+      do n = 1, n_old
+        nk(n)%name = nk_old(n)%name
+        nk(n)%fname = nk_old(n)%fname
+        call move_alloc(nk_old(n)%n, nk(n)%n)
+        call move_alloc(nk_old(n)%k, nk(n)%k)
+      end do
+    else
+      n_old = 0
+      allocate(nk(1))
+    end if
 
-      select case(trim(sp(n)))
-      case('CaTiO3')
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'CaTiO3[s].dat'
-      case('TiO2')
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'TiO2[s].dat'
-      case('Al2O3')
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'Al2O3[s].dat'
-      case('Fe')
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'Fe[s].dat'
-      case('FeO')
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'FeO[s].dat'        
-      case('Mg2SiO4') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'Mg2SiO4_amorph[s].dat'
-      case('MgSiO3') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'MgSiO3_amorph[s].dat'
-      case('MnS') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'MnS[s].dat'     
-      case('Na2S') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'Na2S[s].dat'
-      case('ZnS') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'ZnS[s].dat'
-      case('KCl') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'KCl[s].dat'   
-      case('NaCl') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'NaCl[s].dat'              
-      case('C') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'C[s].dat'
-      case('H2O') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'H2O[s].dat'
-      case('NH3') 
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'NH3[s].dat'
-      case('Soot_Lavvas')
-        nk(n)%name = sp(n)
-        nk(n)%fname = 'Soot_Lavvas[s].dat'
-      case default
-        print*,  'No availible n,k data for species: ', trim(sp(n)), 'STOP'
-        stop
-      end select
+    idx = n_old + 1
+    allocate(nk(idx)%n(n_wl), nk(idx)%k(n_wl))
+    call set_nk_filename(idx, sp)
+    call read_and_interp_nk_table(idx, n_wl, wl)
 
-      call read_and_interp_nk_table(n, n_wl, wl)
+  end subroutine load_nk_table
 
-    end do
+  subroutine set_nk_filename(idx, sp)
+    implicit none
 
-  end subroutine read_nk_tables
+    integer, intent(in) :: idx
+    character(len=11), intent(in) :: sp
+
+    select case(trim(sp))
+    case('CaTiO3')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'CaTiO3[s].dat'
+    case('TiO2')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'TiO2[s].dat'
+    case('Al2O3')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'Al2O3[s].dat'
+    case('Fe')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'Fe[s].dat'
+    case('FeO')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'FeO[s].dat'
+    case('Mg2SiO4')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'Mg2SiO4_amorph[s].dat'
+    case('MgSiO3')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'MgSiO3_amorph[s].dat'
+    case('MnS')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'MnS[s].dat'
+    case('Na2S')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'Na2S[s].dat'
+    case('ZnS')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'ZnS[s].dat'
+    case('KCl')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'KCl[s].dat'
+    case('NaCl')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'NaCl[s].dat'
+    case('C')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'C[s].dat'
+    case('H2O')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'H2O[s].dat'
+    case('NH3')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'NH3[s].dat'
+    case('Soot_Lavvas')
+      nk(idx)%name = sp
+      nk(idx)%fname = 'Soot_Lavvas[s].dat'
+    case default
+      print*,  'No availible n,k data for species: ', trim(sp), 'STOP'
+      stop
+    end select
+
+  end subroutine set_nk_filename
 
   subroutine read_and_interp_nk_table(nn, n_wl, wl_in)
     implicit none
@@ -359,39 +383,6 @@ contains
     deallocate(wl, n, k)
 
   end subroutine read_and_interp_nk_table
-
-  ! ------------- Functions for LLL theory ------------- !!
-  complex(dp) function e2m(e)
-    implicit none
-
-    complex(dp), intent(in) :: e
-
-    real(dp) :: ereal, eimag, n, k
-    real(dp) :: sqrte2
-
-    ereal = real(e,dp)
-    eimag = aimag(e)
-    sqrte2 = sqrt(ereal*ereal + eimag*eimag)
-    n = sqrt(0.5_dp * ( ereal + sqrte2))
-    k = sqrt(0.5_dp * (-ereal + sqrte2))
-    e2m = cmplx(n,k,dp)
-
-  end function e2m
-
-  complex(dp) function m2e(m)
-    implicit none
-
-    complex(dp), intent(in) :: m
-
-    real(dp) :: ereal, eimag, n, k
-
-    n = real(m,dp)
-    k = aimag(m)
-    ereal = n*n - k*k
-    eimag = 2.0_dp * n * k
-    m2e = cmplx(ereal,eimag,dp)
-
-  end function m2e  
 
   ! Perform linear interpolation in log10 space
   subroutine linear_log_interp(xval, x1, x2, y1, y2, yval)

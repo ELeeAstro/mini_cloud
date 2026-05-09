@@ -370,6 +370,7 @@ C ----------------------------------------------------------
       LOGICAL REJECT,LAST 
       EXTERNAL FCN
       COMMON /CONDO5/XOLD,HOUT
+C$OMP THREADPRIVATE(/CONDO5/)
 C *** *** *** *** *** *** ***
 C  INITIALISATIONS
 C *** *** *** *** *** *** *** 
@@ -627,6 +628,7 @@ C ----------------------------------------------------------
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
       DIMENSION CON(5*ND),ICOMP(ND)
       COMMON /CONDO5/XOLD,H
+C$OMP THREADPRIVATE(/CONDO5/)
 C ----- COMPUTE PLACE OF II-TH COMPONENT 
       I=0 
       DO 5 J=1,ND 

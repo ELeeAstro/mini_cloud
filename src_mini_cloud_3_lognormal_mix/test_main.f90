@@ -1,9 +1,8 @@
 program test_mini_cloud_3
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
   use mini_cloud_3_lognormal_mix_mod, only : mini_cloud_3_lognormal_mix
-  use mini_cloud_vf_mod, only : mini_cloud_vf
+  use mini_cloud_vf_num_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
-  use vert_diff_exp_mod, only : vert_diff_exp
   use vert_adv_exp_mod, only : vert_adv_exp
   use vert_diff_imp_mod, only : vert_diff_imp
   use cli_progress
@@ -38,7 +37,7 @@ program test_mini_cloud_3
   real(dp), allocatable, dimension(:) :: T_f, p_f
   real(dp) :: m_seed, Nc, rho_c_tot, rho_d_mean
 
-  integer :: j, nsp
+  integer :: nsp
   real(dp) :: T_eff, k_ir, tau
   real(dp), dimension(3) :: vf_tmp
 
@@ -238,7 +237,7 @@ program test_mini_cloud_3
         do i = 1, nlay
           rho_c_tot = sum(q_1(i,:))*rho(i)
           Nc = q_0(i)*nd_atm(i)
-          m_c(i) = max(rho_c_tot/Nc, m_seed)
+          m_c(i) = max(rho_c_tot/max(Nc, 1.0e-300_dp), m_seed)
           if (rho_c_tot > 1e-30_dp) then
             rho_d_mean = rho_c_tot / sum((q_1(i,:) * rho(i)) / rho_d(:))
           else
@@ -431,7 +430,7 @@ program test_mini_cloud_3
         do i = 1, nlay
           rho_c_tot = sum(q_1(i,:))*rho(i)
           Nc = q_0(i)*nd_atm(i)
-          m_c(i) = max(rho_c_tot/Nc, m_seed)
+          m_c(i) = max(rho_c_tot/max(Nc, 1.0e-300_dp), m_seed)
           if (rho_c_tot > 1e-30_dp) then
             rho_d_mean = rho_c_tot / sum((q_1(i,:) * rho(i)) / rho_d(:))
           else
@@ -453,6 +452,7 @@ program test_mini_cloud_3
 
         if ((end .eqv. .True.) .and. (n > int(1e5))) then
           print*, 'exit: ', n, n_it, end
+          exit
         end if
 
       end do

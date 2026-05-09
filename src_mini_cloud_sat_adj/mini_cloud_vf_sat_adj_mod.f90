@@ -9,9 +9,6 @@ module mini_cloud_vf_sat_adj_mod
   real(dp), parameter :: R_gas = 8.31446261815324e7_dp
   real(dp), parameter :: amu = 1.66053906892e-24_dp
   
-  real(dp), parameter :: third = 1.0_dp/3.0_dp
-  real(dp), parameter :: twothird = 2.0_dp/3.0_dp
-
   real(dp), parameter :: r_seed = 1e-7_dp
 
   !! Diameter, LJ potential and molecular weight for background gases
@@ -28,11 +25,6 @@ module mini_cloud_vf_sat_adj_mod
   real(dp), parameter :: d_N2 = 3.798e-8_dp, LJ_N2 = 71.4_dp * kb, molg_N2 = 14.0067_dp
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
-
-  !! Construct required arrays for calculating gas mixtures
-  real(dp), allocatable, dimension(:) :: d_g, LJ_g, molg_g, eta_g
-
-  !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
 
   public :: mini_cloud_vf_sat_adj
   private :: eta_construct
@@ -51,9 +43,8 @@ module mini_cloud_vf_sat_adj_mod
     real(dp), intent(out) :: v_f
 
     integer :: n_gas
-    real(dp) :: T, mu, nd_atm, rho, p, grav, mfp, eta, cT
-    real(dp), allocatable, dimension(:) :: VMR_g
-    real(dp) :: r_v, Kn, Kn_b, beta, vf_s, vf_e, fx
+    real(dp) :: T, mu, rho, p, grav, mfp, eta
+    real(dp) :: r_v, Kn, beta, vf_s
 
     real(dp) :: A, B
 
@@ -62,8 +53,6 @@ module mini_cloud_vf_sat_adj_mod
     p = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
 
     n_gas = size(bg_VMR_in)
-    allocate(VMR_g(n_gas))
-    VMR_g(:) = bg_VMR_in(:)
 
     !! Change mu_in to mu
     mu = mu_in ! Convert mean molecular weight to mu [g mol-1]
@@ -71,17 +60,11 @@ module mini_cloud_vf_sat_adj_mod
     !! Change gravity to cgs [cm s-2]
     grav = grav_in * 100.0_dp
 
-    !! Number density [cm-3] of layer
-    nd_atm = p/(kb*T)  
-
     !! Mass density of layer
     rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
 
-    !! Thermal velocity
-    cT = sqrt((2.0_dp * kb * T) / (mu * amu))
-
     !! Calculate dynamical viscosity for this layer
-    call eta_construct(n_gas, sp_bg, VMR_g, T, eta)
+    call eta_construct(n_gas, sp_bg, bg_VMR_in, T, eta)
 
     !! Calculate mean free path for this layer
     mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
@@ -99,6 +82,9 @@ module mini_cloud_vf_sat_adj_mod
       r_v = max((A + 3.0_dp)/B, r_seed)
       ! print*,A, B, r_c*1e4, r_v*1e4
       ! stop
+    else
+      print*, 'mini_cloud_vf_sat_adj invalid dist: ', dist
+      stop
     end if
 
     !! Knudsen number
@@ -113,8 +99,6 @@ module mini_cloud_vf_sat_adj_mod
      & + ((0.45_dp*grav*r_c**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
 
     v_f = max(vf_s, 1.0e-30_dp)
-
-    deallocate(d_g, LJ_g, molg_g, eta_g)
 
   end subroutine mini_cloud_vf_sat_adj
 
@@ -131,9 +115,8 @@ module mini_cloud_vf_sat_adj_mod
     
     integer :: i, j
     real(dp) :: bot, Eij, part
+    real(dp), dimension(n_bg) :: d_g, LJ_g, molg_g, eta_g
     real(dp), dimension(n_bg) :: y
-
-    allocate(d_g(n_bg), LJ_g(n_bg), molg_g(n_bg), eta_g(n_bg))
 
     do i = 1, n_bg
       select case(sp_bg(i))

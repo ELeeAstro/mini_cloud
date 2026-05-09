@@ -298,7 +298,7 @@ module mini_cloud_3_gamma_mix_mod
     f(:) = 0.0_dp
 
     !! Convert y to real physical numbers to calculate f
-    N_c = y(1)*nd_atm ! Convert to real number density
+    N_c = max(y(1)*nd_atm, 1.0e-300_dp) ! Convert to real number density
     rho_c(:) = y(2:2+ndust-1)*rho         ! Convert to real mass density
     Z_c_t = y(2+ndust)*rho**2             ! Convert to real total second mass moment density
     rho_v(:) = y(3+ndust:2+2*ndust)*rho   ! Convert to real mass density
@@ -309,8 +309,10 @@ module mini_cloud_3_gamma_mix_mod
 
     !! Total condensed mass density
     rho_c_t = sum(rho_c(:))
+    rho_c_t = max(rho_c_t, N_c*cld(1)%m_seed)
 
     !! Total 2nd moment is carried by the single mixed particle distribution
+    Z_c_t = max(Z_c_t, rho_c_t**2/N_c)
 
     !! Mean mass of particle
     m_c = max(rho_c_t/N_c, cld(1)%m_seed)
@@ -361,7 +363,9 @@ module mini_cloud_3_gamma_mix_mod
         & exp(log_gamma(nu - 1.0_dp/3.0_dp) - lgnu)
     else
       ! Use incomplete gamma function recurrence relation to avoid negative arguments
-      gi_m1_3 = (up_inc_gam(nu-1.0/3.0_dp+1.0_dp,x_seed) - x_seed**(nu-1.0_dp/3.0_dp)*exp(-x_seed))/(nu - 1.0_dp/3.0_dp)
+      gi_m1_3 = (up_inc_gam(nu-1.0_dp/3.0_dp+1.0_dp, x_seed) &
+        & - x_seed**(nu-1.0_dp/3.0_dp)*exp(-x_seed))/(nu - 1.0_dp/3.0_dp)
+      gi_m1_3 = max(gi_m1_3, 1.0e-300_dp)
       Kn_n = Kn * nu**(1.0_dp/3.0_dp) * &
       & exp(log(gi_m1_3) - lgnu)
     end if

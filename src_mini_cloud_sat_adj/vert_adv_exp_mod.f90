@@ -103,10 +103,10 @@ contains
     t = 0.0_dp
     do while (t < t_end - T_TOL)
 
-      ! CFL restriction: take minimum over all interior faces AND over all tracers
+      ! CFL restriction: take minimum over all outflow faces and tracers.
       dt_max = t_end - t
       do n = 1, nq
-        do k = 2, nlay
+        do k = 2, nlev
           num = rho(k-1) * dz(k-1)
           den = A(k,n) + TINY
           if (den > 0.0_dp) dt_max = min(dt_max, CFL * num / den)
@@ -200,25 +200,27 @@ contains
       sigma(1) = gL_top
     end if
 
-    ! right-face reconstructions
+    ! lower-face reconstructions.  dz(i)/2 is the cell-centre to face
+    ! distance on a non-uniform grid.
     do i = 1, nlay-1
-      qR_face(i) = q(i) + 0.5_dp*dzm(i)*sigma(i)
+      qR_face(i) = q(i) + 0.5_dp*dz(i)*sigma(i)
     end do
+    qR_face(nlay) = q(nlay)
 
-    ! clamp first interior face between local extrema (Barth–Jespersen style)
-    if (nlay > 1) then
-      mmax = q_top; if (q(1) > mmax) mmax = q(1); if (q(2) > mmax) mmax = q(2)
-      mmin = q_top; if (q(1) < mmin) mmin = q(1); if (q(2) < mmin) mmin = q(2)
-      if (qR_face(1) > mmax) qR_face(1) = mmax
-      if (qR_face(1) < mmin) qR_face(1) = mmin
-    end if
+    ! Clamp reconstructed interior face states between adjacent cell extrema.
+    do i = 1, nlay-1
+      mmax = max(q(i), q(i+1))
+      mmin = min(q(i), q(i+1))
+      if (qR_face(i) > mmax) qR_face(i) = mmax
+      if (qR_face(i) < mmin) qR_face(i) = mmin
+    end do
 
     ! upwind fluxes for A >= 0
     F(1) = A(1) * q_top
     do k = 2, nlay
       F(k) = A(k) * qR_face(k-1)
     end do
-    F(nlev) = 0.0_dp
+    F(nlev) = A(nlev) * qR_face(nlay)
 
     ! conservative RHS
     do i = 1, nlay

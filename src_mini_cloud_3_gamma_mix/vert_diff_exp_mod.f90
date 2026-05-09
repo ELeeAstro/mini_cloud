@@ -36,7 +36,7 @@ contains
     real(dp), dimension(nlay,nq) :: k1, k2, k3, k4
 
     integer :: n_it, n, accept, ierr
-    real(dp) :: dt, t_now, dt_max
+    real(dp) :: dt, t_now, dt_max, err_ratio, max_err_ratio
     real(dp), dimension(nq) :: tol, err
     real(dp), parameter ::  pow = 0.2_dp, safe = 0.9_dp
     real(dp), parameter ::  atol = 1e-99_dp, rtol = 1e-3_dp
@@ -130,16 +130,17 @@ contains
 
       !! Compute error
       accept = 0
-      ierr = 0
+      ierr = 1
+      max_err_ratio = 0.0_dp
       do n = 1, nq
 
         err(n) = maxval(abs(q_new(:,n) - q_em(:,n)))
         tol(n) = atol + rtol * maxval(abs(q_new(:,n)))
+        err_ratio = err(n) / max(tol(n), tiny(1.0_dp))
 
-        if (n == 1) then
-          ierr = 1
-        else if (err(n) > err(n-1)) then
+        if (err_ratio > max_err_ratio) then
           ierr = n
+          max_err_ratio = err_ratio
         end if
 
         if (err(n) > tol(n)) then
@@ -157,11 +158,15 @@ contains
         n_it = n_it + 1
 
         ! Adjust timestep with safety factor
-        dt = safe * dt * (tol(ierr) / err(ierr))**pow
+        if (err(ierr) <= tiny(1.0_dp)) then
+          dt = dt_max
+        else
+          dt = safe * dt * (tol(ierr) / err(ierr))**pow
+        end if
         dt = min(dt, dt_max)
       else
         ! Reject the step and reduce timestep
-        dt = safe * dt * (tol(ierr) / err(ierr))**pow
+        dt = safe * dt * (tol(ierr) / max(err(ierr), tiny(1.0_dp)))**pow
       end if
 
       ! Escape condition for small timestep
@@ -215,4 +220,3 @@ contains
   end subroutine compute_fluxes
 
 end module vert_diff_exp_mod
-

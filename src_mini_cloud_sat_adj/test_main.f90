@@ -3,7 +3,6 @@ program test_mini_cloud_sat_adj
   use mini_cloud_sat_adj_mod, only : mini_cloud_sat_adj
   use mini_cloud_vf_sat_adj_mod, only : mini_cloud_vf_sat_adj
   use mini_cloud_opac_mie_sat_adj_mod, only : opac_mie_sat_adj
-  use vert_diff_exp_mod, only : vert_diff_exp
   use vert_diff_imp_mod, only : vert_diff_imp
   use vert_adv_exp_mod, only : vert_adv_exp
   use cli_progress
@@ -11,20 +10,18 @@ program test_mini_cloud_sat_adj
 
   integer, parameter :: dp = REAL64
 
-  real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
   real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
-  real(dp), parameter :: R = 8.31446261815324e7_dp
 
   integer :: example, n_it
   real(dp) :: t_step, time
 
-  integer :: nlay, nlev, i, n, u
-  character(len=20) :: sp
+  integer :: nlay, nlev, i, j, n, u, nsp
+  character(len=20), allocatable, dimension(:) :: sp
   character(len=20), allocatable, dimension(:) :: sp_bg
   real(dp), allocatable, dimension(:) :: Tl, pl, mu, pe, nd_atm, rho, Kzz
-  real(dp), allocatable, dimension(:) :: q_1, q_v, q0, q_1_old, del
-  real(dp), allocatable, dimension(:,:) :: VMR, q, vf
+  real(dp), allocatable, dimension(:) :: q0, del
+  real(dp), allocatable, dimension(:,:) :: VMR, q, vf, q_1, q_v, q_1_old
   real(dp) :: grav
 
   integer :: n_wl
@@ -35,7 +32,9 @@ program test_mini_cloud_sat_adj
   real(dp) :: p_bot, p_top
   real(dp), allocatable, dimension(:) :: T_f, p_f
 
-  real(dp) :: tau_cond, sigma, met, mol_w_sp, r_c, rho_d
+  real(dp) :: tau_cond, sigma, met
+  real(dp), allocatable, dimension(:) :: mol_w_sp, r_c, rho_d
+  real(dp), allocatable, dimension(:) :: k_tmp, ssa_tmp, g_tmp, sca_ext, g_sca_ext
 
   integer :: dist
 
@@ -53,7 +52,7 @@ program test_mini_cloud_sat_adj
   time = 6840.0_dp
 
   !! example select
-  example = 2
+  example = 3
 
   !! Selection of size distribution 1 = lognormal, 2 = gamma
   dist = 1
@@ -68,9 +67,11 @@ program test_mini_cloud_sat_adj
 
       nlay = 192
       nlev = nlay + 1
+      nsp = 1
 
       n_wl = 11
       allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
+      allocate(k_tmp(n_wl), ssa_tmp(n_wl), g_tmp(n_wl), sca_ext(n_wl), g_sca_ext(n_wl))
 
       !! Wavelengths to calculate opacity
       wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
@@ -161,15 +162,16 @@ program test_mini_cloud_sat_adj
       VMR(:,2) = 0.15_dp
 
       !! Assumed condensate species
-      sp = 'KCl'
-      rho_d = 1.99_dp
-      mol_w_sp = 74.5513_dp
+      allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp), r_c(nsp))
+      sp(1) = 'KCl'
+      rho_d(1) = 1.99_dp
+      mol_w_sp(1) = 74.5513_dp
 
       !! Metalicity (log10) of the atmosphere
       met = 0.0_dp
 
       ! Characteristic particle size (cm)
-      r_c = 10.0_dp * 1e-4_dp
+      r_c(1) = 10.0_dp * 1e-4_dp
 
       ! geometric standard deviation
       sigma = 2.0_dp
@@ -177,71 +179,76 @@ program test_mini_cloud_sat_adj
       ! condensation timescale
       tau_cond = 10.0_dp
 
-      allocate(q_v(nlay), q_1(nlay), q0(2), q(nlay,2))
-      allocate(vf(nlay,1), q_1_old(nlay), del(nlay))
+      allocate(q_v(nlay,nsp), q_1(nlay,nsp), q0(2*nsp), q(nlay,2*nsp))
+      allocate(vf(nlay,nsp), q_1_old(nlay,nsp), del(nlay))
 
-      q_v(:) = 1e-30_dp
-      q_1(:) = 1e-30_dp
+      q_v(:,:) = 1e-30_dp
+      q_1(:,:) = 1e-30_dp
 
-      q0(1) = 1.17e-7_dp * mol_w_sp/mu(nlay)
-      q0(2) = 1e-30_dp
+      q0(:) = 1e-30_dp
+      q0(1) = 1.17e-7_dp * mol_w_sp(1)/mu(nlay)
 
       time = 0.0_dp
       n = 0
+      q_1_old(:,:) = 1e-30_dp
 
       do n = 1, n_it
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, r_c, sigma, vf(i,1), dist)
+          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(1), sp_bg, r_c(1), sigma, vf(i,1), dist)
         end do
         !$omp end parallel do  
 
-        q(:,1) = q_v(:)
-        q(:,2) = q_1(:)
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1:2*nsp) = q_1(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1), 1, q(:,2))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
 
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2*nsp, q(:,:), q0(:))
 
-        q_v(:) = q(:,1)
-        q_1(:) = q(:,2)
+        q_v(:,:) = q(:,1:nsp)
+        q_1(:,:) = q(:,nsp+1:2*nsp)
 
-        !$omp parallel do default(shared), private(i), schedule(dynamic)
+        !$omp parallel do default(shared), private(i,j), schedule(dynamic)
         do i = 1, nlay
           !! Call mini-cloud and perform integrations for a single layer
-          call mini_cloud_sat_adj(i, t_step, mol_w_sp, sp, rho_d, Tl(i), pl(i), rho(i), met, tau_cond, q_v(i), q_1(i))
+          do j = 1, nsp
+            call mini_cloud_sat_adj(i, t_step, mol_w_sp(j), sp(j), rho_d(j), Tl(i), pl(i), rho(i), met, tau_cond, &
+              & q_v(i,j), q_1(i,j))
+          end do
         end do
         !$omp end parallel do  
 
-        q(:,1) = q_v(:)
-        q(:,2) = q_1(:)
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1:2*nsp) = q_1(:,:)
 
-        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2, q(:,:), q0(:))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2*nsp, q(:,:), q0(:))
 
-        q_v(:) = q(:,1)
-        q_1(:) = q(:,2)
+        q_v(:,:) = q(:,1:nsp)
+        q_1(:,:) = q(:,nsp+1:2*nsp)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d, sp_bg, r_c, sigma, vf(i,1), dist)
+          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(1), sp_bg, r_c(1), sigma, vf(i,1), dist)
         end do
         !$omp end parallel do  
 
-        q(:,1) = q_v(:)
-        q(:,2) = q_1(:)
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1:2*nsp) = q_1(:,:)
         
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,1), 1, q(:,2))
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
 
-        q_v(:) = q(:,1)
-        q_1(:) = q(:,2)
+        q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+1:2*nsp), 1e-30_dp)
 
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate the opacity at the wavelength grid
-          call opac_mie_sat_adj(1, sp, Tl(i), mu(i), pl(i), q_1(i), r_c, rho_d, sigma, n_wl, wl, k_ext(i,:), ssa(i,:), g(i,:), dist)
+          call opac_mie_sat_adj(1, sp(1:1), Tl(i), mu(i), pl(i), q_1(i,1), r_c(1), rho_d(1), sigma, n_wl, wl, &
+            & k_ext(i,:), ssa(i,:), g(i,:), dist)
         end do
         !$omp end parallel do
 
@@ -250,13 +257,13 @@ program test_mini_cloud_sat_adj
         end = .True.
 
         do i = 1, nlay
-          del(i) = abs(q_1_old(i) - q_1(i))/q_1_old(i)
+          del(i) = maxval(abs(q_1_old(i,:) - q_1(i,:))/max(q_1_old(i,:), 1e-300_dp))
           if ((del(i) > 1e-4_dp) .or.  (del(i)/t_step > 1e-4_dp)) then
             end = .False.
             exit
           end if
         end do
-        q_1_old(:) = q_1(:)
+        q_1_old(:,:) = q_1(:,:)
 
         !! increment time
         time = time + t_step
@@ -274,10 +281,199 @@ program test_mini_cloud_sat_adj
       print*, del(:)/t_step
 
       do i = 1, nlay
-        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i), q_1(i), r_c, vf(i,1)
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i,:), q_1(i,:), r_c(:), vf(i,:)
       end do
 
       !! mini-cloud test output
+      call output(n, time, nlay)
+
+    case(3)
+
+      !! L-T transition dwarf setup from the gamma-mix case.
+
+      nsp = 4
+      nlay = 192
+      nlev = nlay + 1
+
+      n_wl = 11
+      allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
+      allocate(k_tmp(n_wl), ssa_tmp(n_wl), g_tmp(n_wl), sca_ext(n_wl), g_sca_ext(n_wl))
+
+      wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
+      wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
+
+      allocate(Tl(nlay), pl(nlay), pe(nlev), mu(nlay), Kzz(nlay), nd_atm(nlay), rho(nlay))
+
+      p_top = 1e-4_dp * 1e5_dp
+      p_bot = 1000.0_dp * 1e5_dp
+
+      p_top = log10(p_top)
+      p_bot = log10(p_bot)
+      do i = 1, nlev
+        pe(i) = 10.0_dp**((p_bot-p_top) * real(i-1,dp) / real(nlev-1,dp) + p_top)
+      end do
+      do i = 1, nlay
+        pl(i) = (pe(i+1) - pe(i)) / log(pe(i+1)/pe(i))
+      end do
+      p_top = 10.0_dp**p_top
+      p_bot = 10.0_dp**p_bot
+
+      mu(:) = 2.33_dp
+      met = 0.0_dp
+      grav = (10.0_dp**(4.5_dp))/100.0_dp
+
+      do i = 1, nlay
+        Tl(i) = 3.0_dp/4.0_dp * 1300.0_dp**4 * &
+          & (2.0_dp/3.0_dp + (1.0e-2_dp * (pl(i) * 10.0_dp))/(grav*100.0_dp))
+        Tl(i) = Tl(i)**(1.0_dp/4.0_dp)
+      end do
+
+      Kzz(:) = 1e8_dp
+
+      print*, 'i, pl [bar], T[k], Kzz [cm2 s-1]'
+      do i = 1, nlay
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i)
+      end do
+
+      nd_atm(:) = (pl(:)*10.0_dp)/(kb*Tl(:))
+      rho(:) = (pl(:)*10.0_dp*mu(:)*amu)/(kb * Tl(:))
+
+      allocate(VMR(nlay,2),sp_bg(2))
+      sp_bg = (/'H2','He'/)
+      VMR(:,1) = 0.85_dp
+      VMR(:,2) = 0.15_dp
+
+      allocate(sp(nsp), rho_d(nsp), mol_w_sp(nsp), r_c(nsp))
+      sp = (/'TiO2   ', 'Al2O3  ', 'Fe     ', 'Mg2SiO4'/)
+      rho_d = (/4.23_dp, 3.986_dp, 7.874_dp, 3.21_dp/)
+      mol_w_sp = (/79.8658_dp, 26.98153860_dp, 55.8450_dp, 24.305_dp/)
+
+      ! Characteristic particle size (cm)
+      r_c(:) = 1.0_dp * 1e-4_dp
+
+      ! geometric standard deviation
+      sigma = 2.0_dp
+
+      ! condensation timescale
+      tau_cond = 10.0_dp
+
+      allocate(q_v(nlay,nsp), q_1(nlay,nsp), q0(2*nsp), q(nlay,2*nsp))
+      allocate(vf(nlay,nsp), q_1_old(nlay,nsp), del(nlay))
+
+      q_v(:,:) = 1e-30_dp
+      q_1(:,:) = 1e-30_dp
+
+      q0(:) = 1e-30_dp
+      q0(1) = 9.33e-8_dp * mol_w_sp(1)/mu(nlay)
+      q0(2) = 2.69e-6_dp * mol_w_sp(2)/mu(nlay)
+      q0(3) = 2.88e-5_dp * mol_w_sp(3)/mu(nlay)
+      q0(4) = 3.55e-5_dp * mol_w_sp(4)/mu(nlay)
+
+      time = 0.0_dp
+      n = 0
+      q_1_old(:,:) = 1e-30_dp
+
+      do n = 1, n_it
+
+        !$omp parallel do default(shared), private(i,j), schedule(dynamic)
+        do i = 1, nlay
+          do j = 1, nsp
+            call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(j), sp_bg, r_c(j), sigma, vf(i,j), dist)
+          end do
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1:2*nsp) = q_1(:,:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2*nsp, q(:,:), q0(:))
+
+        q_v(:,:) = q(:,1:nsp)
+        q_1(:,:) = q(:,nsp+1:2*nsp)
+
+        !$omp parallel do default(shared), private(i,j), schedule(dynamic)
+        do i = 1, nlay
+          do j = 1, nsp
+            call mini_cloud_sat_adj(i, t_step, mol_w_sp(j), sp(j), rho_d(j), Tl(i), pl(i), rho(i), met, tau_cond, &
+              & q_v(i,j), q_1(i,j))
+          end do
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1:2*nsp) = q_1(:,:)
+
+        call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2*nsp, q(:,:), q0(:))
+
+        q_v(:,:) = q(:,1:nsp)
+        q_1(:,:) = q(:,nsp+1:2*nsp)
+
+        !$omp parallel do default(shared), private(i,j), schedule(dynamic)
+        do i = 1, nlay
+          do j = 1, nsp
+            call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(j), sp_bg, r_c(j), sigma, vf(i,j), dist)
+          end do
+        end do
+        !$omp end parallel do
+
+        q(:,1:nsp) = q_v(:,:)
+        q(:,nsp+1:2*nsp) = q_1(:,:)
+
+        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+
+        q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
+        q_1(:,:) = max(q(:,nsp+1:2*nsp), 1e-30_dp)
+
+        k_ext(:,:) = 0.0_dp
+        ssa(:,:) = 0.0_dp
+        g(:,:) = 0.0_dp
+
+        do j = 1, nsp
+          do i = 1, nlay
+            call opac_mie_sat_adj(1, sp(j:j), Tl(i), mu(i), pl(i), q_1(i,j), r_c(j), rho_d(j), sigma, n_wl, wl, &
+              & k_tmp(:), ssa_tmp(:), g_tmp(:), dist)
+            k_ext(i,:) = k_ext(i,:) + k_tmp(:)
+            ssa(i,:) = ssa(i,:) + ssa_tmp(:)*k_tmp(:)
+            g(i,:) = g(i,:) + g_tmp(:)*ssa_tmp(:)*k_tmp(:)
+          end do
+        end do
+
+        do i = 1, nlay
+          sca_ext(:) = ssa(i,:)
+          g_sca_ext(:) = g(i,:)
+          ssa(i,:) = sca_ext(:)/max(k_ext(i,:), 1.0e-300_dp)
+          g(i,:) = g_sca_ext(:)/max(sca_ext(:), 1.0e-300_dp)
+        end do
+
+        end = .True.
+        do i = 1, nlay
+          del(i) = maxval(abs(q_1_old(i,:) - q_1(i,:))/max(q_1_old(i,:), 1e-300_dp))
+          if ((del(i) > 1e-4_dp) .or.  (del(i)/t_step > 1e-4_dp)) then
+            end = .False.
+            exit
+          end if
+        end do
+        q_1_old(:,:) = q_1(:,:)
+
+        time = time + t_step
+
+        call progress_update(n, n_it, time, maxval(del(:)/t_step), width=100)
+
+        if ((end .eqv. .True.) .and. (n > int(1e5))) then
+          print*, 'exit: ', n, n_it, end
+          exit
+        end if
+
+      end do
+
+      print*, del(:)
+      print*, del(:)/t_step
+
+      do i = 1, nlay
+        print*, i, pl(i)/1e5_dp, Tl(i), Kzz(i), q_v(i,:), q_1(i,:), r_c(:), vf(i,:)
+      end do
+
       call output(n, time, nlay)
 
     case default 
@@ -298,13 +494,19 @@ contains
 
     if (first_call .eqv. .True.) then
       open(newunit=u1,file='results_sat_adj/tracers.txt',action='readwrite')
+      write(u1,*) nsp
+      write(u1,*) sp(:)
+      write(u1,*) rho_d(:)
+      write(u1,*) mol_w_sp(:)
+      write(u1,*) r_c(:)
+      write(u1,*) sigma, dist
       open(newunit=u2,file='results_sat_adj/opac.txt',action='readwrite')
       write(u2,*) wl(:)
       first_call = .False.
     end if
 
     do i = 1, nlay
-      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i), q_1(i), r_c, vf(i,:)
+      write(u1,*) t, time, Tl(i), pl(i), grav, mu(i), VMR(i,:), q_v(i,:), q_1(i,:), vf(i,:)
       write(u2,*) t, time, k_ext(i,:), ssa(i,:), g(i,:)
     end do
 

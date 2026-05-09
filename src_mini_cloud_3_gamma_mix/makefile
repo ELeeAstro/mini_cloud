@@ -20,6 +20,7 @@ SRCS_F90 = \
     gamma_mod.f90 \
     mini_cloud_opac_mie_mod.f90 \
     mini_cloud_vf_mod.f90 \
+    mini_cloud_vf_num_mod.f90 \
     mini_cloud_3_gamma_mix_mod.f90 \
     test_main.f90
 
