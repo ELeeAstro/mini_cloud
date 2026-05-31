@@ -1186,8 +1186,19 @@ module mini_cloud_2_mono_mix_mod
       !else
       !  p_vap = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
       !end if
-      ! Murphy & Koop (2005) saturation vapour pressure over ice
-      p_vap = exp(9.550426_dp - 5723.265_dp/T + 3.53068_dp*log(T) - 0.00728332_dp*T) * pa      
+      ! Murphy & Koop (2005) saturation vapour pressure over ice/liquid.
+      ! Expressions return Pa; convert to dyne cm-2 with pa.
+      if (T <= 273.16_dp) then
+        p_vap = exp(9.550426_dp - 5723.265_dp/T + 3.53068_dp*log(T) - 0.00728332_dp*T) * pa
+      else if (T < 1048.0_dp) then
+        p_vap = exp(54.842763_dp - 6763.22_dp/T - 4.210_dp*log(T) + 0.000367_dp*T &
+          & + tanh(0.0415_dp*(T - 218.8_dp)) &
+          & * (53.878_dp - 1331.22_dp/T - 9.44523_dp*log(T) + 0.014025_dp*T)) * pa
+      else
+        p_vap = exp(54.842763_dp - 6763.22_dp/1048.0_dp - 4.210_dp*log(1048.0_dp) + 0.000367_dp*1048.0_dp &
+          & + tanh(0.0415_dp*(1048.0_dp - 218.8_dp)) &
+          & * (53.878_dp - 1331.22_dp/1048.0_dp - 9.44523_dp*log(1048.0_dp) + 0.014025_dp*1048.0_dp)) * pa
+      end if
     case('NH3')
       ! Blakley et al. (2024) - experimental to low T and pressure
       ! p_vap = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
@@ -1365,6 +1376,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp), intent(in) :: T, mol_w
 
     real(dp) :: L_heat
+    real(dp) :: t_lh
 
 
     ! Return latent heat in erg g-1.
@@ -1421,7 +1433,11 @@ module mini_cloud_2_mono_mix_mod
     case('NH4Cl')
       L_heat = 4302.0_dp * log(10.0_dp) * R_gas / mol_w
     case('H2O')
-      L_heat = 5723.265_dp * R_gas / mol_w
+      ! Murphy & Koop (2005) latent heat of sublimation over ice [J mol-1],
+      ! valid for T > 30 K. Convert J mol-1 to erg g-1.
+      t_lh = max(T, 30.0_dp)
+      L_heat = (46782.5_dp + 35.8925_dp*t_lh - 0.07414_dp*t_lh**2 &
+        & + 541.5_dp*exp(-(t_lh/123.75_dp)**2)) * 1.0e7_dp / mol_w
     case('NH3')
       L_heat = 3537.0_dp * R_gas / mol_w
     case('CH4')

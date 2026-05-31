@@ -83,14 +83,18 @@ contains
     case('NH4Cl')
       p_vap = 10.0**(7.0220 - 4302.0/T) * bar
     case('H2O')
-      ! Ackerman & Marley et al. (2001) H2O liquid & ice vapour pressure expressions
-      TC = T - 273.15_dp
-      if (T > 1048.0_dp) then
-        p_vap = 6.0e8_dp
-      else if (T < 273.16_dp) then
-        p_vap = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
+      ! Murphy & Koop (2005) saturation vapour pressure over ice/liquid.
+      ! Expressions return Pa; convert to dyne cm-2 with pa.
+      if (T <= 273.16_dp) then
+        p_vap = exp(9.550426_dp - 5723.265_dp/T + 3.53068_dp*log(T) - 0.00728332_dp*T) * pa
+      else if (T < 1048.0_dp) then
+        p_vap = exp(54.842763_dp - 6763.22_dp/T - 4.210_dp*log(T) + 0.000367_dp*T &
+          & + tanh(0.0415_dp*(T - 218.8_dp)) &
+          & * (53.878_dp - 1331.22_dp/T - 9.44523_dp*log(T) + 0.014025_dp*T)) * pa
       else
-        p_vap = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp))
+        p_vap = exp(54.842763_dp - 6763.22_dp/1048.0_dp - 4.210_dp*log(1048.0_dp) + 0.000367_dp*1048.0_dp &
+          & + tanh(0.0415_dp*(1048.0_dp - 218.8_dp)) &
+          & * (53.878_dp - 1331.22_dp/1048.0_dp - 9.44523_dp*log(1048.0_dp) + 0.014025_dp*1048.0_dp)) * pa
       end if
     case('NH3')
       ! Ackerman & Marley et al. (2001) NH3 ice vapour pressure expression from Weast (1971)
