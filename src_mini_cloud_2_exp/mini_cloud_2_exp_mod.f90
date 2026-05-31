@@ -531,11 +531,14 @@ module mini_cloud_2_exp_mod
     character(len=20), intent(in) :: sp
     real(dp), intent(in) :: T
 
-    real(dp) :: TC
+    real(dp) :: TC, f
+    !real(dp) :: A, B, C
+    real(dp), parameter :: met = 0.0_dp
 
     ! Return vapour pressure in dyne
-    select case(sp)
+    select case(trim(sp))
     case('C')
+      ! Gail & Sedlmayr (2013) - I think...
       p_vap_sp = exp(3.27860e1_dp - 8.65139e4_dp/(T + 4.80395e-1_dp))
     case('TiC')
       ! Kimura et al. (2023)
@@ -545,8 +548,10 @@ module mini_cloud_2_exp_mod
       p_vap_sp =  exp(-9.51431385e4_dp/T + 3.72019157e1_dp + 1.09809718e-3_dp*T &
         & -5.63629542e-7_dp*T**2 + 6.97886017e-11_dp*T**3)
     case('CaTiO3')
+      ! Wakeford et al. (2017) -  taken from VIRGA
+      p_vap_sp = 10.0_dp**(-72160.0_dp/T + 30.24_dp - log10(p/1e6_dp) - 2.0_dp*met) * bar
       ! Kozasa et al. (1987)
-      p_vap_sp = exp(-79568.2_dp/T + 42.0204_dp) * atm
+      !p_vap = exp(-79568.2_dp/T + 42.0204_dp) * atm
     case('TiO2')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-7.70443e4_dp/T +  4.03144e1_dp - 2.59140e-3_dp*T &
@@ -556,15 +561,19 @@ module mini_cloud_2_exp_mod
       p_vap_sp = exp(-6.74603e4_dp/T + 3.82717e1_dp - 2.78551e-3_dp*T &
         & + 5.72078e-7_dp*T**2 - 7.41840e-11_dp*T**3)
     case('Al2O3')
+      ! Wakeford et al. (2017) - taken from CARMA
+      p_vap_sp = 10.0_dp**(17.7_dp - 45892.6_dp/T - 1.66_dp*met) * bar
       ! Kozasa et al. (1987)
-      p_vap_sp = exp(-73503.0_dp/T + 22.005_dp) * atm
+      !p_vap = exp(-73503.0_dp/T + 22.005_dp) * atm
     case('Fe')
+      ! Visscher et al. (2010) - taken from CARMA
+      p_vap_sp = 10.0_dp**(7.23_dp - 20995.0_dp/T) * bar
       ! Elspeth note: Changed to Ackerman & Marley et al. (2001) expression
-      if (T > 1800.0_dp) then
-        p_vap_sp = exp(9.86_dp - 37120.0_dp/T) * bar
-      else
-        p_vap_sp = exp(15.71_dp - 47664.0_dp/T) * bar
-      end if
+      ! if (T > 1800.0_dp) then
+      !   p_vap = exp(9.86_dp - 37120.0_dp/T) * bar
+      ! else
+      !   p_vap = exp(15.71_dp - 47664.0_dp/T) * bar
+      ! end if
     case('FeS')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-5.69922e4_dp/T + 3.86753e1_dp - 4.68301e-3_dp*T &
@@ -574,19 +583,25 @@ module mini_cloud_2_exp_mod
       p_vap_sp = exp(-6.30018e4_dp/T + 3.66364e1_dp - 2.42990e-3_dp*T &
         & + 3.18636e-7_dp*T**2)
     case('Mg2SiO4')
-      ! Kozasa et al. (1989)
-      p_vap_sp = exp(-62279.0_dp/T + 20.944_dp) * atm
+      ! Visscher et al. (2010)/Visscher notes - taken from CARMA
+      p_vap_sp = 10.0_dp**(14.88_dp - 32488.0_dp/T - 1.4_dp*met - 0.2_dp*log10(p/1e6_dp)) * bar
+      ! Kozasa et al. (1989) - Seems to be too high
+      !p_vap = p*10.0**(8.25_dp -  27250.0_dp/T - log10(p/1e6_dp) + 3.58_dp)
     case('MgSiO3','MgSiO3_amorph')
+      ! Visscher - taken from VIRGA
+      p_vap_sp = 10.0_dp**(13.43_dp - 28665.0_dp/T - met) * bar
       ! Ackerman & Marley (2001)
-      p_vap_sp = exp(-58663.0_dp/T + 25.37_dp) * bar
+      !p_vap = exp(-58663.0_dp/T + 25.37_dp) * bar
     case('MgO')
       ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
-        &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
+      !p_vap = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
+      !  &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
+      ! Corrected expression using NASA9 coefficents
+      p_vap_sp = exp(-8.44591675e4_dp/T + 4.58952742e1_dp + 4.38797163e-3_dp*T - 9.84437451e-8_dp*T**2 - 7.30855823e-11_dp*T**3)
     case('SiO2','SiO2_amorph')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-7.28086e4_dp/T + 3.65312e1_dp - 2.56109e-4_dp*T &
-      & - 5.24980e-7_dp*T**2 + 1.53343E-10_dp*T**3) 
+        & - 5.24980e-7_dp*T**2 + 1.53343E-10_dp*T**3) 
     case('SiO')
       ! Gail et al. (2013)
       p_vap_sp = exp(-49520.0_dp/T + 32.52_dp)
@@ -596,60 +611,26 @@ module mini_cloud_2_exp_mod
         &  - 6.17347e-8_dp*T**2 + 2.88469e-12_dp*T**3)
      case('MnS')
       ! Morley et al. (2012)
-      p_vap_sp = 10.0_dp**(11.532_dp - 23810.0_dp/T) * bar
+      p_vap_sp = 10.0_dp**(11.532_dp - 23810.0_dp/T - met) * bar
     case('Na2S')
       ! Morley et al. (2012)
-      p_vap_sp =  10.0_dp**(8.550_dp - 13889.0_dp/T) * bar
+      p_vap_sp =  10.0_dp**(8.550_dp - 13889.0_dp/T - 0.5_dp*met) * bar
     case('ZnS')
       ! Elspeth 5 polynomial Barin data fit
       p_vap_sp = exp(-4.75507888e4_dp/T + 3.66993865e1_dp - 2.49490016e-3_dp*T &
-        &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)      
+        &  + 7.29116854e-7_dp*T**2 - 1.12734453e-10_dp*T**3)
       ! Morley et al. (2012)
-      !p_vap_sp = 10.0_dp**(12.812_dp - 15873.0_dp/T) * bar
+      !p_vap = 10.0_dp**(12.812_dp - 15873.0_dp/T - met) * bar        
     case('KCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.69250e4_dp/T + 3.39574e+1_dp - 2.04903e-3_dp*T &
         & -2.83957e-7_dp*T**2 + 1.82974e-10_dp*T**3)
       ! Morley et al. (2012)
-      !p_vap_sp =  10.0_dp**(7.611_dp - 11382.0_dp/T) * bar
+      !p_vap =  10.0_dp**(7.611_dp - 11382.0_dp/T) * bar
     case('NaCl')
       ! GGChem 5 polynomial NIST fit
       p_vap_sp = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e3_dp*T & 
         & + 5.30965e-7_dp*T**2 -2.59584e-12_dp*T**3)
-    case('NH4Cl')
-      p_vap_sp = 10.0_dp**(7.0220_dp - 4302.0_dp/T) * bar
-    case('H2O')
-      ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
-      TC = T - 273.15_dp
-      if (T > 1048.0_dp) then
-        p_vap_sp = 6.0e8_dp
-      else if (T < 273.16_dp) then
-        p_vap_sp = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
-      else
-        p_vap_sp = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
-      end if
-    case('NH3')
-      ! Ackerman & Marley (2001) NH3 ice vapour pressure expression from Weast (1971)
-      p_vap_sp = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
-    case('CH4')
-      !--- Prydz, R.; Goodwin, R.D., J. Chem. Thermodyn., 1972, 4,1 ---
-      if (T < 0.5_dp) then ! Limiter for very very very cold T
-        p_vap_sp = 10.0_dp**(3.9895_dp - 443.028_dp/(0.5_dp-0.49_dp)) * bar       
-      else
-        p_vap_sp = 10.0_dp**(3.9895_dp - 443.028_dp/(T-0.49_dp)) * bar
-      end if
-    case('NH4SH')
-      !--- E.Lee's fit to Walker & Lumsden (1897) ---
-      p_vap_sp = 10.0_dp**(7.8974_dp - 2409.4_dp/T) * bar
-    case('H2S')
-      !--- Stull (1947) ---
-      if (T < 30.0_dp) then ! Limiter for very cold T
-        p_vap_sp = 10.0_dp**(4.43681_dp - 829.439_dp/(30.0_dp-25.412_dp)) * bar
-      else if (T < 212.8_dp) then
-        p_vap_sp = 10.0_dp**(4.43681_dp - 829.439_dp/(T-25.412_dp)) * bar
-      else
-        p_vap_sp = 10.0_dp**(4.52887_dp - 958.587_dp/(T-0.539_dp)) * bar
-      end if
     case('S2')
       !--- Zahnle et al. (2016) ---
       if (T < 413.0_dp) then
@@ -663,20 +644,87 @@ module mini_cloud_2_exp_mod
         p_vap_sp = exp(20.0_dp - 11800.0_dp/T) * bar
       else
         p_vap_sp = exp(9.6_dp - 7510.0_dp/T) * bar
-      end if
-    case('CO')
-      ! Yaws
-      p_vap_sp = 10.0_dp**(51.8145e0_dp - 7.8824e2_dp/T - 2.2734e1_dp*log10(T) &
-        & + 5.1225e-2_dp*T + 4.6603e-11_dp*T**2) * mmHg
-    case('CO2')
-      ! Yaws
-      p_vap_sp = 10.0_dp**(35.0187e0_dp - 1.5119e3_dp/T - 1.1335e1_dp*log10(T) &
-        & + 9.3383e-3_dp*T + 7.7626e-10_dp*T**2) * mmHg
+      end if        
+    case('NH4Cl')
+      ! Unknown - I think I fit this?
+      p_vap_sp = 10.0_dp**(7.0220_dp - 4302.0_dp/T) * bar
+    case('H2O')
+      TC = T - 273.15_dp
+      ! Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
+      ! if (TC < 0.0_dp) then
+      !   !f = 0.99882_dp * exp(0.00000008_dp * p/pa)
+      !   p_vap = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa * f
+      ! else
+      !   !f = 1.00071_dp * exp(0.000000045_dp * p/pa)
+      !   p_vap = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa * f
+      ! end if
+      ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
+      !if (T > 1048.0_dp) then
+      !  p_vap = 6.0e8_dp
+      !else if (T < 273.16_dp) then
+      !  p_vap = 6111.5_dp * exp((23.036_dp * TC - TC**2/333.7_dp)/(TC + 279.82_dp))
+      !else
+      !  p_vap = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
+      !end if
+      ! Murphy & Koop (2005) saturation vapour pressure over ice
+      p_vap_sp = exp(9.550426_dp - 5723.265_dp/T + 3.53068_dp*log(T) - 0.00728332_dp*T) * pa      
+    case('NH3')
+      ! Blakley et al. (2024) - experimental to low T and pressure
+      ! p_vap = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
+      ! Ackerman & Marley (2001) NH3 ice vapour pressure expression fit from Weast (1971) data
+      !p_vap = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
+      ! Fray & Schmitt (2009)
+      p_vap_sp = exp(15.96_dp - 3537.0_dp/T - 3.310e4_dp/T**2 + 1.742e6_dp/T**3 - 2.995e7_dp/T**4) * bar
+    case('CH4')
+      ! Frey & Schmitt (2009)
+      p_vap_sp = exp(1.051e1_dp - 1.110e3_dp/T - 4.341e3_dp/T**2 + 1.035e5_dp/T**3 - 7.910e5_dp/T**4) * bar
+      ! Lodders & Fegley (1998) - directly taken from VIRGA
+      ! if (T < 90.68_dp) then
+      !   C = -16.043_dp/8.3143_dp * (2.213_dp - 2.650_dp)
+      !   B = -16.043_dp/8.3143_dp * (611.10_dp + (2.213_dp - 2.650_dp) * 90.68_dp)
+      !   A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
+      ! else
+      !   C = -16.043_dp/8.3143_dp * (2.213_dp - 3.370_dp)
+      !   B = -16.043_dp/8.3143_dp * (552.36_dp + (2.213_dp - 3.370_dp) * 90.68_dp)
+      !   A = 0.11719_dp * 90.68_dp**(-C) * exp(-B/90.68_dp)
+      ! end if
+      ! p_vap = A * T**C * exp(B/T) * bar
+
+    case('NH4SH')
+      !--- E.Lee's fit to Walker & Lumsden (1897) ---
+      p_vap_sp = 10.0_dp**(7.8974_dp - 2409.4_dp/T) * bar
+    case('H2S')
+      ! Frey & Schmitt (2009)
+      p_vap_sp = exp(12.98_dp - 2.707e3_dp/T) * bar
     case('H2SO4')
       ! GGChem 5 polynomial NIST fit
-      p_vap_sp = exp(-1.01294e4_dp/T + 3.55465e1_dp - 8.34848e-3_dp*T)
+      p_vap_sp = exp(-1.01294e4_dp/T + 3.55465e1_dp - 8.34848e-3_dp*T)      
+    case('CO')
+      ! Frey & Schmitt (2009)
+      if (T < 61.55_dp) then
+        p_vap_sp = exp(1.043e1_dp - 7.213e2_dp/T - 1.074e4_dp/T**2 + 2.341e5_dp/T**3 - 2.392e6_dp/T**4 + 9.478e6_dp/T**5) * bar
+      else
+        p_vap_sp = exp(1.025e1_dp - 7.482e2_dp/T - 5.843e3_dp/T**2 + 3.939e4_dp/T**3) * bar
+      end if
+      ! Yaws
+      !p_vap = 10.0_dp**(51.8145e0_dp - 7.8824e2_dp/T - 2.2734e1_dp*log10(T) &
+      !  & + 5.1225e-2_dp*T + 4.6603e-11_dp*T**2) * mmHg
+    case('CO2')
+      ! Frey & Schmitt (2009)
+      if (T < 194.7_dp) then
+        p_vap_sp = exp(1.476e1_dp - 2.571e3_dp/T - 7.781e4_dp/T**2 + 4.325e6_dp/T**3 - 1.207e8_dp/T**4 + 1.350e9_dp/T**5) * bar
+      else
+        p_vap_sp = exp(1.861e1_dp - 4.154e3_dp/T + 1.041e5_dp/T**2) * bar
+      end if      
+      ! Yaws
+      !p_vap = 10.0_dp**(35.0187e0_dp - 1.5119e3_dp/T - 1.1335e1_dp*log10(T) &
+      !  & + 9.3383e-3_dp*T + 7.7626e-10_dp*T**2) * mmHg
+    case('O2')
+      ! Blakley et al. (2024) - experimental to low T and pressure (beta O2)
+      p_vap_sp = exp(15.29_dp - 1166.2_dp/T - 0.75587_dp*log(T) + 0.14188_dp*T - 1.8665e-3_dp*T**2 + 7.582e-6_dp *T**3) * bar
     case default
-      print*, 'Vapour pressure species not found: ', trim(sp), 'STOP'
+      print*, 'Vapour pressure species not found: ', trim(sp)
+      print*, 'STOP'
       stop
     end select
 

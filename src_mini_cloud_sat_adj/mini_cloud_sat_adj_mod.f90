@@ -145,7 +145,8 @@ contains
     implicit none
 
     character(len=20), intent(in) :: sp
-    real(dp), intent(in) :: T, p, met
+    real(dp), intent(in) :: T
+    real(dp), intent(in) :: p, met
 
     real(dp) :: TC, f
     !real(dp) :: A, B, C
@@ -210,8 +211,10 @@ contains
       !p_vap = exp(-58663.0_dp/T + 25.37_dp) * bar
     case('MgO')
       ! GGChem 5 polynomial NIST fit
-      p_vap = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
-        &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
+      !p_vap = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
+      !  &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
+      ! Corrected expression using NASA9 coefficents
+      p_vap = exp(-8.44591675e4_dp/T + 4.58952742e1_dp + 4.38797163e-3_dp*T - 9.84437451e-8_dp*T**2 - 7.30855823e-11_dp*T**3)
     case('SiO2','SiO2_amorph')
       ! GGChem 5 polynomial NIST fit
       p_vap = exp(-7.28086e4_dp/T + 3.65312e1_dp - 2.56109e-4_dp*T &
@@ -265,13 +268,13 @@ contains
     case('H2O')
       TC = T - 273.15_dp
       ! Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
-      if (TC < 0.0_dp) then
-        f = 0.99882_dp * exp(0.00000008_dp * p/pa)
-        p_vap = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa * f
-      else
-        f = 1.00071_dp * exp(0.000000045_dp * p/pa)
-        p_vap = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa * f
-      end if
+      ! if (TC < 0.0_dp) then
+      !   !f = 0.99882_dp * exp(0.00000008_dp * p/pa)
+      !   p_vap = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa * f
+      ! else
+      !   !f = 1.00071_dp * exp(0.000000045_dp * p/pa)
+      !   p_vap = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa * f
+      ! end if
       ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
       !if (T > 1048.0_dp) then
       !  p_vap = 6.0e8_dp
@@ -280,11 +283,15 @@ contains
       !else
       !  p_vap = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
       !end if
+      ! Murphy & Koop (2005) saturation vapour pressure over ice
+      p_vap = exp(9.550426_dp - 5723.265_dp/T + 3.53068_dp*log(T) - 0.00728332_dp*T) * pa      
     case('NH3')
       ! Blakley et al. (2024) - experimental to low T and pressure
-      p_vap = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
+      ! p_vap = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
       ! Ackerman & Marley (2001) NH3 ice vapour pressure expression fit from Weast (1971) data
       !p_vap = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
+      ! Fray & Schmitt (2009)
+      p_vap = exp(15.96_dp - 3537.0_dp/T - 3.310e4_dp/T**2 + 1.742e6_dp/T**3 - 2.995e7_dp/T**4) * bar
     case('CH4')
       ! Frey & Schmitt (2009)
       p_vap = exp(1.051e1_dp - 1.110e3_dp/T - 4.341e3_dp/T**2 + 1.035e5_dp/T**3 - 7.910e5_dp/T**4) * bar

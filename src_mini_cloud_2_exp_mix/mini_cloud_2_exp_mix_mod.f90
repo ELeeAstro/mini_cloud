@@ -1150,8 +1150,10 @@ module mini_cloud_2_exp_mix_mod
       !p_vap = exp(-58663.0_dp/T + 25.37_dp) * bar
     case('MgO')
       ! GGChem 5 polynomial NIST fit
-      p_vap = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
-        &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
+      !p_vap = exp(-7.91838e4_dp/T + 3.57312e1_dp + 1.45021e-4_dp*T &
+      !  &  - 8.47194e-8*T**2 + 4.49221e-12_dp*T**3)
+      ! Corrected expression using NASA9 coefficents
+      p_vap = exp(-8.44591675e4_dp/T + 4.58952742e1_dp + 4.38797163e-3_dp*T - 9.84437451e-8_dp*T**2 - 7.30855823e-11_dp*T**3)
     case('SiO2','SiO2_amorph')
       ! GGChem 5 polynomial NIST fit
       p_vap = exp(-7.28086e4_dp/T + 3.65312e1_dp - 2.56109e-4_dp*T &
@@ -1205,13 +1207,13 @@ module mini_cloud_2_exp_mix_mod
     case('H2O')
       TC = T - 273.15_dp
       ! Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
-      if (TC < 0.0_dp) then
-        f = 0.99882_dp * exp(0.00000008_dp * p/pa)
-        p_vap = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa * f
-      else
-        f = 1.00071_dp * exp(0.000000045_dp * p/pa)
-        p_vap = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa * f
-      end if
+      ! if (TC < 0.0_dp) then
+      !   !f = 0.99882_dp * exp(0.00000008_dp * p/pa)
+      !   p_vap = exp(43.494_dp - (6545.8_dp/(TC + 278.0_dp)))/(TC + 868.0_dp)**2.0_dp * pa * f
+      ! else
+      !   !f = 1.00071_dp * exp(0.000000045_dp * p/pa)
+      !   p_vap = exp(34.494_dp - (4924.99_dp/(TC + 237.1_dp)))/(TC + 105.0_dp)**1.57_dp * pa * f
+      ! end if
       ! Ackerman & Marley (2001) H2O liquid & ice vapour pressure expressions
       !if (T > 1048.0_dp) then
       !  p_vap = 6.0e8_dp
@@ -1220,11 +1222,15 @@ module mini_cloud_2_exp_mix_mod
       !else
       !  p_vap = 6112.1_dp * exp((18.729_dp * TC - TC**2/227.3_dp)/(TC + 257.87_dp)) 
       !end if
+      ! Murphy & Koop (2005) saturation vapour pressure over ice
+      p_vap = exp(9.550426_dp - 5723.265_dp/T + 3.53068_dp*log(T) - 0.00728332_dp*T) * pa      
     case('NH3')
       ! Blakley et al. (2024) - experimental to low T and pressure
-      p_vap = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
+      ! p_vap = exp(-5.55_dp - 3605.0_dp/T + 4.82792_dp*log(T) - 0.024895_dp*T + 2.1669e-5_dp*T**2 - 2.3575e-8_dp *T**3) * bar
       ! Ackerman & Marley (2001) NH3 ice vapour pressure expression fit from Weast (1971) data
       !p_vap = exp(10.53_dp - 2161.0_dp/T - 86596.0_dp/T**2)  * bar
+      ! Fray & Schmitt (2009)
+      p_vap = exp(15.96_dp - 3537.0_dp/T - 3.310e4_dp/T**2 + 1.742e6_dp/T**3 - 2.995e7_dp/T**4) * bar
     case('CH4')
       ! Frey & Schmitt (2009)
       p_vap = exp(1.051e1_dp - 1.110e3_dp/T - 4.341e3_dp/T**2 + 1.035e5_dp/T**3 - 7.910e5_dp/T**4) * bar
@@ -1397,11 +1403,15 @@ module mini_cloud_2_exp_mix_mod
     real(dp) :: L_heat
 
 
-    ! Return latent heat in erg g-1
-    ! Get value from vapour pressure expression (or special function)
+    ! Return latent heat in erg g-1.
+    ! Values are estimated from the active vapour pressure expression using the
+    ! leading linear coefficient in ln(p_vap) versus 1/T:
+    ! L ~= -d(ln(p_vap))/d(1/T) * R_gas / mol_w. For exp(B - A/T) this gives
+    ! A*R_gas/mol_w; for 10**(B - A/T) this gives A*log(10)*R_gas/mol_w.
+    ! Higher-order temperature terms in polynomial fits are ignored here.
     select case(trim(sp))
     case('C')
-      L_heat = 41523.0_dp * log(10.0_dp) * R_gas / mol_w
+      L_heat = 8.65139e4_dp * (T/(T + 4.80395e-1_dp))**2 * R_gas / mol_w
     case('TiC')
       L_heat = 33600.0_dp * log(10.0_dp) * R_gas / mol_w
     case('SiC')
@@ -1427,7 +1437,7 @@ module mini_cloud_2_exp_mix_mod
     case('MgSiO3','MgSiO3_amorph')
       L_heat = 28665.0_dp * log(10.0_dp) * R_gas / mol_w
     case('MgO')
-      L_heat = 7.91838e4_dp * R_gas / mol_w
+      L_heat = 8.44591675e4_dp * R_gas / mol_w
     case('SiO2','SiO2_amorph')
       L_heat = 7.28086e4_dp * R_gas / mol_w
     case('SiO')
@@ -1447,23 +1457,39 @@ module mini_cloud_2_exp_mix_mod
     case('NH4Cl')
       L_heat = 4302.0_dp * log(10.0_dp) * R_gas / mol_w
     case('H2O')
-      L_heat = 2257.0e7_dp
+      L_heat = 5723.265_dp * R_gas / mol_w
     case('NH3')
-      L_heat = 1371.0e7_dp
+      L_heat = 3537.0_dp * R_gas / mol_w
     case('CH4')
-      L_heat = 480.6e7_dp
+      L_heat = 1.110e3_dp * R_gas / mol_w
     case('NH4SH')
       L_heat = 2409.4_dp * log(10.0_dp) * R_gas / mol_w
     case('H2S')
       L_heat = 2.707e3_dp * R_gas / mol_w
     case('S2')
-      L_heat = 14000.0_dp * R_gas / mol_w
+      if (T < 413.0_dp) then
+        L_heat = 18500.0_dp * R_gas / mol_w
+      else
+        L_heat = 14000.0_dp * R_gas / mol_w
+      end if
     case('S8')
-      L_heat = 7510.0_dp * R_gas / mol_w
+      if (T < 413.0_dp) then
+        L_heat = 11800.0_dp * R_gas / mol_w
+      else
+        L_heat = 7510.0_dp * R_gas / mol_w
+      end if
     case('CO')
-      L_heat = 7.213e2_dp * R_gas / mol_w
+      if (T < 61.55_dp) then
+        L_heat = 7.213e2_dp * R_gas / mol_w
+      else
+        L_heat = 7.482e2_dp * R_gas / mol_w
+      end if
     case('CO2')
-      L_heat = 2.571e3_dp * R_gas / mol_w
+      if (T < 194.7_dp) then
+        L_heat = 2.571e3_dp * R_gas / mol_w
+      else
+        L_heat = 4.154e3_dp * R_gas / mol_w
+      end if
     case('H2SO4')
       L_heat = 1.01294e4_dp * R_gas / mol_w
     case('O2')
