@@ -1628,104 +1628,162 @@ module mini_cloud_3_gamma_mix_mod
     real(dp), intent(in) :: T, mol_w
 
     real(dp) :: L_heat
-    real(dp) :: t_lh
+    real(dp) :: h_lh, g_lh
 
 
     ! Return latent heat in erg g-1.
-    ! Values are estimated from the active vapour pressure expression using the
-    ! leading linear coefficient in ln(p_vap) versus 1/T:
-    ! L ~= -d(ln(p_vap))/d(1/T) * R_gas / mol_w. For exp(B - A/T) this gives
-    ! A*R_gas/mol_w; for 10**(B - A/T) this gives A*log(10)*R_gas/mol_w.
-    ! Higher-order temperature terms in polynomial fits are ignored here.
+    ! Use Clausius-Clapeyron on the active vapour pressure expression:
+    ! L = (R_gas/mol_w) * T**2 * d(ln p_vap)/dT.
     select case(trim(sp))
     case('C')
-      L_heat = 8.65139e4_dp * (T/(T + 4.80395e-1_dp))**2 * R_gas / mol_w
+      ! Gail & Sedlmayr shifted inverse-temperature carbon fit.
+      L_heat = R_gas/mol_w * 8.65139e4_dp * (T/(T + 4.80395e-1_dp))**2
     case('TiC')
-      L_heat = 33600.0_dp * log(10.0_dp) * R_gas / mol_w
+      ! Kimura et al. base-10 inverse-temperature TiC fit.
+      L_heat = R_gas/mol_w * 33600.0_dp * log(10.0_dp)
     case('SiC')
-      L_heat = 9.51431385e4_dp * R_gas / mol_w
+      ! JANAF/NIST polynomial SiC fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (9.51431385e4_dp + 1.09809718e-3_dp*T**2 &
+        & - 2.0_dp*5.63629542e-7_dp*T**3 + 3.0_dp*6.97886017e-11_dp*T**4)
     case('CaTiO3')
-      L_heat = 72160.0_dp * log(10.0_dp) * R_gas / mol_w
+      ! Wakeford/VIRGA base-10 CaTiO3 fit with pressure and metallicity terms.
+      L_heat = R_gas/mol_w * 72160.0_dp * log(10.0_dp)
     case('Al2O3')
-      L_heat = 45892.6_dp * log(10.0_dp) * R_gas / mol_w
+      ! Wakeford/CARMA base-10 Al2O3 fit with metallicity term.
+      L_heat = R_gas/mol_w * 45892.6_dp * log(10.0_dp)
     case('TiO2')
-      L_heat = 7.70443e4_dp * R_gas / mol_w
+      ! GGChem/NIST polynomial TiO2 fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (7.70443e4_dp - 2.59140e-3_dp*T**2 &
+        & + 2.0_dp*6.02422e-7_dp*T**3 - 3.0_dp*6.86899e-11_dp*T**4)
     case('VO')
-      L_heat = 6.74603e4_dp * R_gas / mol_w
+      ! NIST polynomial VO fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (6.74603e4_dp - 2.78551e-3_dp*T**2 &
+        & + 2.0_dp*5.72078e-7_dp*T**3 - 3.0_dp*7.41840e-11_dp*T**4)
     case('Fe')
-      L_heat = 20995.0_dp * log(10.0_dp) * R_gas / mol_w
+      ! Visscher/CARMA base-10 inverse-temperature Fe fit.
+      L_heat = R_gas/mol_w * 20995.0_dp * log(10.0_dp)
     case('FeS')
-      L_heat = 5.69922e4_dp * R_gas / mol_w
+      ! GGChem/NIST polynomial FeS fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (5.69922e4_dp - 4.68301e-3_dp*T**2 &
+        & + 2.0_dp*1.03559e-6_dp*T**3 - 3.0_dp*8.42872e-11_dp*T**4)
     case('FeO')
-      L_heat = 6.30018e4_dp * R_gas / mol_w
+      ! GGChem/NIST polynomial FeO fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (6.30018e4_dp - 2.42990e-3_dp*T**2 &
+        & + 2.0_dp*3.18636e-7_dp*T**3)
     case('MgS')
-      L_heat = 5.92010440e4_dp * R_gas / mol_w
+      ! No active MgS vapour pressure expression is defined in p_vap_sp.
+      print*, 'Latent heat: no active vapour pressure expression for ', trim(sp)
+      print*, 'STOP'
+      stop
     case('Mg2SiO4')
-      L_heat = 32488.0_dp * log(10.0_dp) * R_gas / mol_w
+      ! Visscher/CARMA base-10 Mg2SiO4 fit with pressure and metallicity terms.
+      L_heat = R_gas/mol_w * 32488.0_dp * log(10.0_dp)
     case('MgSiO3','MgSiO3_amorph')
-      L_heat = 28665.0_dp * log(10.0_dp) * R_gas / mol_w
+      ! Visscher/VIRGA base-10 MgSiO3 fit with metallicity term.
+      L_heat = R_gas/mol_w * 28665.0_dp * log(10.0_dp)
     case('MgO')
-      L_heat = 8.44591675e4_dp * R_gas / mol_w
+      ! Corrected NASA9/GGChem polynomial MgO fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (8.44591675e4_dp + 4.38797163e-3_dp*T**2 &
+        & - 2.0_dp*9.84437451e-8_dp*T**3 - 3.0_dp*7.30855823e-11_dp*T**4)
     case('SiO2','SiO2_amorph')
-      L_heat = 7.28086e4_dp * R_gas / mol_w
+      ! GGChem/NIST polynomial SiO2 fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (7.28086e4_dp - 2.56109e-4_dp*T**2 &
+        & - 2.0_dp*5.24980e-7_dp*T**3 + 3.0_dp*1.53343e-10_dp*T**4)
     case('SiO')
-      L_heat = 49520.0_dp * R_gas / mol_w
+      ! Gail et al. inverse-temperature SiO fit.
+      L_heat = R_gas/mol_w * 49520.0_dp
     case('Cr')
-      L_heat = 4.78455e4_dp * R_gas / mol_w
+      ! GGChem/NIST polynomial Cr fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (4.78455e4_dp - 5.28710e-4_dp*T**2 &
+        & - 2.0_dp*6.17347e-8_dp*T**3 + 3.0_dp*2.88469e-12_dp*T**4)
     case('MnS')
-      L_heat = 23810.0_dp * log(10.0_dp) * R_gas / mol_w
+      ! Morley base-10 inverse-temperature MnS fit with metallicity term.
+      L_heat = R_gas/mol_w * 23810.0_dp * log(10.0_dp)
     case('Na2S')
-      L_heat = 13889.0_dp * log(10.0_dp) * R_gas / mol_w
+      ! Morley base-10 inverse-temperature Na2S fit with metallicity term.
+      L_heat = R_gas/mol_w * 13889.0_dp * log(10.0_dp)
     case('ZnS')
-      L_heat = 4.75507888e4_dp * R_gas / mol_w
+      ! Barin/GGChem polynomial ZnS fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (4.75507888e4_dp - 2.49490016e-3_dp*T**2 &
+        & + 2.0_dp*7.29116854e-7_dp*T**3 - 3.0_dp*1.12734453e-10_dp*T**4)
     case('KCl')
-      L_heat = 2.69250e4_dp * R_gas / mol_w
+      ! GGChem/NIST polynomial KCl fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (2.69250e4_dp - 2.04903e-3_dp*T**2 &
+        & - 2.0_dp*2.83957e-7_dp*T**3 + 3.0_dp*1.82974e-10_dp*T**4)
     case('NaCl')
-      L_heat = 2.79146e4_dp * R_gas / mol_w
+      ! GGChem/NIST polynomial NaCl fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (2.79146e4_dp - 3.11287e3_dp*T**2 &
+        & + 2.0_dp*5.30965e-7_dp*T**3 - 3.0_dp*2.59584e-12_dp*T**4)
     case('NH4Cl')
-      L_heat = 4302.0_dp * log(10.0_dp) * R_gas / mol_w
+      ! Base-10 inverse-temperature NH4Cl fit.
+      L_heat = R_gas/mol_w * 4302.0_dp * log(10.0_dp)
     case('H2O')
-      ! Murphy & Koop (2005) latent heat of sublimation over ice [J mol-1],
-      ! valid for T > 30 K. Convert J mol-1 to erg g-1.
-      t_lh = max(T, 30.0_dp)
-      L_heat = (46782.5_dp + 35.8925_dp*t_lh - 0.07414_dp*t_lh**2 &
-        & + 541.5_dp*exp(-(t_lh/123.75_dp)**2)) * 1.0e7_dp / mol_w
-    case('NH3')
-      L_heat = 3537.0_dp * R_gas / mol_w
-    case('CH4')
-      L_heat = 1.110e3_dp * R_gas / mol_w
-    case('NH4SH')
-      L_heat = 2409.4_dp * log(10.0_dp) * R_gas / mol_w
-    case('H2S')
-      L_heat = 2.707e3_dp * R_gas / mol_w
-    case('S2')
-      if (T < 413.0_dp) then
-        L_heat = 18500.0_dp * R_gas / mol_w
+      ! Murphy & Koop ice/liquid H2O saturation vapour pressure.
+      if (T <= 273.16_dp) then
+        L_heat = R_gas/mol_w * (5723.265_dp + 3.53068_dp*T - 0.00728332_dp*T**2)
+      else if (T < 1048.0_dp) then
+        h_lh = tanh(0.0415_dp*(T - 218.8_dp))
+        g_lh = 53.878_dp - 1331.22_dp/T - 9.44523_dp*log(T) + 0.014025_dp*T
+        L_heat = R_gas/mol_w * T**2 * (6763.22_dp/T**2 - 4.210_dp/T + 0.000367_dp &
+          & + h_lh*(1331.22_dp/T**2 - 9.44523_dp/T + 0.014025_dp) &
+          & + 0.0415_dp*(1.0_dp - h_lh**2)*g_lh)
       else
-        L_heat = 14000.0_dp * R_gas / mol_w
+        L_heat = 0.0_dp
+      end if
+    case('NH3')
+      ! Fray & Schmitt polynomial NH3 fit in inverse powers of T.
+      L_heat = R_gas/mol_w * (3537.0_dp + 2.0_dp*3.310e4_dp/T &
+        & - 3.0_dp*1.742e6_dp/T**2 + 4.0_dp*2.995e7_dp/T**3)
+    case('CH4')
+      ! Fray & Schmitt polynomial CH4 fit in inverse powers of T.
+      L_heat = R_gas/mol_w * (1.110e3_dp + 2.0_dp*4.341e3_dp/T &
+        & - 3.0_dp*1.035e5_dp/T**2 + 4.0_dp*7.910e5_dp/T**3)
+    case('NH4SH')
+      ! Walker & Lumsden base-10 inverse-temperature NH4SH fit.
+      L_heat = R_gas/mol_w * 2409.4_dp * log(10.0_dp)
+    case('H2S')
+      ! Fray & Schmitt inverse-temperature H2S fit.
+      L_heat = R_gas/mol_w * 2.707e3_dp
+    case('S2')
+      ! Zahnle piecewise inverse-temperature S2 fit.
+      if (T < 413.0_dp) then
+        L_heat = R_gas/mol_w * 18500.0_dp
+      else
+        L_heat = R_gas/mol_w * 14000.0_dp
       end if
     case('S8')
+      ! Zahnle piecewise inverse-temperature S8 fit.
       if (T < 413.0_dp) then
-        L_heat = 11800.0_dp * R_gas / mol_w
+        L_heat = R_gas/mol_w * 11800.0_dp
       else
-        L_heat = 7510.0_dp * R_gas / mol_w
+        L_heat = R_gas/mol_w * 7510.0_dp
       end if
     case('CO')
+      ! Fray & Schmitt piecewise CO fit in inverse powers of T.
       if (T < 61.55_dp) then
-        L_heat = 7.213e2_dp * R_gas / mol_w
+        L_heat = R_gas/mol_w * (7.213e2_dp + 2.0_dp*1.074e4_dp/T &
+          & - 3.0_dp*2.341e5_dp/T**2 + 4.0_dp*2.392e6_dp/T**3 &
+          & - 5.0_dp*9.478e6_dp/T**4)
       else
-        L_heat = 7.482e2_dp * R_gas / mol_w
+        L_heat = R_gas/mol_w * (7.482e2_dp + 2.0_dp*5.843e3_dp/T &
+          & - 3.0_dp*3.939e4_dp/T**2)
       end if
     case('CO2')
+      ! Fray & Schmitt piecewise CO2 fit in inverse powers of T.
       if (T < 194.7_dp) then
-        L_heat = 2.571e3_dp * R_gas / mol_w
+        L_heat = R_gas/mol_w * (2.571e3_dp + 2.0_dp*7.781e4_dp/T &
+          & - 3.0_dp*4.325e6_dp/T**2 + 4.0_dp*1.207e8_dp/T**3 &
+          & - 5.0_dp*1.350e9_dp/T**4)
       else
-        L_heat = 4.154e3_dp * R_gas / mol_w
+        L_heat = R_gas/mol_w * (4.154e3_dp - 2.0_dp*1.041e5_dp/T)
       end if
     case('H2SO4')
-      L_heat = 1.01294e4_dp * R_gas / mol_w
+      ! GGChem/NIST polynomial H2SO4 fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (1.01294e4_dp - 8.34848e-3_dp*T**2)
     case('O2')
-      L_heat = 1166.2_dp * R_gas / mol_w
+      ! Blakley beta-O2 polynomial fit in ln(p_vap).
+      L_heat = R_gas/mol_w * (1166.2_dp - 0.75587_dp*T + 0.14188_dp*T**2 &
+        & - 2.0_dp*1.8665e-3_dp*T**3 + 3.0_dp*7.582e-6_dp*T**4)
     case default
       print*, 'Latent heat: dust species not found: ', trim(sp)
       print*, 'STOP'
