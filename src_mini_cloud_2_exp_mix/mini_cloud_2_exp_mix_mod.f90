@@ -1412,8 +1412,6 @@ module mini_cloud_2_exp_mix_mod
     real(dp), intent(in) :: T, mol_w
 
     real(dp) :: L_heat
-    real(dp) :: h_lh, g_lh
-
 
     ! Return latent heat in erg g-1.
     ! Use Clausius-Clapeyron on the active vapour pressure expression:
@@ -1502,17 +1500,13 @@ module mini_cloud_2_exp_mix_mod
       ! Base-10 inverse-temperature NH4Cl fit.
       L_heat = R_gas/mol_w * 4302.0_dp * log(10.0_dp)
     case('H2O')
-      ! Murphy & Koop ice/liquid H2O saturation vapour pressure.
+      ! Murphy & Koop latent heat: Eq. (5) for ice and Eq. (9) for liquid water.
       if (T <= 273.16_dp) then
-        L_heat = R_gas/mol_w * (5723.265_dp + 3.53068_dp*T - 0.00728332_dp*T**2)
-      else if (T < 1048.0_dp) then
-        h_lh = tanh(0.0415_dp*(T - 218.8_dp))
-        g_lh = 53.878_dp - 1331.22_dp/T - 9.44523_dp*log(T) + 0.014025_dp*T
-        L_heat = R_gas/mol_w * T**2 * (6763.22_dp/T**2 - 4.210_dp/T + 0.000367_dp &
-          & + h_lh*(1331.22_dp/T**2 - 9.44523_dp/T + 0.014025_dp) &
-          & + 0.0415_dp*(1.0_dp - h_lh**2)*g_lh)
+        L_heat = (46782.5_dp + 35.8925_dp*T - 0.07414_dp*T**2 &
+          & + 541.5_dp*exp(-(T/123.75_dp)**2)) * 1.0e7_dp/mol_w
       else
-        L_heat = 0.0_dp
+        L_heat = (56579.0_dp - 42.212_dp*T + exp(0.1149_dp*(281.6_dp - T))) &
+          & * 1.0e7_dp/mol_w
       end if
     case('NH3')
       ! Fray & Schmitt polynomial NH3 fit in inverse powers of T.
