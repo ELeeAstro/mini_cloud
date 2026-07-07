@@ -117,7 +117,7 @@ contains
 
       !! Calculate the opacity, abledo and mean cosine angle (asymmetry factor)
       k_ext(l) = (q_ext * xsec * n_d)/rho
-      alb(l) = max(q_sca/q_ext, 0.99_dp)
+      alb(l) = min(q_sca/q_ext, 0.99_dp)
       gg(l) = max(g, 0.0_dp)
 
       if (.not. ieee_is_finite(k_ext(l))) k_ext(l) = 0.0_dp
