@@ -16,6 +16,11 @@ module mini_cloud_2_mono_mix_mod
   real(dp), parameter :: eV = 1.60217663e-12_dp
   real(dp), parameter :: third = 1.0_dp/3.0_dp
   real(dp), parameter :: twothird = 2.0_dp/3.0_dp
+  real(dp), parameter :: sat_tol = 0.01_dp
+  real(dp), parameter :: sat_blend = 0.01_dp
+  real(dp), parameter :: min_phase_timescale = 1.0_dp
+  real(dp), parameter :: atol_scale = 1.0e-6_dp
+  real(dp), parameter :: tracer_floor = 1.0e-30_dp
 
   !! Conversions to dyne
   real(dp), parameter :: bar = 1.0e6_dp ! bar to dyne
@@ -69,7 +74,7 @@ module mini_cloud_2_mono_mix_mod
   real(dp), parameter :: d_CH4 = 3.758e-8_dp, LJ_CH4 = 148.6_dp * kb, molg_CH4 = 16.0425_dp
   real(dp), parameter :: d_C2H2 = 4.033e-8_dp, LJ_C2H2 = 231.8_dp * kb, molg_C2H2 = 26.0373_dp
   real(dp), parameter :: d_NH3 = 2.900e-8_dp, LJ_NH3 = 558.3_dp * kb, molg_NH3 = 17.03052_dp
-  real(dp), parameter :: d_N2 = 3.798e-8_dp, LJ_N2 = 71.4_dp * kb, molg_N2 = 14.0067_dp
+  real(dp), parameter :: d_N2 = 3.798e-8_dp, LJ_N2 = 71.4_dp * kb, molg_N2 = 28.0134_dp
   real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
   real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
 
@@ -79,8 +84,8 @@ module mini_cloud_2_mono_mix_mod
   !$omp threadprivate(d_g, LJ_g, molg_g, eta_g)
 
   public :: mini_cloud_2_mono_mix, RHS_mom, jac_dum
-  private :: calc_coal, calc_coag, calc_cond, calc_hom_nuc, calc_seed_evap, &
-    & p_vap_sp, sig_sp, l_heat_sp, eta_a_mix, kappa_a_mix
+  private :: calc_coal, calc_coag, calc_cond, limit_phase_rates, calc_hom_nuc, calc_seed_evap, &
+    & phase_activity, smooth_rate_limit, p_vap_sp, sig_sp, l_heat_sp, eta_a_mix, kappa_a_mix
 
   contains
 
@@ -108,19 +113,23 @@ module mini_cloud_2_mono_mix_mod
     ! DLSODE variables
     integer :: n_eq
     real(dp), allocatable, dimension(:) :: y
-    real(dp), allocatable, dimension(:) :: rwork
+    real(dp), allocatable, dimension(:) :: rwork, atol
     integer, allocatable, dimension(:) :: iwork
     integer :: itol, itask, istate, iopt, mf
     integer :: rworkdim, iworkdim
-    real(dp) :: rtol, atol
+    real(dp) :: rtol
 
     !! Work variables
     integer :: n_bg
     real(dp), allocatable, dimension(:) :: VMR_bg
     real(dp), dimension(n_in) :: q_1_old
     real(dp) :: Q_latent
+    logical :: integration_ok
 
     ndust = n_in
+
+    if (t_end <= 0.0_dp) error stop 'mini_cloud_2_mono_mix: t_end must be positive'
+    if (cp_in <= 0.0_dp) error stop 'mini_cloud_2_mono_mix: cp_in must be positive'
 
     !! Alter input values to mini-cloud units
     !! (note, some are obvious not not changed in case specific models need different conversion factors)
@@ -188,11 +197,10 @@ module mini_cloud_2_mono_mix_mod
     mf = 22
     rworkdim = 22 + 9*n_eq + n_eq**2
     iworkdim = 20 + n_eq
-    allocate(rwork(rworkdim), iwork(iworkdim))
+    allocate(rwork(rworkdim), iwork(iworkdim), atol(n_eq))
 
-    itol = 1
-    rtol = 1.0e-3_dp           ! Relative tolerances for each scalar
-    atol = 1.0e-30_dp               ! Absolute tolerance for each scalar (floor value)
+    itol = 2
+    rtol = 1.0e-3_dp
 
     rwork(:) = 0.0_dp
     iwork(:) = 0
@@ -218,7 +226,12 @@ module mini_cloud_2_mono_mix_mod
     q_1_old(:) = q_1(:)
 
     !! Limit y values
-    y(:) = max(y(:),1e-30_dp)
+    y(:) = max(y(:),tracer_floor)
+
+    !! Per-equation absolute tolerances retain a common numerical floor while
+    !! scaling to the initial magnitude of each number, condensate, and vapour
+    !! tracer. Relative tolerance remains dominant away from zero.
+    atol(:) = max(tracer_floor, atol_scale*abs(y(:)))
 
     t_now = 0.0_dp
 
@@ -227,6 +240,7 @@ module mini_cloud_2_mono_mix_mod
     call xsetf(0)
 
     ncall = 0
+    integration_ok = .false.
 
     do while ((t_now < t_end) .and. (ncall < 100))
 
@@ -235,19 +249,27 @@ module mini_cloud_2_mono_mix_mod
 
       ncall = ncall + 1
 
-      !if (mod(ncall,10) == 0) then
-        !istate = 1
-      !else  if (istate == -1) then
-        !istate = 2
-      if (istate < 0) then
-        print*, 'dlsode: ', istate, ilay, t_now
+      if (istate == -1) then
+        ! Excess work is recoverable: retain DLSODE's state and continue.
+        istate = 2
+      else if (istate < 0) then
+        exit
+      else if (t_now >= t_end) then
+        integration_ok = .true.
         exit
       end if
 
     end do
 
+    if (.not. integration_ok) then
+      print*, 'dlsode failed: ', istate, ilay, t_now, t_end
+      dTdt = 0.0_dp
+      deallocate(y, rwork, atol, iwork, d_g, LJ_g, molg_g, eta_g, VMR_bg, cld)
+      return
+    end if
+
     !! Limit y values
-    y(:) = max(y(:),1e-30_dp)
+    y(:) = max(y(:),tracer_floor)
 
     !! Give y values to tracers
     q_0 = y(1)
@@ -258,7 +280,7 @@ module mini_cloud_2_mono_mix_mod
     Q_latent = sum(cld(:)%lh * (q_1_old(:) - q_1(:)))
     dTdt = -Q_latent/(cp*t_end)
 
-    deallocate(y, rwork, iwork, d_g, LJ_g, molg_g, eta_g, VMR_bg, cld)
+    deallocate(y, rwork, atol, iwork, d_g, LJ_g, molg_g, eta_g, VMR_bg, cld)
 
   end subroutine mini_cloud_2_mono_mix
 
@@ -266,15 +288,16 @@ module mini_cloud_2_mono_mix_mod
     implicit none
 
     integer, intent(in) :: n_eq
-    real(dp), intent(inout) :: time
-    real(dp), dimension(n_eq), intent(inout) :: y
-    real(dp), dimension(n_eq), intent(inout) :: f
+    real(dp), intent(in) :: time
+    real(dp), dimension(n_eq), intent(in) :: y
+    real(dp), dimension(n_eq), intent(out) :: f
 
     real(dp) :: f_coal, f_coag
-    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf, Kn_b
+    real(dp) :: m_c, r_c, Kn, beta, vf_s, vf
 
     integer :: j
     real(dp) :: N_c, rho_c_t, rho_d_m, V_tot
+    real(dp), dimension(n_eq) :: y_eval
     real(dp), dimension(ndust) :: rho_c, rho_v, V_mix
     real(dp), dimension(ndust) :: p_v, n_v
     real(dp), dimension(ndust) :: f_nuc_hom, f_cond, f_seed_evap
@@ -283,13 +306,14 @@ module mini_cloud_2_mono_mix_mod
     !! The current values of each moment (y) are typically kept constant
     !! Basically, you solve for the RHS of the ODE for each moment
 
-    !! Limit y values
-    y(:) = max(y(:),1e-30_dp)
+    !! Evaluate rates from a positive local state without modifying DLSODE's
+    !! input vector. DLSODE uses y internally when estimating its Jacobian.
+    y_eval(:) = max(y(:),tracer_floor)
 
     !! Convert y to real physical numbers to calculate f
-    N_c = y(1)*nd_atm ! Convert to real number density
-    rho_c(:) = y(2:2+ndust-1)*rho   ! Convert to real mass density
-    rho_v(:) = y(2+ndust:)*rho   ! Convert to real mass density
+    N_c = y_eval(1)*nd_atm ! Convert to real number density
+    rho_c(:) = y_eval(2:2+ndust-1)*rho   ! Convert to real mass density
+    rho_v(:) = y_eval(2+ndust:)*rho   ! Convert to real mass density
 
     !! Find the true vapour VMR
     p_v(:) = rho_v(:) * cld(:)%Rd_v * T     !! Pressure of vapour
@@ -299,16 +323,12 @@ module mini_cloud_2_mono_mix_mod
     rho_c_t = sum(rho_c(:))
     m_c = max(rho_c_t/N_c, cld(1)%m_seed)
 
-    !! Net bulk density of the particles
-    rho_d_m = 0.0_dp
-    do j = 1, ndust
-      rho_d_m = rho_d_m + (rho_c(j)/rho_c_t) * cld(j)%rho_d
-    end do
-
     !! Bulk material volume mixing ratio
     V_tot = sum(rho_c(:)/cld(:)%rho_d) ! Total condensed volume
     V_mix(:) = (rho_c(:)/cld(:)%rho_d)/V_tot ! Condensed volume mixing ratio
-    !V_mix(:) = rho_c(:)/rho_c_t
+
+    !! Bulk density from total condensed mass divided by total material volume
+    rho_d_m = rho_c_t/V_tot
 
     !! Mass weighted mean radius of particle
     r_c = max(((3.0_dp*m_c)/(4.0_dp*pi*rho_d_m))**(third), r_seed)
@@ -331,6 +351,10 @@ module mini_cloud_2_mono_mix_mod
 
     !! Calculate condensation rate
     call calc_cond(ndust, r_c, Kn, n_v(:), V_mix(:), f_cond)
+
+    !! Smoothly limit phase transfer to the material available outside the
+    !! deadband. This preserves the vapour/condensate stoichiometric exchange.
+    call limit_phase_rates(ndust, N_c, rho_c, rho_v, f_cond)
 
     !! Calculate homogenous nucleation rate
     call calc_hom_nuc(ndust, n_v(:), f_nuc_hom)
@@ -389,16 +413,27 @@ module mini_cloud_2_mono_mix_mod
 
     integer :: j
     real(dp) :: dmdt_low, dmdt_high, Knd, Kn_crit, fx
+    real(dp) :: low_coeff, high_coeff, driving, activity
 
     do j = 1, ndust
 
+      activity = phase_activity(cld(j)%sat)
+      if (activity <= 0.0_dp) then
+        dmdt(j) = 0.0_dp
+        cycle
+      end if
+
+      driving = n_v(j) * (1.0_dp - 1.0_dp/cld(j)%sat)
+
+      !! Rate coefficients with the common supersaturation factor removed.
+      low_coeff = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0
+      high_coeff = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * cld(j)%alp_c
+
       !! Diffusive limited regime (Kn << 1) [g s-1]
-      dmdt_low = 4.0_dp * pi * r_c * cld(j)%D * cld(j)%m0 * n_v(j) &
-        & *  (1.0_dp - 1.0_dp/cld(j)%sat)
+      dmdt_low = low_coeff * driving
 
       !! Free molecular flow regime (Kn >> 1) [g s-1]
-      dmdt_high = 4.0_dp * pi * r_c**2 * cld(j)%vth * cld(j)%m0 * n_v(j) * cld(j)%alp_c & 
-        & * (1.0_dp - 1.0_dp/cld(j)%sat)
+      dmdt_high = high_coeff * driving
 
       !! If evaporation, weight rate by current condensed volume ratio (Woitke et al. 2020)
       if (cld(j)%sat < 1.0_dp) then
@@ -407,7 +442,7 @@ module mini_cloud_2_mono_mix_mod
       end if
 
       !! Critical Knudsen number
-      Kn_crit = Kn * (dmdt_high/dmdt_low)
+      Kn_crit = Kn * (high_coeff/low_coeff)
 
       !! Kn' (Woitke & Helling 2003)
       Knd = Kn/Kn_crit
@@ -416,10 +451,48 @@ module mini_cloud_2_mono_mix_mod
       fx = 0.5_dp * (1.0_dp - tanh(2.0_dp*log10(Knd)))
 
       !! Mass change rate
-      dmdt(j) = dmdt_low * fx + dmdt_high * (1.0_dp - fx)
+      dmdt(j) = activity * (dmdt_low * fx + dmdt_high * (1.0_dp - fx))
     end do
 
   end subroutine calc_cond
+
+  !! Smooth, conservative limiter for severely stiff phase exchange
+  subroutine limit_phase_rates(ndust, N_c, rho_c, rho_v, dmdt)
+    implicit none
+
+    integer, intent(in) :: ndust
+    real(dp), intent(in) :: N_c
+    real(dp), dimension(ndust), intent(in) :: rho_c, rho_v
+    real(dp), dimension(ndust), intent(inout) :: dmdt
+
+    integer :: j
+    real(dp) :: raw_rate, rate_cap, available
+    real(dp) :: rho_v_sat, rho_v_target
+
+    do j = 1, ndust
+      raw_rate = dmdt(j)*N_c
+      if (abs(raw_rate) <= tiny(1.0_dp)) cycle
+
+      rho_v_sat = cld(j)%p_vap/(cld(j)%Rd_v*T)
+
+      if (raw_rate > 0.0_dp) then
+        !! Condensation can consume only vapour above the upper deadband edge.
+        rho_v_target = (1.0_dp + sat_tol)*rho_v_sat
+        available = max(0.0_dp, rho_v(j) - rho_v_target)/cld(j)%v2c
+      else
+        !! Evaporation can fill only the deficit below the lower edge, and
+        !! cannot consume more condensed material than is present.
+        rho_v_target = (1.0_dp - sat_tol)*rho_v_sat
+        available = min(rho_c(j), &
+          & max(0.0_dp, rho_v_target - rho_v(j))/cld(j)%v2c)
+      end if
+
+      rate_cap = available/min_phase_timescale
+      raw_rate = smooth_rate_limit(raw_rate, rate_cap)
+      dmdt(j) = raw_rate/N_c
+    end do
+
+  end subroutine limit_phase_rates
 
   !! modified classical nucleation theory (MCNT)
   subroutine calc_hom_nuc(ndust, n_v, J_hom)
@@ -435,6 +508,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp) :: f0, kbT
 
     real(dp) :: alpha, Nf
+    real(dp) :: activity, rho_vap, rho_v_target, J_cap
 
     do j = 1, ndust
 
@@ -443,7 +517,8 @@ module mini_cloud_2_mono_mix_mod
         cycle
       end if
 
-      if (cld(j)%sat > 1.0_dp) then
+      activity = phase_activity(cld(j)%sat)
+      if (cld(j)%sat > 1.0_dp + sat_tol) then
 
         if (cld(j)%sp == 'SiO') then
           !! Special nucleation rate for SiO (Gail et al. 2016)
@@ -485,6 +560,15 @@ module mini_cloud_2_mono_mix_mod
           J_hom(j) = n_v(j) * tau_gr * Zel * exp(max(-300.0_dp, N_star_1*ln_ss - dg_rt))
         end if
 
+        !! Blend smoothly away from the deadband and limit seed production to
+        !! the excess vapour reservoir on the minimum relaxation timescale.
+        J_hom(j) = activity*J_hom(j)
+        rho_vap = n_v(j)*cld(j)%mol_w_v*amu
+        rho_v_target = (1.0_dp + sat_tol)*cld(j)%p_vap/(cld(j)%Rd_v*T)
+        J_cap = max(0.0_dp, rho_vap - rho_v_target) &
+          & / (cld(j)%m_seed*min_phase_timescale)
+        J_hom(j) = smooth_rate_limit(J_hom(j), J_cap)
+
       else 
         !! Unsaturated, zero nucleation
         J_hom(j) = 0.0_dp
@@ -503,7 +587,7 @@ module mini_cloud_2_mono_mix_mod
     real(dp), dimension(ndust), intent(out) :: J_evap
 
     integer :: j
-    real(dp) :: tau_evap
+    real(dp) :: tau_evap, activity, J_raw, J_cap
 
     do j = 1, ndust
 
@@ -512,7 +596,12 @@ module mini_cloud_2_mono_mix_mod
         cycle
       end if
 
-      if ((cld(j)%sat >= 1.0_dp)) then
+      if (abs(cld(j)%sat - 1.0_dp) <= sat_tol) then
+
+        !! Do not evaporate seed particles inside the equilibrium deadband
+        J_evap(j) = 0.0_dp
+
+      else if (cld(j)%sat > 1.0_dp) then
 
         !! If growing or too little number density then evaporation can't take place
         J_evap(j) = 0.0_dp
@@ -524,7 +613,10 @@ module mini_cloud_2_mono_mix_mod
         if (m_c <= (1.001_dp * cld(j)%m_seed)) then
           tau_evap = 0.1_dp !m_c/abs(f_cond)
           !! Seed particle evaporation rate [cm-3 s-1]
-          J_evap(j) = -N_c/tau_evap
+          activity = phase_activity(cld(j)%sat)
+          J_raw = -activity*N_c/tau_evap
+          J_cap = N_c/min_phase_timescale
+          J_evap(j) = smooth_rate_limit(J_raw, J_cap)
         else
           !! There is still some mantle to evaporate from
           J_evap(j) = 0.0_dp
@@ -534,6 +626,50 @@ module mini_cloud_2_mono_mix_mod
     end do
 
   end subroutine calc_seed_evap
+
+  !! Exact zero in the deadband, followed by a C2 quintic transition to
+  !! the full physical rate over sat_blend on either side.
+  pure elemental real(dp) function phase_activity(sat) result(weight)
+    implicit none
+
+    real(dp), intent(in) :: sat
+    real(dp) :: x
+
+    if (sat > 1.0_dp + sat_tol) then
+      x = (sat - (1.0_dp + sat_tol))/sat_blend
+    else if (sat < 1.0_dp - sat_tol) then
+      x = ((1.0_dp - sat_tol) - sat)/sat_blend
+    else
+      weight = 0.0_dp
+      return
+    end if
+
+    x = min(1.0_dp, max(0.0_dp, x))
+    weight = x**3 * (10.0_dp - 15.0_dp*x + 6.0_dp*x**2)
+
+  end function phase_activity
+
+  !! Differentiable magnitude limiter: asymptotes to rate_cap while retaining
+  !! the sign and the weak-rate limit smooth_rate_limit(rate) ~= rate.
+  pure elemental real(dp) function smooth_rate_limit(rate, rate_cap) result(rate_limited)
+    implicit none
+
+    real(dp), intent(in) :: rate, rate_cap
+    real(dp) :: ratio
+
+    if ((rate_cap <= 0.0_dp) .or. (abs(rate) <= tiny(1.0_dp))) then
+      rate_limited = 0.0_dp
+      return
+    end if
+
+    if (abs(rate) >= 50.0_dp*rate_cap) then
+      ratio = 50.0_dp
+    else
+      ratio = abs(rate)/rate_cap
+    end if
+    rate_limited = sign(rate_cap*tanh(ratio), rate)
+
+  end function smooth_rate_limit
 
   !! Particle-particle Brownian coagulation
   subroutine calc_coag(m_c, r_c, beta, f_coag)
@@ -1026,8 +1162,13 @@ module mini_cloud_2_mono_mix_mod
       cld(j)%D = 5.0_dp/(16.0_dp*Avo*cld(j)%d0**2*rho) * &
         & sqrt((R_gas*T*mu)/(2.0_dp*pi) * (cld(j)%mol_w_v + mu)/cld(j)%mol_w_v)
 
-      !! Surface tension of species [erg cm-2]
-      cld(j)%sig = sig_sp(cld(j)%sp, T)
+      !! Surface tension is only used by homogeneous nucleation. Requiring it
+      !! for non-nucleating condensates unnecessarily rejects valid species.
+      if (cld(j)%inuc == 1) then
+        cld(j)%sig = sig_sp(cld(j)%sp, T)
+      else
+        cld(j)%sig = 0.0_dp
+      end if
 
       !! Specific gas constant of vapour [erg g-1 K-1]
       cld(j)%Rd_v = R_gas/cld(j)%mol_w_v
@@ -1051,7 +1192,7 @@ module mini_cloud_2_mono_mix_mod
     character(len=20), intent(in) :: sp
     real(dp), intent(in) :: T
 
-    real(dp) :: TC, f
+    real(dp) :: TC
     !real(dp) :: A, B, C
     real(dp) :: p_vap
 
@@ -1149,7 +1290,7 @@ module mini_cloud_2_mono_mix_mod
       !p_vap =  10.0_dp**(7.611_dp - 11382.0_dp/T) * bar
     case('NaCl')
       ! GGChem 5 polynomial NIST fit
-      p_vap = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e3_dp*T & 
+      p_vap = exp(-2.79146e4_dp/T + 3.46023e1_dp - 3.11287e-3_dp*T &
         & + 5.30965e-7_dp*T**2 -2.59584e-12_dp*T**3)
     case('S2')
       !--- Zahnle et al. (2016) ---
@@ -1458,7 +1599,7 @@ module mini_cloud_2_mono_mix_mod
         & - 2.0_dp*2.83957e-7_dp*T**3 + 3.0_dp*1.82974e-10_dp*T**4)
     case('NaCl')
       ! GGChem/NIST polynomial NaCl fit in ln(p_vap).
-      L_heat = R_gas/mol_w * (2.79146e4_dp - 3.11287e3_dp*T**2 &
+      L_heat = R_gas/mol_w * (2.79146e4_dp - 3.11287e-3_dp*T**2 &
         & + 2.0_dp*5.30965e-7_dp*T**3 - 3.0_dp*2.59584e-12_dp*T**4)
     case('NH4Cl')
       ! Base-10 inverse-temperature NH4Cl fit.
@@ -1631,7 +1772,7 @@ module mini_cloud_2_mono_mix_mod
 
         !! Monogenidou, Assael & Huber (2018)
         Tr = T/405.56_dp
-        lam_g(n) = (86.9294_dp - 170.5502_dp*Tr +  608.0287_dp*Tr**2 - 100.9764_dp*Tr**3 +  85.1986_dp*T**4) &
+        lam_g(n) = (86.9294_dp - 170.5502_dp*Tr + 608.0287_dp*Tr**2 - 100.9764_dp*Tr**3 + 85.1986_dp*Tr**4) &
           & / (4.68994_dp + 9.21307_dp*Tr - 1.53637_dp*Tr**2 + Tr**3)
 
           !! Convert to erg s-1 cm-1 K-1

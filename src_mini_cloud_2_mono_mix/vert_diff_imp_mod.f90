@@ -5,7 +5,7 @@ module vert_diff_imp_mod
   integer, parameter :: dp = REAL64
 
   ! -------- Numerics / constants --------
-  real(dp), parameter :: qmin   = 1.0e-99_dp
+  real(dp), parameter :: qmin   = 1.0e-30_dp
   real(dp), parameter :: eps    = 1.0e-300_dp
   real(dp), parameter :: R_gas  = 8.31446261815324e7_dp   ! erg/mol/K
 
@@ -91,7 +91,7 @@ contains
     do k = 2, nlay
       Df(k) = rho_e(k) * K_e(k) / (dzm(k-1) + eps) ! interior faces
     end do
-    Df(nlay+1) = rho_e(nlev) * K_e(nlev) / (dzm(nlay-1) + eps)   ! bottom face
+    Df(nlay+1) = rho_e(nlev) * K_e(nlev) / (0.5_dp*dz(nlay) + eps) ! bottom Dirichlet face
 
     ! Cell weight wcell = 1/(rho*Δz)
     do k = 1, nlay
