@@ -1,10 +1,11 @@
-program test_mini_cloud_sat_adj
+program test_mini_cloud_sat_rel
   use, intrinsic :: iso_fortran_env ! Requires fortran 2008
-  use mini_cloud_sat_adj_mod, only : mini_cloud_sat_adj
-  use mini_cloud_vf_sat_adj_mod, only : mini_cloud_vf_sat_adj
-  use mini_cloud_opac_mie_sat_adj_mod, only : opac_mie_sat_adj
+  use mini_cloud_sat_rel_mod, only : mini_cloud_sat_rel
+  use mini_cloud_vf_sat_rel_mod, only : mini_cloud_vf_sat_rel
+  use mini_cloud_opac_mie_sat_rel_mod, only : init_opac_mie_sat_rel, opac_mie_sat_rel
   use vert_diff_imp_mod, only : vert_diff_imp
-  use vert_adv_exp_mod, only : vert_adv_exp
+  use vert_adv_imp_mod, only : vert_adv_imp
+  ! use vert_adv_exp_mod, only : vert_adv_exp  ! explicit advection scheme, kept in-repo as an alternative
   use cli_progress
   implicit none
 
@@ -34,7 +35,6 @@ program test_mini_cloud_sat_adj
 
   real(dp) :: tau_cond, sigma, met
   real(dp), allocatable, dimension(:) :: mol_w_sp, r_c, rho_d
-  real(dp), allocatable, dimension(:) :: k_tmp, ssa_tmp, g_tmp, sca_ext, g_sca_ext
 
   integer :: dist
 
@@ -71,7 +71,6 @@ program test_mini_cloud_sat_adj
 
       n_wl = 11
       allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
-      allocate(k_tmp(n_wl), ssa_tmp(n_wl), g_tmp(n_wl), sca_ext(n_wl), g_sca_ext(n_wl))
 
       !! Wavelengths to calculate opacity
       wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
@@ -188,6 +187,8 @@ program test_mini_cloud_sat_adj
       q0(:) = 1e-30_dp
       q0(1) = 1.17e-7_dp * mol_w_sp(1)/mu(nlay)
 
+      call init_opac_mie_sat_rel(nsp, sp, n_wl, wl, r_c, sigma, dist)
+
       time = 0.0_dp
       n = 0
       q_1_old(:,:) = 1e-30_dp
@@ -197,14 +198,14 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(1), sp_bg, r_c(1), sigma, vf(i,1), dist)
+          call mini_cloud_vf_sat_rel(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(1), sp_bg, r_c(1), sigma, vf(i,1), dist)
         end do
         !$omp end parallel do  
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1:2*nsp) = q_1(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
 
         call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2*nsp, q(:,:), q0(:))
 
@@ -215,7 +216,7 @@ program test_mini_cloud_sat_adj
         do i = 1, nlay
           !! Call mini-cloud and perform integrations for a single layer
           do j = 1, nsp
-            call mini_cloud_sat_adj(i, t_step, mol_w_sp(j), sp(j), rho_d(j), Tl(i), pl(i), rho(i), met, tau_cond, &
+            call mini_cloud_sat_rel(i, t_step, mol_w_sp(j), sp(j), rho_d(j), Tl(i), pl(i), rho(i), met, tau_cond, &
               & q_v(i,j), q_1(i,j))
           end do
         end do
@@ -232,14 +233,14 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate settling velocity for this layer
-          call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(1), sp_bg, r_c(1), sigma, vf(i,1), dist)
+          call mini_cloud_vf_sat_rel(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(1), sp_bg, r_c(1), sigma, vf(i,1), dist)
         end do
         !$omp end parallel do  
 
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1:2*nsp) = q_1(:,:)
         
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
 
         q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
         q_1(:,:) = max(q(:,nsp+1:2*nsp), 1e-30_dp)
@@ -247,7 +248,7 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
           !! Calculate the opacity at the wavelength grid
-          call opac_mie_sat_adj(1, sp(1:1), Tl(i), mu(i), pl(i), q_1(i,1), r_c(1), rho_d(1), sigma, n_wl, wl, &
+          call opac_mie_sat_rel(1, sp(1:1), Tl(i), mu(i), pl(i), q_1(i,1), r_c(1), rho_d(1), sigma, n_wl, wl, &
             & k_ext(i,:), ssa(i,:), g(i,:), dist)
         end do
         !$omp end parallel do
@@ -297,7 +298,6 @@ program test_mini_cloud_sat_adj
 
       n_wl = 11
       allocate(wl_e(n_wl+1), wl(n_wl), k_ext(nlay,n_wl), ssa(nlay,n_wl), g(nlay,n_wl))
-      allocate(k_tmp(n_wl), ssa_tmp(n_wl), g_tmp(n_wl), sca_ext(n_wl), g_sca_ext(n_wl))
 
       wl_e = (/0.260, 0.420, 0.610, 0.850, 1.320, 2.020,2.500,3.500,4.400,8.70,20.00,324.68 /)
       wl(:) = (wl_e(2:n_wl+1) +  wl_e(1:n_wl))/ 2.0_dp
@@ -369,6 +369,8 @@ program test_mini_cloud_sat_adj
       q0(3) = 2.88e-5_dp * mol_w_sp(3)/mu(nlay)
       q0(4) = 3.55e-5_dp * mol_w_sp(4)/mu(nlay)
 
+      call init_opac_mie_sat_rel(nsp, sp, n_wl, wl, r_c, sigma, dist)
+
       time = 0.0_dp
       n = 0
       q_1_old(:,:) = 1e-30_dp
@@ -378,7 +380,7 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i,j), schedule(dynamic)
         do i = 1, nlay
           do j = 1, nsp
-            call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(j), sp_bg, r_c(j), sigma, vf(i,j), dist)
+            call mini_cloud_vf_sat_rel(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(j), sp_bg, r_c(j), sigma, vf(i,j), dist)
           end do
         end do
         !$omp end parallel do
@@ -386,7 +388,7 @@ program test_mini_cloud_sat_adj
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1:2*nsp) = q_1(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
         call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2*nsp, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
@@ -395,7 +397,7 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i,j), schedule(dynamic)
         do i = 1, nlay
           do j = 1, nsp
-            call mini_cloud_sat_adj(i, t_step, mol_w_sp(j), sp(j), rho_d(j), Tl(i), pl(i), rho(i), met, tau_cond, &
+            call mini_cloud_sat_rel(i, t_step, mol_w_sp(j), sp(j), rho_d(j), Tl(i), pl(i), rho(i), met, tau_cond, &
               & q_v(i,j), q_1(i,j))
           end do
         end do
@@ -412,7 +414,7 @@ program test_mini_cloud_sat_adj
         !$omp parallel do default(shared), private(i,j), schedule(dynamic)
         do i = 1, nlay
           do j = 1, nsp
-            call mini_cloud_vf_sat_adj(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(j), sp_bg, r_c(j), sigma, vf(i,j), dist)
+            call mini_cloud_vf_sat_rel(Tl(i), pl(i), grav, mu(i), VMR(i,:), rho_d(j), sp_bg, r_c(j), sigma, vf(i,j), dist)
           end do
         end do
         !$omp end parallel do
@@ -420,31 +422,18 @@ program test_mini_cloud_sat_adj
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1:2*nsp) = q_1(:,:)
 
-        call vert_adv_exp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
 
         q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
         q_1(:,:) = max(q(:,nsp+1:2*nsp), 1e-30_dp)
 
-        k_ext(:,:) = 0.0_dp
-        ssa(:,:) = 0.0_dp
-        g(:,:) = 0.0_dp
-
-        do j = 1, nsp
-          do i = 1, nlay
-            call opac_mie_sat_adj(1, sp(j:j), Tl(i), mu(i), pl(i), q_1(i,j), r_c(j), rho_d(j), sigma, n_wl, wl, &
-              & k_tmp(:), ssa_tmp(:), g_tmp(:), dist)
-            k_ext(i,:) = k_ext(i,:) + k_tmp(:)
-            ssa(i,:) = ssa(i,:) + ssa_tmp(:)*k_tmp(:)
-            g(i,:) = g(i,:) + g_tmp(:)*ssa_tmp(:)*k_tmp(:)
-          end do
-        end do
-
+        !$omp parallel do default(shared), private(i), schedule(dynamic)
         do i = 1, nlay
-          sca_ext(:) = ssa(i,:)
-          g_sca_ext(:) = g(i,:)
-          ssa(i,:) = sca_ext(:)/max(k_ext(i,:), 1.0e-300_dp)
-          g(i,:) = g_sca_ext(:)/max(sca_ext(:), 1.0e-300_dp)
+          !! opac_mie_sat_rel combines all nsp condensate species internally.
+          call opac_mie_sat_rel(nsp, sp, Tl(i), mu(i), pl(i), q_1(i,:), r_c, rho_d, sigma, n_wl, wl, &
+            & k_ext(i,:), ssa(i,:), g(i,:), dist)
         end do
+        !$omp end parallel do
 
         end = .True.
         do i = 1, nlay
@@ -493,14 +482,14 @@ contains
     logical, save :: first_call = .True.
 
     if (first_call .eqv. .True.) then
-      open(newunit=u1,file='results_sat_adj/tracers.txt',action='readwrite')
+      open(newunit=u1,file='results_sat_rel/tracers.txt',action='readwrite')
       write(u1,*) nsp
       write(u1,*) sp(:)
       write(u1,*) rho_d(:)
       write(u1,*) mol_w_sp(:)
       write(u1,*) r_c(:)
       write(u1,*) sigma, dist
-      open(newunit=u2,file='results_sat_adj/opac.txt',action='readwrite')
+      open(newunit=u2,file='results_sat_rel/opac.txt',action='readwrite')
       write(u2,*) wl(:)
       first_call = .False.
     end if
@@ -557,4 +546,4 @@ contains
 
   end subroutine linear_interp
 
-end program test_mini_cloud_sat_adj
+end program test_mini_cloud_sat_rel

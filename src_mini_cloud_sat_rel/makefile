@@ -16,10 +16,11 @@ SRCS_F90 = \
     vert_diff_exp_mod.f90 \
     vert_diff_imp_mod.f90 \
     vert_adv_exp_mod.f90 \
+    vert_adv_imp_mod.f90 \
     lxmie_mod.f90 \
-    mini_cloud_vf_sat_adj_mod.f90 \
-    mini_cloud_opac_mie_sat_adj_mod.f90 \
-    mini_cloud_sat_adj_mod.f90 \
+    mini_cloud_vf_sat_rel_mod.f90 \
+    mini_cloud_opac_mie_sat_rel_mod.f90 \
+    mini_cloud_sat_rel_mod.f90 \
     test_main.f90
 
 SRCS_F = dopri5.f
@@ -28,7 +29,7 @@ SRCS_F = dopri5.f
 OBJECTS = $(SRCS_F90:.f90=.o) $(SRCS_F:.f=.o)
 
 # Executable
-EXECS = ../mini_cloud_sat_adj
+EXECS = ../mini_cloud_sat_rel
 
 #====================
 # Phony targets

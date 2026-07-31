@@ -12,9 +12,9 @@ Each source code directory contains a makefile to build the model. Each model is
 
 This model is being developed and is dynamically changing, expect frequent bug fixes, improvements and updates.
 
-### src_mini_cloud_sat_adj
+### src_mini_cloud_sat_rel
 
-Single moment tracer saturation adjustment scheme
+Single moment tracer saturation relaxation scheme
 
 ### src_mini_cloud_2_mono_mix
 

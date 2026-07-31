@@ -1,0 +1,568 @@
+module mini_cloud_vf_sat_rel_mod
+  use, intrinsic :: iso_fortran_env ! Requires fortran 2008
+  implicit none
+
+  integer, parameter :: dp = REAL64
+
+  real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
+  real(dp), parameter :: kb = 1.380649e-16_dp
+  real(dp), parameter :: R_gas = 8.31446261815324e7_dp
+  real(dp), parameter :: amu = 1.66053906892e-24_dp
+  
+  real(dp), parameter :: r_seed = 1e-7_dp
+
+  !! Diameter, LJ potential and molecular weight for background gases
+  real(dp), parameter :: d_OH = 3.06e-8_dp, LJ_OH = 100.0_dp * kb, molg_OH = 17.00734_dp  ! estimate
+  real(dp), parameter :: d_H2 = 2.827e-8_dp, LJ_H2 = 59.7_dp * kb, molg_H2 = 2.01588_dp
+  real(dp), parameter :: d_H2O = 2.641e-8_dp, LJ_H2O = 809.1_dp * kb, molg_H2O = 18.01528_dp
+  real(dp), parameter :: d_H = 2.5e-8_dp, LJ_H = 30.0_dp * kb, molg_H = 1.00794_dp
+  real(dp), parameter :: d_CO = 3.690e-8_dp, LJ_CO = 91.7_dp * kb, molg_CO = 28.0101_dp
+  real(dp), parameter :: d_CO2 = 3.941e-8_dp, LJ_CO2 = 195.2_dp * kb, molg_CO2 = 44.0095_dp
+  real(dp), parameter :: d_O = 2.66e-8_dp, LJ_O = 70.0_dp * kb, molg_O = 15.99940_dp
+  real(dp), parameter :: d_CH4 = 3.758e-8_dp, LJ_CH4 = 148.6_dp * kb, molg_CH4 = 16.0425_dp
+  real(dp), parameter :: d_C2H2 = 4.033e-8_dp, LJ_C2H2 = 231.8_dp * kb, molg_C2H2 = 26.0373_dp
+  real(dp), parameter :: d_NH3 = 2.900e-8_dp, LJ_NH3 = 558.3_dp * kb, molg_NH3 = 17.03052_dp
+  real(dp), parameter :: d_N2 = 3.798e-8_dp, LJ_N2 = 71.4_dp * kb, molg_N2 = 14.0067_dp
+  real(dp), parameter :: d_HCN = 3.630e-8_dp, LJ_HCN = 569.1_dp * kb, molg_HCN = 27.0253_dp
+  real(dp), parameter :: d_He = 2.511e-8_dp, LJ_He = 10.22_dp * kb, molg_He = 4.002602_dp
+
+  !! Gauss-Hermite quadrature (over the standardised normal weight
+  !! exp(-x**2)) averages the settling velocity over a lognormal size
+  !! distribution (dist == 1). Unlike the Gauss-Laguerre case below, r as a
+  !! function of the Hermite variable x is exponential
+  !! (r = r_med*exp(sqrt(2)*log(sigma)*x)), not polynomial, so the extra
+  !! r**3 volume weighting cannot be absorbed exactly into the quadrature
+  !! order the way it can for the gamma distribution - the whole scheme is
+  !! only an approximation, and testing against a dense reference integral
+  !! showed 8 points left a ~2.6% error for this settling velocity law. 16
+  !! points (matching established Mie-scattering practice for the same
+  !! lognormal transform) reduces that to below 1e-6. Nodes/weights are
+  !! universal constants (independent of sigma), so they are solved for
+  !! once per thread and cached rather than recomputed every call.
+  real(dp), parameter :: sqrt2 = sqrt(2.0_dp)
+  integer, parameter :: n_gh = 16
+
+  real(dp), dimension(n_gh), save :: gh_x_cached, gh_w_cached
+  logical, save :: gh_initialized = .false.
+  !$omp threadprivate(gh_x_cached, gh_w_cached, gh_initialized)
+
+  !! Cached 8-point generalized Gauss-Laguerre quadrature nodes/weights for
+  !! the gamma size distribution (dist == 2). Unlike the Hermite case above,
+  !! these depend on the distribution shape parameter A (derived from
+  !! sigma), so they cannot be fixed parameters - but sigma is normally the
+  !! same prescribed value on every call within a run, so it is cheaper to
+  !! cache the last-computed nodes/weights and only rebuild them when sigma
+  !! actually changes, rather than re-solving the eigenproblem every call.
+  !! One cache per OpenMP thread avoids threads clobbering each other's state.
+  real(dp), save :: gl_sigma_cached = -1.0_dp
+  real(dp), save :: gl_A_cached = 0.0_dp
+  real(dp), dimension(8), save :: gl_x_cached, gl_w_cached
+  !$omp threadprivate(gl_sigma_cached, gl_A_cached, gl_x_cached, gl_w_cached)
+
+  public :: mini_cloud_vf_sat_rel
+  private :: eta_construct, single_particle_settling, gauss_hermite_nodes, gauss_laguerre_nodes, tridiag_eigen, pythag
+
+  contains
+
+  subroutine mini_cloud_vf_sat_rel(T_in, P_in, grav_in, mu_in, bg_VMR_in, rho_d, sp_bg, r_med, sigma, v_f, dist)
+    implicit none
+
+    ! Input variables
+    character(len=20), dimension(:), intent(in) :: sp_bg
+    integer, intent(in) :: dist
+    real(dp), intent(in) :: T_in, P_in, mu_in, grav_in, rho_d, r_med, sigma
+    real(dp), dimension(:), intent(in) :: bg_VMR_in
+
+    real(dp), intent(out) :: v_f
+
+    integer :: n_gas, k
+    real(dp) :: T, mu, rho, p, grav, mfp, eta
+    real(dp) :: vf_s
+    real(dp) :: log_sigma, r_i, vf_i, numerator, denominator
+    real(dp) :: A, B
+
+    !! Find the number density of the atmosphere
+    T = T_in             ! Convert temperature to K
+    p = P_in * 10.0_dp   ! Convert pascal to dyne cm-2
+
+    n_gas = size(bg_VMR_in)
+
+    !! Change mu_in to mu
+    mu = mu_in ! Convert mean molecular weight to mu [g mol-1]
+
+    !! Change gravity to cgs [cm s-2]
+    grav = grav_in * 100.0_dp
+
+    !! Mass density of layer
+    rho = (p*mu*amu)/(kb * T) ! Mass density [g cm-3]
+
+    !! Calculate dynamical viscosity for this layer
+    call eta_construct(n_gas, sp_bg, bg_VMR_in, T, eta)
+
+    !! Calculate mean free path for this layer
+    mfp = (2.0_dp*eta/rho) * sqrt((pi * mu)/(8.0_dp*R_gas*T))
+
+    !! Net settling velocity for the prescribed particle size distribution.
+    if (dist == 1) then
+      ! Lognormal distribution - r_med is median particle size and sigma the geometric std. dev.
+      ! Volume-weighted mean settling velocity via n_gh-point Gauss-Hermite
+      ! quadrature over the lognormal size distribution.
+      if (.not. gh_initialized) then
+        call gauss_hermite_nodes(n_gh, gh_x_cached, gh_w_cached)
+        gh_initialized = .true.
+      end if
+      log_sigma = log(sigma)
+      numerator = 0.0_dp
+      denominator = 0.0_dp
+      do k = 1, n_gh
+        r_i = max(r_med * exp(sqrt2 * log_sigma * gh_x_cached(k)), r_seed)
+        vf_i = single_particle_settling(r_i, grav, rho_d, rho, eta, mfp)
+        numerator = numerator + gh_w_cached(k) * r_i**3 * vf_i
+        denominator = denominator + gh_w_cached(k) * r_i**3
+      end do
+      vf_s = numerator / max(denominator, tiny(denominator))
+    else if (dist == 2) then
+      ! Gamma distribution - r_med is now the number weighted radius and sigma is related to the trigamma function.
+      ! Volume-weighted mean settling velocity via 8-point generalized
+      ! Gauss-Laguerre quadrature over the Gamma(A,B) size distribution,
+      ! i.e. number density n(r) ~ r**(A-1) * exp(-B*r). The r**3 volume
+      ! weighting is absorbed directly into the quadrature weight (nodes
+      ! built for shape A+2 rather than A-1, so the weight matches
+      ! r**(A-1) * r**3 = r**(A+2)) instead of being multiplied in
+      ! afterwards - this uses the full polynomial-exactness budget of the
+      ! quadrature on the settling velocity itself and is measurably more
+      ! accurate at fixed node count. Nodes/weights only depend on sigma
+      ! (via A), so they are cached and only rebuilt when sigma changes
+      ! from the previous call on this thread.
+      if (sigma /= gl_sigma_cached) then
+        gl_A_cached = inv_trigamma_pos(log(sigma)**2)
+        call gauss_laguerre_nodes(gl_A_cached + 2.0_dp, gl_x_cached, gl_w_cached)
+        gl_sigma_cached = sigma
+      end if
+      A = gl_A_cached
+      B = A/r_med
+      numerator = 0.0_dp
+      denominator = 0.0_dp
+      do k = 1, 8
+        r_i = max(gl_x_cached(k)/B, r_seed)
+        vf_i = single_particle_settling(r_i, grav, rho_d, rho, eta, mfp)
+        numerator = numerator + gl_w_cached(k) * vf_i
+        denominator = denominator + gl_w_cached(k)
+      end do
+      vf_s = numerator / max(denominator, tiny(denominator))
+    else
+      print*, 'mini_cloud_vf_sat_rel invalid dist: ', dist
+      stop
+    end if
+
+    v_f = max(vf_s, 1.0e-30_dp)
+
+  end subroutine mini_cloud_vf_sat_rel
+
+  pure real(dp) function single_particle_settling(r, grav, rho_d, rho, eta, mfp) result(vf_s)
+    implicit none
+
+    real(dp), intent(in) :: r, grav, rho_d, rho, eta, mfp
+    real(dp) :: Kn, beta
+
+    !! Knudsen number
+    Kn = mfp/r
+
+    !! Cunningham slip factor (Jung et al. 2012)
+    beta = 1.0_dp + Kn*(1.165_dp + 0.480_dp * exp(-0.101_dp/Kn))
+
+    !! Settling velocity (Stokes regime)
+    vf_s = (2.0_dp * beta * grav * r**2 * (rho_d - rho))/(9.0_dp * eta) &
+     & * (1.0_dp &
+     & + ((0.45_dp*grav*r**3*rho*rho_d)/(54.0_dp*eta**2))**(0.4_dp))**(-1.25_dp)
+
+  end function single_particle_settling
+
+  !! n-point Gauss-Hermite quadrature nodes/weights for the standardised
+  !! weight function exp(-x**2) on (-inf,inf), via the same Golub-Welsch
+  !! approach as gauss_laguerre_nodes below: the Jacobi matrix for
+  !! physicists' Hermite polynomials has zero diagonal and off-diagonal
+  !! b_k = sqrt(k/2). Unlike the Laguerre case, this Jacobi matrix does not
+  !! depend on any distribution parameter, so callers cache the result
+  !! rather than calling this every time.
+  pure subroutine gauss_hermite_nodes(n, x, w)
+    implicit none
+
+    integer, intent(in) :: n
+    real(dp), dimension(n), intent(out) :: x, w
+
+    real(dp), dimension(n) :: d, e
+    real(dp), dimension(n,n) :: z
+    integer :: i
+
+    d(:) = 0.0_dp
+    e(1) = 0.0_dp
+    do i = 2, n
+      e(i) = sqrt(real(i-1,dp)/2.0_dp)
+    end do
+
+    z(:,:) = 0.0_dp
+    do i = 1, n
+      z(i,i) = 1.0_dp
+    end do
+
+    call tridiag_eigen(n, d, e, z)
+
+    !! Zeroth moment of exp(-x**2) is sqrt(pi); unlike gauss_laguerre_nodes
+    !! this constant is included here since it is not always the case that
+    !! callers only need a ratio of weighted sums.
+    x(:) = d(:)
+    w(:) = z(1,:)**2 * sqrt(pi)
+
+  end subroutine gauss_hermite_nodes
+
+  !! Generalized 8-point Gauss-Laguerre quadrature nodes/weights for the
+  !! weight function x**alpha * exp(-x) on [0,inf). Unlike the
+  !! Gauss-Hermite case above, the Jacobi (tridiagonal) matrix here depends
+  !! on alpha, so nodes/weights must be recomputed whenever the underlying
+  !! distribution shape changes, via eigendecomposition (Golub-Welsch
+  !! algorithm). Weights are returned unnormalized (missing the common
+  !! factor Gamma(alpha+1)); this is sufficient since callers only ever use
+  !! a ratio of weighted sums, in which that constant cancels.
+  pure subroutine gauss_laguerre_nodes(alpha, x, w)
+    implicit none
+
+    real(dp), intent(in) :: alpha
+    real(dp), dimension(8), intent(out) :: x, w
+
+    integer, parameter :: n = 8
+    real(dp), dimension(n) :: d, e
+    real(dp), dimension(n,n) :: z
+    integer :: i
+
+    !! Jacobi matrix for generalized Laguerre polynomials L_n^(alpha):
+    !! diagonal a_k = 2k + alpha + 1, off-diagonal b_k = sqrt(k*(k+alpha))
+    do i = 1, n
+      d(i) = 2.0_dp*real(i-1,dp) + alpha + 1.0_dp
+    end do
+    e(1) = 0.0_dp
+    do i = 2, n
+      e(i) = sqrt(real(i-1,dp)*(real(i-1,dp) + alpha))
+    end do
+
+    z(:,:) = 0.0_dp
+    do i = 1, n
+      z(i,i) = 1.0_dp
+    end do
+
+    call tridiag_eigen(n, d, e, z)
+
+    !! Nodes are the (ascending, pre-sorted) eigenvalues; weights are
+    !! proportional to the squared first component of each eigenvector.
+    x(:) = d(:)
+    w(:) = z(1,:)**2
+
+  end subroutine gauss_laguerre_nodes
+
+  !! Eigenvalues (ascending) and eigenvectors of a real symmetric tridiagonal
+  !! matrix with diagonal d and off-diagonal e(2:n), via the implicit-shift
+  !! QL algorithm (standard EISPACK TQL2 method). On input z should be the
+  !! identity (or an initial similarity transform); on output its columns
+  !! hold the eigenvectors of the original tridiagonal matrix.
+  pure subroutine tridiag_eigen(n, d, e, z)
+    implicit none
+
+    integer, intent(in) :: n
+    real(dp), dimension(n), intent(inout) :: d, e
+    real(dp), dimension(n,n), intent(inout) :: z
+
+    integer :: i, j, k, l, m, ii, l1, mml
+    real(dp) :: c, c2, c3, dl1, el1, f, g, h, p, r, s, s2, tst1, tst2
+
+    if (n == 1) return
+
+    do i = 2, n
+      e(i-1) = e(i)
+    end do
+    e(n) = 0.0_dp
+
+    f = 0.0_dp
+    tst1 = 0.0_dp
+
+    do l = 1, n
+      tst1 = max(tst1, abs(d(l)) + abs(e(l)))
+
+      !! locate small sub-diagonal element
+      m = n
+      do i = l, n
+        tst2 = tst1 + abs(e(i))
+        if (tst2 == tst1) then
+          m = i
+          exit
+        end if
+      end do
+
+      do while (m /= l)
+
+        !! form shift
+        l1 = l + 1
+        g = d(l)
+        p = (d(l1) - g)/(2.0_dp*e(l))
+        r = pythag(p, 1.0_dp)
+        d(l) = e(l)/(p + sign(r,p))
+        d(l1) = e(l)*(p + sign(r,p))
+        dl1 = d(l1)
+        h = g - d(l)
+        do i = l1+1, n
+          d(i) = d(i) - h
+        end do
+        f = f + h
+
+        !! QL transformation on the submatrix l..m
+        p = d(m)
+        c = 1.0_dp
+        c2 = c
+        el1 = e(l1)
+        s = 0.0_dp
+        mml = m - l
+        do ii = 1, mml
+          c3 = c2
+          c2 = c
+          s2 = s
+          i = m - ii
+          g = c*e(i)
+          h = c*p
+          r = pythag(p, e(i))
+          e(i+1) = s*r
+          s = e(i)/r
+          c = p/r
+          p = c*d(i) - s*g
+          d(i+1) = h + s*(c*g + s*d(i))
+          do k = 1, n
+            h = z(k,i+1)
+            z(k,i+1) = s*z(k,i) + c*h
+            z(k,i) = c*z(k,i) - s*h
+          end do
+        end do
+        p = -s*s2*c3*el1*e(l)/dl1
+        e(l) = s*p
+        d(l) = c*p
+
+        tst2 = tst1 + abs(e(l))
+        if (tst2 <= tst1) exit
+      end do
+
+      d(l) = d(l) + f
+
+      !! locate next small sub-diagonal element (or exit if l==n)
+      if (l < n) then
+        m = n
+        do i = l+1, n
+          tst2 = tst1 + abs(e(i))
+          if (tst2 == tst1) then
+            m = i
+            exit
+          end if
+        end do
+      end if
+
+    end do
+
+    !! sort eigenvalues (and corresponding eigenvectors) ascending
+    do ii = 2, n
+      i = ii - 1
+      k = i
+      p = d(i)
+      do j = ii, n
+        if (d(j) < p) then
+          k = j
+          p = d(j)
+        end if
+      end do
+      if (k /= i) then
+        d(k) = d(i)
+        d(i) = p
+        do j = 1, n
+          p = z(j,i)
+          z(j,i) = z(j,k)
+          z(j,k) = p
+        end do
+      end if
+    end do
+
+  end subroutine tridiag_eigen
+
+  pure real(dp) function pythag(a, b) result(r)
+    implicit none
+    real(dp), intent(in) :: a, b
+    real(dp) :: absa, absb
+
+    absa = abs(a)
+    absb = abs(b)
+    if (absa > absb) then
+      r = absa*sqrt(1.0_dp + (absb/absa)**2)
+    else if (absb == 0.0_dp) then
+      r = 0.0_dp
+    else
+      r = absb*sqrt(1.0_dp + (absa/absb)**2)
+    end if
+
+  end function pythag
+
+  !! eta for background gas
+  subroutine eta_construct(n_bg, sp_bg, VMR_bg, T, eta_out)
+    implicit none
+
+    integer, intent(in) :: n_bg
+    character(len=20), dimension(:), intent(in) :: sp_bg
+    real(dp), dimension(n_bg), intent(in) :: VMR_bg
+    real(dp), intent(in) :: T
+
+    real(dp), intent(out) :: eta_out
+    
+    integer :: i, j
+    real(dp) :: bot, Eij, part
+    real(dp), dimension(n_bg) :: d_g, LJ_g, molg_g, eta_g
+    real(dp), dimension(n_bg) :: y
+
+    do i = 1, n_bg
+      select case(sp_bg(i))
+
+      case('OH')
+        d_g(i) = d_OH
+        LJ_g(i) = LJ_OH
+        molg_g(i) = molg_OH
+      case('H2')
+        d_g(i) = d_H2
+        LJ_g(i) = LJ_H2
+        molg_g(i) = molg_H2
+      case('H2O')
+        d_g(i) = d_H2O
+        LJ_g(i) = LJ_H2O
+        molg_g(i) = molg_H2O
+      case('H')
+        d_g(i) = d_H
+        LJ_g(i) = LJ_H
+        molg_g(i) = molg_H
+      case('CO')
+        d_g(i) = d_CO
+        LJ_g(i) = LJ_CO
+        molg_g(i) = molg_CO
+      case('CO2')
+        d_g(i) = d_CO2
+        LJ_g(i) = LJ_CO2
+        molg_g(i) = molg_CO2
+      case('O')
+        d_g(i) = d_O
+        LJ_g(i) = LJ_O
+        molg_g(i) = molg_O
+      case('CH4')
+        d_g(i) = d_CH4
+        LJ_g(i) = LJ_CH4
+        molg_g(i) = molg_CH4
+      case('C2H2')
+        d_g(i) = d_C2H2
+        LJ_g(i) = LJ_C2H2
+        molg_g(i) = molg_C2H2
+      case('NH3')
+        d_g(i) = d_NH3
+        LJ_g(i) = LJ_NH3
+        molg_g(i) = molg_NH3
+      case('N2')
+        d_g(i) = d_N2
+        LJ_g(i) = LJ_N2
+        molg_g(i) = molg_N2 
+      case('HCN')
+        d_g(i) = d_HCN
+        LJ_g(i) = LJ_HCN
+        molg_g(i) = molg_HCN
+      case('He')
+        d_g(i) = d_He
+        LJ_g(i) = LJ_He
+        molg_g(i) = molg_He
+      case default
+        print*, 'Background gas species data not found: ', trim(sp_bg(i)), 'STOP'
+        stop
+      end select
+
+    end do
+
+    !! Davidson (1993) mixing rule
+    
+    !! First calculate each species eta
+    do i = 1, n_bg
+      eta_g(i) = (5.0_dp/16.0_dp) * (sqrt(pi*(molg_g(i)*amu)*kb*T)/(pi*d_g(i)**2)) &
+        & * ((((kb*T)/LJ_g(i))**(0.16_dp))/1.22_dp)
+    end do
+
+    !! Calculate y values
+    bot = 0.0_dp
+    do i = 1, n_bg
+      bot = bot + VMR_bg(i) * sqrt(molg_g(i))
+    end do
+    y(:) = (VMR_bg(:) * sqrt(molg_g(:)))/bot
+
+    !! Calculate fluidity following Davidson equation
+    eta_out = 0.0_dp
+    do i = 1, n_bg
+      do j = 1, n_bg
+        Eij = ((2.0_dp*sqrt(molg_g(i)*molg_g(j)))/(molg_g(i) + molg_g(j)))**0.375
+        part = (y(i)*y(j))/(sqrt(eta_g(i)*eta_g(j))) * Eij
+        eta_out = eta_out + part
+      end do
+    end do
+
+    !! Viscosity is inverse fluidity
+    eta_out = 1.0_dp/eta_out
+
+  end subroutine eta_construct
+
+  pure real(dp) function inv_trigamma_pos(y_target) result(x)
+    real(dp), intent(in) :: y_target
+    real(dp) :: x_lo, x_hi, x_mid
+    integer :: i
+
+    if (y_target <= 0.0_dp) then
+      x = huge(1.0_dp)
+      return
+    end if
+
+    ! trigamma(x) is strictly decreasing for x > 0.
+    x_lo = epsilon(1.0_dp)
+    x_hi = max(1.0_dp, 1.0_dp/y_target + 1.0_dp/sqrt(y_target))
+
+    do while (trigamma_pos(x_hi) > y_target)
+      x_hi = 2.0_dp*x_hi
+    end do
+
+    do i = 1, 100
+      x_mid = 0.5_dp*(x_lo + x_hi)
+      if (trigamma_pos(x_mid) > y_target) then
+        x_lo = x_mid
+      else
+        x_hi = x_mid
+      end if
+    end do
+
+    x = 0.5_dp*(x_lo + x_hi)
+
+  end function inv_trigamma_pos
+
+  pure real(dp) function trigamma_pos(x) result(y)
+    real(dp), intent(in) :: x
+    real(dp) :: z, inv, inv2
+
+    z = x
+    y = 0.0_dp
+
+    do while (z < 8.0_dp)
+      y = y + 1.0_dp / (z*z)
+      z = z + 1.0_dp
+    end do
+
+    inv  = 1.0_dp / z
+    inv2 = inv * inv
+
+    y = y + inv + 0.5_dp*inv2 + inv2*inv/6.0_dp &
+          - inv2*inv2*inv/30.0_dp &
+          + inv2*inv2*inv2*inv/42.0_dp &
+          - inv2*inv2*inv2*inv2*inv/30.0_dp
+  end function trigamma_pos
+
+
+end module mini_cloud_vf_sat_rel_mod

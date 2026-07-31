@@ -5,7 +5,7 @@ module vert_diff_imp_mod
   integer, parameter :: dp = REAL64
 
   ! -------- Numerics / constants --------
-  real(dp), parameter :: qmin   = 1.0e-99_dp
+  real(dp), parameter :: qmin   = 1.0e-30_dp
   real(dp), parameter :: eps    = 1.0e-300_dp
   real(dp), parameter :: R_gas  = 8.31446261815324e7_dp   ! erg/mol/K
 
