@@ -148,23 +148,32 @@ contains
       sig = 1862.0_dp - 0.39_dp * (TC - 1530.0_dp)
       ! Pradhan et al. (2009)
       !sig = 2858.0_dp - 0.51_dp * T
+    case('FeO')
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
+      sig = 585.0_dp
     case('Al2O3')
       ! Pradhan et al. (2009)
       sig = 1024.0_dp - 0.177_dp * T
+    case('MgSiO3')
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
+      sig = 197.3_dp + 0.098_dp * T
     case('Cr')
       sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)
     case('SiO2')
       ! Pradhan et al. (2009)
-      sig = 243.2_dp - 0.013_dp * T
+      !sig = 243.2_dp - 0.013_dp * T
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
+      sig = 243.2_dp + 0.031_dp * T
+    case('MgO')
+      ! Pradhan et al. (2009)
+      sig = 1170_dp - 0.636_dp*T
 
-      ! Pradhan et al. (2009):
-      !Si : 732 - 0.086*(T - 1685.0)
-      !MgO : 1170 - 0.636*T
-      !CaO : 791 - 0.0935*T
     case('KCl')
-      sig = 160.4_dp - 0.070_dp*TC
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
+      sig = 175.57_dp - 0.07321_dp * T
     case('NaCl')
-      sig = 171.5_dp - 0.0719_dp*TC
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
+      sig = 191.16_dp - 0.07188_dp * T
     case('H2O')
       sig = 141.0_dp - 0.15_dp*TC
     case default
@@ -172,6 +181,10 @@ contains
     end select
 
     sig = max(10.0_dp, sig)
+
+    ! Pradhan et al. (2009):
+    ! Si : 732 - 0.086*(T - 1685.0)
+    ! CaO : 791 - 0.0935*T
 
   end subroutine calc_sig
 

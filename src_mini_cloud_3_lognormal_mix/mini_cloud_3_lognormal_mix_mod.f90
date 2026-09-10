@@ -1143,17 +1143,23 @@ module mini_cloud_3_lognormal_mix_mod
     case('Fe2O3')
       sig = 410.0_dp
     case('FeO')
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
       sig = 585.0_dp
     case('Al2O3')
       sig = 1024.0_dp - 0.177_dp * T
     case('MgSiO3')
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
       sig = 197.3_dp + 0.098_dp * T
     case('Mg2SiO4')
       sig = 436.0_dp
     case('SiO')
       sig = 500.0_dp
     case('SiO2')
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
       sig = 243.2_dp + 0.031_dp * T
+    case('MgO')
+      ! Pradhan et al. (2009)
+      sig = 1170_dp - 0.636_dp*T
     case('Cr')
       sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)
     case('MnS')
@@ -1161,8 +1167,10 @@ module mini_cloud_3_lognormal_mix_mod
     case('Na2S')
       sig = 1033.0_dp
     case('KCl')
-      sig = 160.4_dp - 0.07_dp*T
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
+      sig = 175.57_dp - 0.07321_dp * T
     case('NaCl')
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
       sig = 191.16_dp - 0.07188_dp * T
     case('ZnS')
       sig = 860.0_dp

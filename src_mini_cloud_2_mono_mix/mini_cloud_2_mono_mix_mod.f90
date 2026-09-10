@@ -1438,7 +1438,7 @@ module mini_cloud_2_mono_mix_mod
     case('Fe2O3')
       sig = 410.0_dp
     case('FeO')
-      ! Janz 1988
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
       sig = 585.0_dp
     case('Al2O3')
       ! Pradhan et al. (2009)
@@ -1446,7 +1446,7 @@ module mini_cloud_2_mono_mix_mod
       ! Kozasa et al. (1989)
       !sig = 690.0_dp
     case('MgSiO3')
-      ! Janz 1988
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
       sig = 197.3_dp + 0.098_dp * T
     case('Mg2SiO4')
       ! Kozasa et al. (1989)
@@ -1457,8 +1457,11 @@ module mini_cloud_2_mono_mix_mod
     case('SiO2')
       ! Pradhan et al. (2009)
       !sig = 243.2_dp - 0.013_dp * T
-      ! Janz 1988
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
       sig = 243.2_dp + 0.031_dp * T
+    case('MgO')
+      ! Pradhan et al. (2009)
+      sig = 1170_dp - 0.636_dp*T
     case('Cr')
       ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
       sig = 1642.0_dp - 0.20_dp * (TC - 1860.0_dp)      
@@ -1467,11 +1470,10 @@ module mini_cloud_2_mono_mix_mod
     case('Na2S')
       sig = 1033.0_dp
     case('KCl')
-      ! Janz 1988
-      !sig = 175.57_dp - 0.07321_dp * T
-      sig = 160.4_dp - 0.07_dp*T
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
+      sig = 175.57_dp - 0.07321_dp * T
     case('NaCl')
-      ! Janz 1988
+      ! Janz 1992 - https://data.nist.gov/od/id/mds2-2298
       sig = 191.16_dp - 0.07188_dp * T
     case('ZnS')
       sig = 860.0_dp
@@ -1502,10 +1504,9 @@ module mini_cloud_2_mono_mix_mod
 
     sig = max(10.0_dp, sig)
 
-      ! Pradhan et al. (2009):
-      !Si : 732 - 0.086*(T - 1685.0)
-      !MgO : 1170 - 0.636*T
-      !CaO : 791 - 0.0935*T
+    ! Pradhan et al. (2009):
+    ! Si : 732 - 0.086*(T - 1685.0)
+    ! CaO : 791 - 0.0935*T
 
   end function sig_sp
 
