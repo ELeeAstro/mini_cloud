@@ -37,6 +37,8 @@ __pycache__
 *.exe
 *.out
 *.app
+/mini_cloud_*
+*.dSYM/
 
 .vscode/*
 

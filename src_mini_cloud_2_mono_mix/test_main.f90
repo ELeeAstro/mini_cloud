@@ -4,11 +4,15 @@ program test_mini_cloud_2
   use mini_cloud_vf_mod, only : mini_cloud_vf
   use mini_cloud_opac_mie_mod, only : opac_mie
   use vert_adv_imp_mod, only : vert_adv_imp
+  use vert_adv_csl_mass_mod, only : vert_adv_csl_mass
   use vert_diff_imp_mod, only : vert_diff_imp
   use cli_progress
   implicit none
 
   integer, parameter :: dp = REAL64
+  integer, parameter :: ADVECT_IMPLICIT = 1, ADVECT_CSL_MASS = 2
+  ! Exercise pressure-mass CSL by default; select ADVECT_IMPLICIT to compare.
+  integer, parameter :: advection_scheme = ADVECT_CSL_MASS
 
   real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
   real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
@@ -206,7 +210,11 @@ program test_mini_cloud_2
         q(:,nsp+1) = q_0(:) * nd_atm(:) / rho(:) ! Make mass ratio for vertical transport
         q(:,nsp+2:) = q_1(:,:)
 
-        call vert_adv_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:))
+        if (advection_scheme == ADVECT_CSL_MASS) then
+          call vert_adv_csl_mass(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:))
+        else
+          call vert_adv_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, vf, nsp+1, q(:,nsp+1:))
+        end if
 
         call vert_diff_imp(nlay, nlev, t_step, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
 
@@ -394,7 +402,11 @@ program test_mini_cloud_2
         q(:,nsp+2:) = q_1(:,:)
 
         !! Vertical advection (settling tracers)
-        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        if (advection_scheme == ADVECT_CSL_MASS) then
+          call vert_adv_csl_mass(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        else
+          call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        end if
 
         !! Vertical diffusion (diffused tracers)
         call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz, nsp*2+1, q(:,:), q0(:))
@@ -434,7 +446,11 @@ program test_mini_cloud_2
         q(:,nsp+1) = q_0(:) 
         q(:,nsp+2:) = q_1(:,:)
 
-        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        if (advection_scheme == ADVECT_CSL_MASS) then
+          call vert_adv_csl_mass(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        else
+          call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp+1, q(:,nsp+1:))
+        end if
 
         q_v(:,:) = max(q(:,1:nsp),1e-30_dp)
         q_0(:) = max(q(:,nsp+1),1e-30_dp)

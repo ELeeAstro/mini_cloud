@@ -5,11 +5,15 @@ program test_mini_cloud_sat_rel
   use mini_cloud_opac_mie_sat_rel_mod, only : init_opac_mie_sat_rel, opac_mie_sat_rel
   use vert_diff_imp_mod, only : vert_diff_imp
   use vert_adv_imp_mod, only : vert_adv_imp
+  use vert_adv_csl_mass_mod, only : vert_adv_csl_mass
   ! use vert_adv_exp_mod, only : vert_adv_exp  ! explicit advection scheme, kept in-repo as an alternative
   use cli_progress
   implicit none
 
   integer, parameter :: dp = REAL64
+  integer, parameter :: ADVECT_IMPLICIT = 1, ADVECT_CSL_MASS = 2
+  ! Select ADVECT_IMPLICIT here to retain the previous transport scheme.
+  integer, parameter :: advection_scheme = ADVECT_CSL_MASS
 
   real(dp), parameter :: kb = 1.380649e-16_dp ! erg K^-1 - Boltzmann's constant
   real(dp), parameter :: amu = 1.66053906660e-24_dp ! g - Atomic mass unit
@@ -205,7 +209,13 @@ program test_mini_cloud_sat_rel
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1:2*nsp) = q_1(:,:)
 
-        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        if (advection_scheme == ADVECT_CSL_MASS) then
+          call vert_adv_csl_mass(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, &
+                            vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        else
+          call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, &
+                            vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        end if
 
         call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2*nsp, q(:,:), q0(:))
 
@@ -240,7 +250,13 @@ program test_mini_cloud_sat_rel
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1:2*nsp) = q_1(:,:)
         
-        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        if (advection_scheme == ADVECT_CSL_MASS) then
+          call vert_adv_csl_mass(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, &
+                            vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        else
+          call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, &
+                            vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        end if
 
         q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
         q_1(:,:) = max(q(:,nsp+1:2*nsp), 1e-30_dp)
@@ -388,7 +404,13 @@ program test_mini_cloud_sat_rel
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1:2*nsp) = q_1(:,:)
 
-        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        if (advection_scheme == ADVECT_CSL_MASS) then
+          call vert_adv_csl_mass(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, &
+                            vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        else
+          call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, &
+                            vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        end if
         call vert_diff_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, Kzz(:), 2*nsp, q(:,:), q0(:))
 
         q_v(:,:) = q(:,1:nsp)
@@ -422,7 +444,13 @@ program test_mini_cloud_sat_rel
         q(:,1:nsp) = q_v(:,:)
         q(:,nsp+1:2*nsp) = q_1(:,:)
 
-        call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        if (advection_scheme == ADVECT_CSL_MASS) then
+          call vert_adv_csl_mass(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, &
+                            vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        else
+          call vert_adv_imp(nlay, nlev, t_step/2.0_dp, mu, grav, Tl, pl, pe, &
+                            vf(:,:), nsp, q(:,nsp+1:2*nsp))
+        end if
 
         q_v(:,:) = max(q(:,1:nsp), 1e-30_dp)
         q_1(:,:) = max(q(:,nsp+1:2*nsp), 1e-30_dp)

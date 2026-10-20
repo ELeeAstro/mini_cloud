@@ -103,10 +103,11 @@ contains
     t = 0.0_dp
     do while (t < t_end - T_TOL)
 
-      ! CFL restriction: take minimum over all interior faces AND over all tracers
+      ! CFL restriction: take minimum over all outflow faces and tracers,
+      ! including the open bottom boundary.
       dt_max = t_end - t
       do n = 1, nq
-        do k = 2, nlay
+        do k = 2, nlev
           num = rho(k-1) * dz(k-1)
           den = A(k,n) + TINY
           if (den > 0.0_dp) dt_max = min(dt_max, CFL * num / den)
@@ -204,6 +205,7 @@ contains
     do i = 1, nlay-1
       qR_face(i) = q(i) + 0.5_dp*dzm(i)*sigma(i)
     end do
+    qR_face(nlay) = q(nlay)
 
     ! clamp first interior face between local extrema (Barth–Jespersen style)
     if (nlay > 1) then
@@ -218,7 +220,7 @@ contains
     do k = 2, nlay
       F(k) = A(k) * qR_face(k-1)
     end do
-    F(nlev) = 0.0_dp
+    F(nlev) = A(nlev) * qR_face(nlay)
 
     ! conservative RHS
     do i = 1, nlay

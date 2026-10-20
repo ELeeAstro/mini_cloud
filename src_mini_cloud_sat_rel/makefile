@@ -17,6 +17,7 @@ SRCS_F90 = \
     vert_diff_imp_mod.f90 \
     vert_adv_exp_mod.f90 \
     vert_adv_imp_mod.f90 \
+    vert_adv_csl_mass_mod.f90 \
     lxmie_mod.f90 \
     mini_cloud_vf_sat_rel_mod.f90 \
     mini_cloud_opac_mie_sat_rel_mod.f90 \

@@ -98,34 +98,27 @@ contains
         dt = t_end - t_now
       end if
 
-      !! Apply tracer lower boundary conditions
-      qc(1,:) = qc(2,:)
-      qc(nlay,:) = q0(:)
       do n = 1, nq
         qc(:,n) = max(qc(:,n),1e-99_dp)
       end do
 
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, qc(:,:), k1(:,:))
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q0(:), qc(:,:), k1(:,:))
       q_in(:,:) = qc(:,:) + 0.5_dp * dt * k1(:,:)
-      q_in(1,:) = q_in(2,:); q_in(nlay,:) = q0(:)
       q_in(:,:) = max(q_in(:,:), 1.0e-99_dp)
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_in(:,:), k2(:,:))
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q0(:), q_in(:,:), k2(:,:))
       q_in(:,:) = qc(:,:) + 0.75_dp * dt * k2(:,:)
-      q_in(1,:) = q_in(2,:); q_in(nlay,:) = q0(:)
       q_in(:,:) = max(q_in(:,:), 1.0e-99_dp)
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_in(:,:), k3(:,:))
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q0(:), q_in(:,:), k3(:,:))
 
       !! Update q_new 
       q_new(:,:) = qc(:,:) + dt * (2.0_dp / 9.0_dp * k1(:,:) + 3.0_dp / 9.0_dp * k2(:,:) + 4.0_dp / 9.0_dp * k3(:,:))
 
-      q_new(1,:) = q_new(2,:); q_new(nlay,:) = q0(:)
       q_new(:,:) = max(q_new(:,:), 1.0e-99_dp)
 
       !! Calculated q_embedded
-      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q_new(:,:), k4(:,:))
+      call compute_fluxes(nlay, delz_mid(:), delz(:), Kzze(:), rhoe(:), rho(:), nq, q0(:), q_new(:,:), k4(:,:))
       q_em(:,:) = qc(:,:) + dt * (7.0_dp / 24.0_dp * k1(:,:) + 1.0_dp / 4.0_dp * k2(:,:) + 1.0_dp / 3.0_dp * k3(:,:) &
         & + 1.0_dp/8.0_dp * k4(:,:))
-      q_em(1,:) = q_em(2,:); q_em(nlay,:) = q0(:)
       q_em(:,:) = max(q_em(:,:), 1.0e-99_dp)
 
       !! Compute error
@@ -177,39 +170,40 @@ contains
       q(k,:) = qc(k,:)
     end do
 
-    ! Apply boundary conditions
-    q(1,:) = q(2,:)
-    q(nlay,:) = q0(:)
-
     do n = 1, nq
       q(:,n) = max(q(:,n),1e-99_dp)
     end do
 
   end subroutine vert_diff_exp
 
-  subroutine compute_fluxes(nlay, delz_mid, delz, Kzze, rhoe, rho, nq, q_in, flux)
+  subroutine compute_fluxes(nlay, delz_mid, delz, Kzze, rhoe, rho, nq, q0, q_in, flux)
     implicit none
 
     integer, intent(in) :: nlay, nq
     real(dp), dimension(nlay-1), intent(in) :: delz_mid
     real(dp), dimension(nlay), intent(in) :: delz, rho
     real(dp), dimension(nlay+1), intent(in) :: Kzze, rhoe
+    real(dp), dimension(nq), intent(in) :: q0
     real(dp), dimension(nlay, nq), intent(in) :: q_in
 
     real(dp), dimension(nlay, nq), intent(out) :: flux
 
     integer :: k, n
-    real(dp), dimension(nlay, nq) :: phit, phil
+    real(dp), dimension(nlay+1, nq) :: face_flux
 
-    !! Find flux between layers 
+    !! Form diffusive face fluxes.  The top face is zero-flux; q0 is a
+    !! Dirichlet value located at the bottom face, half a cell from q(nlay).
     do n = 1, nq
-        flux(1,n) = 0.0_dp
-        do k = 2, nlay-1
-          phit(k,n) = rhoe(k+1)*Kzze(k+1)*(q_in(k+1,n) - q_in(k,n))/delz_mid(k)
-          phil(k,n) = rhoe(k)*Kzze(k)*(q_in(k,n) - q_in(k-1,n))/delz_mid(k-1)
-          flux(k,n) = ((phit(k,n) - phil(k,n))/delz(k))/rho(k)
-        end do
-        flux(nlay,n) = 0.0_dp
+      face_flux(1,n) = 0.0_dp
+      do k = 2, nlay
+        face_flux(k,n) = rhoe(k)*Kzze(k)*(q_in(k,n) - q_in(k-1,n))/delz_mid(k-1)
+      end do
+      face_flux(nlay+1,n) = rhoe(nlay+1)*Kzze(nlay+1)* &
+                            (q0(n) - q_in(nlay,n))/(0.5_dp*delz(nlay))
+
+      do k = 1, nlay
+        flux(k,n) = (face_flux(k+1,n) - face_flux(k,n))/(rho(k)*delz(k))
+      end do
     end do
 
   end subroutine compute_fluxes
